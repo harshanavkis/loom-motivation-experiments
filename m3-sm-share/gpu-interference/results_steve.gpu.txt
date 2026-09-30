@@ -1,0 +1,2 @@
+name, driver_version, pcie.link.gen.current, pcie.link.width.current, clocks.max.sm [MHz], power.limit [W]
+NVIDIA H200 NVL, 595.71.05, 5, 8, 1785 MHz, 600.00 W
