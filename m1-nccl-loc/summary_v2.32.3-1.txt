@@ -1,0 +1,73 @@
+# v2.32.3-1  (../src/nccl)
+
+## NCCL-authored (excl. vendored): 449 files, 113222 code lines
+| category | files | file view LoC | % | split view LoC | % |
+|---|---|---|---|---|---|
+| scale-up | 61 | 14956 | 13.2% | 16566 | 14.6% |
+| scale-out | 140 | 33507 | 29.6% | 36580 | 32.3% |
+| mixed | 13 | 14994 | 13.2% | - | - |
+| common | 235 | 49765 | 44.0% | 60076 | 53.1% |
+mixed files split into: up=1610 out=3073 common=10311
+
+## vendored third-party only: 103 files, 30183 code lines
+| category | files | file view LoC | % | split view LoC | % |
+|---|---|---|---|---|---|
+| scale-up | 0 | 0 | 0.0% | 0 | 0.0% |
+| scale-out | 69 | 25230 | 83.6% | 25230 | 83.6% |
+| mixed | 0 | 0 | 0.0% | - | - |
+| common | 34 | 4953 | 16.4% | 4953 | 16.4% |
+mixed files split into: up=0 out=0 common=0
+
+## everything in src/ (incl. vendored): 552 files, 143405 code lines
+| category | files | file view LoC | % | split view LoC | % |
+|---|---|---|---|---|---|
+| scale-up | 61 | 14956 | 10.4% | 16566 | 11.6% |
+| scale-out | 209 | 58737 | 41.0% | 61810 | 43.1% |
+| mixed | 13 | 14994 | 10.5% | - | - |
+| common | 269 | 54718 | 38.2% | 65029 | 45.3% |
+mixed files split into: up=1610 out=3073 common=10311
+
+## sensitivity: transport-specific (up+out) share of NCCL-authored code
+  A file view, mixed counted as common : up=14956 out=33507 -> 42.8% of 113222
+  B split view (default)               : up=16566 out=36580 -> 46.9% of 113222
+  C split view + whole proxy = out     : up=16566 out=37668 -> 47.9% of 113222
+  D split view, excl. src/ras + src/diagnostics*: up=15618 out=36060 -> 51.2% of 100865
+
+## top files per category (NCCL-authored)
+- scale-up: ce_coll.cc(1868), transport/p2p.cc(1281), diagnostics/p2p.cc(848), include/nccl_device/impl/cft__funcs.h(794), transport/nvls.cc(692), include/nccl_device/impl/reduce_copy__funcs.h(628), include/nccl_device/impl/multimem__funcs.h(605), device/symmetric/data_ops.cuh(532), device/symmetric/all_reduce.cuh(524), device/symmetric/reduce_scatter.cuh(491), rma/rma_ce.cc(401), device/symmetric/all_gather.cuh(389), device/symmetric/primitives.cuh(378), transport/shm.cc(376), transport/nvls_ub.cc(374)
+- scale-out: transport/net.cc(1833), transport/coll_net.cc(1575), include/nccl_device/impl/gin__funcs.h(1483), transport/net_ib/connect.cc(1431), transport/net_ib/p2p_resiliency_recovery.cc(1263), transport/net_ib/gdaki/gin_host_gdaki.cc(1178), transport/net_ib/p2p_resiliency.cc(1024), transport/net_nd/connect.cc(931), transport/net_ib/p2p.cc(789), transport/net_ib/gin.cc(782), include/nccl_device/gin/gpi/gin_gpi.h(761), transport/net_nd/p2p.cc(751), misc/gdrwrap.cc(703), transport/net_socket.cc(627), include/nccl_device/gin/gdaki/gin_gdaki.h(621)
+- mixed: init.cc(3266), graph/topo.cc(2140), dev_runtime.cc(1970), proxy.cc(1902), graph/search.cc(1296), graph/paths.cc(910), device/all_reduce.h(661), device/all_gather.h(588), device/reduce_scatter.h(526), register/coll_reg.cc(498), graph/connect.cc(439), transport.cc(421), include/proxy.h(377)
+- common: enqueue/enqueue.cc(2927), ras/client_support.cc(1984), ras/diagnostics_pci.cc(1471), bootstrap.cc(1319), os/windows.cc(1270), graph/xml.cc(1245), plugin/profiler.cc(1244), device/prims_simple.h(1185), device/reduce_kernel.h(1110), ras/rasnet.cc(1058), group.cc(1017), ras/diagnostics_xid.cc(913), mem_manager.cc(856), include/collectives.h(854), enqueue/task_prep/task_posttuning.cc(853)
+
+## per-directory LoC by category (NCCL-authored, split view)
+  src/include                  up=  3866 out=  7098 common= 11484
+  src/transport                up=  3082 out= 18468 common=   125
+  src/*.cc                     up=  3101 out=  1040 common= 10970
+  src/ras                      up=     0 out=     0 common= 10766
+  src/device                   up=  3302 out=  1574 common=  5654
+  src/graph                    up=   391 out=  1310 common=  5098
+  src/plugin                   up=     0 out=  2420 common=  2710
+  src/misc                     up=     0 out=  1420 common=  3226
+  src/enqueue                  up=    10 out=     0 common=  4266
+  src/os                       up=   389 out=     0 common=  2561
+  src/tuning                   up=   582 out=   239 common=  1286
+  src/rma                      up=   401 out=  1269 common=   221
+  src/diagnostics              up=   948 out=   520 common=     0
+  src/gin                      up=     0 out=  1156 common=     0
+  src/register                 up=    98 out=    22 common=   593
+  src/scheduler                up=   351 out=     0 common=   171
+  src/devcomm                  up=     0 out=     0 common=   434
+  src/param                    up=     0 out=     0 common=   240
+  src/config                   up=     0 out=     0 common=   206
+  src/nccl_device              up=    45 out=    44 common=    65
+
+## interfaces
+  plugin API ncclGin/Net/..: ncclNet_vX | versions=[6, 7, 8, 9, 10, 11, 12] | fn-ptrs newest(v12)=21 | fn-ptrs oldest(v6)=16
+  plugin API ncclGin/Net/..: ncclCollNet_vX | versions=[6, 7, 8, 9, 10, 11, 12] | fn-ptrs newest(v12)=18 | fn-ptrs oldest(v6)=14
+  plugin API ncclGin/Net/..: ncclGin_vX | versions=[13, 14] | fn-ptrs newest(v14)=16 | fn-ptrs oldest(v13)=20
+  plugin API ncclGin/Net/..: ncclRma_vX | versions=[14, 15, 16] | fn-ptrs newest(v16)=21 | fn-ptrs oldest(v14)=20
+  plugin API ncclGin/Net/..: ncclTuner_vX | versions=[2, 3, 4, 5, 6] | fn-ptrs newest(v6)=4 | fn-ptrs oldest(v2)=3
+  plugin API ncclGin/Net/..: ncclProfiler_vX | versions=[1, 2, 3, 4, 5, 6, 7] | fn-ptrs newest(v7)=5 | fn-ptrs oldest(v1)=5
+  plugin API ncclGin/Net/..: ncclEnv_vX | versions=[1, 2] | fn-ptrs newest(v2)=3 | fn-ptrs oldest(v1)=3
+  internal ncclTransport contract | ncclTransportComm fn-ptrs=10 (x2 send/recv) + canConnect | built-in transports=['p2pTransport', 'shmTransport', 'netTransport', 'collNetTransport']
+  device API public decls (nccl_device/*.h, NCCL_*DEVICE_INLINE) | common=158, scale-out=86, scale-up=82

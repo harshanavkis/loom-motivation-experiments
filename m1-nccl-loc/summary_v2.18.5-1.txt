@@ -1,0 +1,53 @@
+# v2.18.5-1  (../src/nccl-v2.18.5)
+
+## NCCL-authored (excl. vendored): 108 files, 25009 code lines
+| category | files | file view LoC | % | split view LoC | % |
+|---|---|---|---|---|---|
+| scale-up | 7 | 1465 | 5.9% | 1745 | 7.0% |
+| scale-out | 15 | 4821 | 19.3% | 6347 | 25.4% |
+| mixed | 11 | 6948 | 27.8% | - | - |
+| common | 75 | 11775 | 47.1% | 16917 | 67.6% |
+mixed files split into: up=280 out=1526 common=5142
+
+## vendored third-party only: 24 files, 4728 code lines
+| category | files | file view LoC | % | split view LoC | % |
+|---|---|---|---|---|---|
+| scale-up | 0 | 0 | 0.0% | 0 | 0.0% |
+| scale-out | 1 | 844 | 17.9% | 844 | 17.9% |
+| mixed | 0 | 0 | 0.0% | - | - |
+| common | 23 | 3884 | 82.1% | 3884 | 82.1% |
+mixed files split into: up=0 out=0 common=0
+
+## everything in src/ (incl. vendored): 132 files, 29737 code lines
+| category | files | file view LoC | % | split view LoC | % |
+|---|---|---|---|---|---|
+| scale-up | 7 | 1465 | 4.9% | 1745 | 5.9% |
+| scale-out | 16 | 5665 | 19.1% | 7191 | 24.2% |
+| mixed | 11 | 6948 | 23.4% | - | - |
+| common | 98 | 15659 | 52.7% | 20801 | 69.9% |
+mixed files split into: up=280 out=1526 common=5142
+
+## sensitivity: transport-specific (up+out) share of NCCL-authored code
+  A file view, mixed counted as common : up=1465 out=4821 -> 25.1% of 25009
+  B split view (default)               : up=1745 out=6347 -> 32.4% of 25009
+  C split view + whole proxy = out     : up=1745 out=7123 -> 35.5% of 25009
+  D split view, excl. src/ras + src/diagnostics*: up=1745 out=6347 -> 32.4% of 25009
+
+## top files per category (NCCL-authored)
+- scale-up: transport/p2p.cc(608), transport/shm.cc(368), transport/nvls.cc(294), misc/ipcsocket.cc(147), include/ipcsocket.h(25), include/p2p.h(15), include/shm.h(8)
+- scale-out: transport/net_ib.cc(1138), transport/net.cc(1073), transport/coll_net.cc(698), transport/net_socket.cc(540), net.cc(319), misc/gdrwrap.cc(204), include/gdrwrap.h(189), misc/ibvwrap.cc(150), include/nccl_net.h(145), misc/ibvsymbols.cc(128), misc/profiler.cc(96), include/ibvwrap.h(69), include/ibvsymbols.h(36), include/coll_net.h(22), include/net.h(14)
+- mixed: init.cc(1649), proxy.cc(1380), graph/search.cc(929), graph/topo.cc(718), graph/paths.cc(606), collectives/device/all_reduce.h(589), graph/connect.cc(365), transport.cc(277), include/proxy.h(223), collectives/device/all_gather.h(109), collectives/device/reduce_scatter.h(103)
+- common: enqueue.cc(1344), graph/xml.cc(727), misc/socket.cc(703), collectives/device/prims_simple.h(540), collectives/device/reduce_kernel.h(520), bootstrap.cc(466), include/utils.h(376), collectives/device/prims_ll128.h(364), group.cc(348), misc/strongstream.cc(341), collectives/device/prims_ll.h(340), graph/tuning.cc(333), collectives/device/op128.h(332), include/comm.h(308), include/devcomm.h(271)
+
+## per-directory LoC by category (NCCL-authored, split view)
+  src/*.cc                     up=    29 out=  1288 common=  4792
+  src/transport                up=  1270 out=  3449 common=     0
+  src/graph                    up=   251 out=   452 common=  3481
+  src/collectives              up=     0 out=     0 common=  3991
+  src/include                  up=    48 out=   580 common=  2710
+  src/misc                     up=   147 out=   578 common=  1943
+
+## interfaces
+  plugin API ncclGin/Net/..: ncclNet_vX | versions=[4, 5, 6] | fn-ptrs newest(v6)=16 | fn-ptrs oldest(v4)=15
+  plugin API ncclGin/Net/..: ncclCollNet_vX | versions=[4, 5, 6] | fn-ptrs newest(v6)=14 | fn-ptrs oldest(v4)=13
+  internal ncclTransport contract | ncclTransportComm fn-ptrs=8 (x2 send/recv) + canConnect | built-in transports=['p2pTransport', 'shmTransport', 'netTransport', 'collNetTransport']
