@@ -1,0 +1,24 @@
+# Loom motivation experiments
+
+Each experiment folder has a `README.md` (question, methodology, results, caveats, candidate claims, reproduce commands) and a detailed evidence file with file:line citations.
+
+| # | experiment | folder | status | headline result |
+|---|---|---|---|---|
+| M1 | NCCL scale-up vs scale-out LoC split | [m1-nccl-loc/](m1-nccl-loc/) | done | NCCL 2.32: 46.9% of 113,222 NCCL-authored lines is transport-specific (36,580 scale-out, 16,566 scale-up; 43–51% across attribution variants), up from 32.4% in 2.18; transport-specific code grew 6.6× vs 3.6× for shared code. |
+| M2 | Device-side transport state of GPU-initiated RDMA | [m2-device-state/](m2-device-state/) | done | DeepEP V2.5 on NCCL GIN GDAKI (129 contexts) holds 4,257 RC QPs and ≈592 MiB of HBM rings/doorbell records per GPU at EP256, plus 4,257 GPU-mapped NIC doorbells; one put costs 4 atomics, 3 WQE stores, 1 doorbell-record store, 2 MMIO doorbells and 4–5 fences on the SM. |
+| M3 | SM share | [m3-sm-share/](m3-sm-share/) | analysis done; GPU interference (steve) done; real-RDMA variant blocked (no cabled GPU+CX host) | DeepEP V2.5 hybrid comm kernel uses 4–16 SMs (3–12% of an H100); direct/V1 20–72 (15–55%). On an H200, holding 8–20 SMs to move 50 GB/s costs a BF16 expert GEMM 9.5–51% of its throughput; the copy engine moving the same bytes costs 0.1%. |
+| M4 | Who moves the bytes: dgemm+memcpy vs E810 RDMA on the FPGA testbed | – | not started (clara busy with a Vivado build; irdma not loaded after its reboot) | – |
+| M5 | E810 post+poll cost | – | not started | – |
+
+## Source clones (`src/`)
+
+| directory | ref | commit |
+|---|---|---|
+| `src/nccl` | NCCL `v2.32.3-1` | `12df1a11` |
+| `src/nccl-v2.18.5` | NCCL `v2.18.5-1` (git worktree of `src/nccl`) | `559b70f8` |
+| `src/nvshmem` | NVSHMEM `v3.8.0-0` | `270759e` |
+| `src/DeepEP` | DeepEP `main` | `93eb6eb` |
+| `src/DeepEP-v1-last` | DeepEP last commit with V1 code, parent of V2.5 (git worktree of `src/DeepEP`) | `a56d615` |
+| `src/DeepEP-0sm` | separate DeepEP clone at `main` with PR/branch refs fetched (`pr347`, `pr453`, `origin/hybrid-ep`, `origin/antgroup-opt`, ...) | `93eb6eb` |
+
+Experiment READMEs reference these clones by relative path (`../src/...`), so run their commands from inside the experiment folder.
