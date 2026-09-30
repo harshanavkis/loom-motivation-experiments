@@ -1,0 +1,16 @@
+WARN: device irdma0 is not enumerated as an mlx5 device. Skipping...
+
+WARN: device irdma1 is not enumerated as an mlx5 device. Skipping...
+
+WARN: device irdma0 is not enumerated as an mlx5 device. Skipping...
+
+WARN: device irdma1 is not enumerated as an mlx5 device. Skipping...
+
+# B1 GPU-initiated dispatch (IBGDA, warp nbi puts), H=7168 E=256 R=8 topk=8, 24 QPs/peer
+test,tokens,ctas,warps_per_cta,messages,median_us,p10_us,p90_us,GBps
+ibgda,128,8,8,683,377.3,362.7,398.8,12.98
+ibgda,128,20,8,683,371.7,347.1,384.5,13.17
+ibgda,128,32,8,683,368.4,354.6,382.2,13.29
+ibgda,4096,8,8,21711,10692.4,10626.7,10766.6,14.55
+ibgda,4096,20,8,21711,10785.4,10676.5,10913.2,14.43
+ibgda,4096,32,8,21711,10730.0,10681.0,10843.6,14.50

@@ -108,7 +108,38 @@ The measurements above are the CPU proxy's best case: one message at a time, who
 
 So DeepEP pays SM time per post (6–8 µs on this testbed) and holds SMs (M3c) to remove the host from a data-dependent control path. That trade-off is the gap Loom targets: triggered from inside the kernel like IBGDA (no host synchronisation), but executed by an engine outside the SMs (no fence chain, no held SMs).
 
-**Planned:** a dispatch-shaped benchmark on steve (GPU-computed top-k routing, 7 KiB tokens, IBGDA from many warps vs. a CPU proxy that must first read the GPU-computed counts), to quantify points 1 and 4 on real hardware. DeepEP itself cannot run here, since it needs NCCL GIN, which needs two GPUs.
+### Dispatch-shaped benchmark on real hardware (steve)
+
+DeepEP itself cannot run here, since it needs NCCL GIN, which needs two GPUs. Instead, both mechanisms are reproduced with identical routing and payload.
+
+**Common setup:** a kernel computes top-8 routing over 256 experts for T tokens (deterministic hash). There are R = 8 destinations, and each token goes once to each distinct destination rank, as DeepEP deduplicates per rank. Tokens are 7168 B (FP8 DeepSeek-V3). The destinations are 8 regions of the peer's receive buffer (EP-shaped traffic over one peer). Grid: 8/20/32 CTAs × 256 threads. Timed with CUDA events around the kernel: routing → all bytes delivered; median of 20.
+
+- **B1 (`dispatch_ibgda.cu`):** each warp routes its tokens and immediately puts each one to its destination (`nvshmemx_putmem_nbi_warp`, IBGDA, 24 QPs), then `quiet`.
+- **B2 (`dispatch_proxy.cu`):**
+  - The kernel routes and packs tokens contiguously per destination (SM copies).
+  - The last CTA writes the 8 counts plus a flag into pinned host memory and spins on a done flag.
+  - A CPU proxy thread (socket 0) reads the counts, posts RDMA writes (GPU → GPU, dma-buf MRs), waits for the last completion, and sets done.
+  - Two posting modes: "block" (one write per destination) and "token" (one write per token).
+
+| shape | B1 GPU-initiated | B2 proxy, per destination | B2 proxy, per token |
+|---|---|---|---|
+| decode, 128 tokens (683 messages, 4.9 MB) | **368–377 µs** (13.0–13.3 GB/s) | 489–518 µs (9.5–10.0 GB/s) | 507–532 µs (9.2–9.7 GB/s) |
+| prefill, 4096 tokens (21,711 messages, 156 MB) | 10.69–10.79 ms (14.4–14.6 GB/s) | 10.53–11.14 ms (14.0–14.8 GB/s) | 10.66–11.25 ms |
+
+(Ranges over 8/20/32 CTAs.)
+
+Reading:
+- **Decode: GPU-initiated is about 25% faster (120–140 µs).** B1 streams each token as soon as its route is known, so routing, packing and transfer overlap. B2 must finish routing and packing, hand the counts to the host, and only then transfer. This is point 1 above, measured.
+- **Prefill: no difference.** Both run into steve's ~15 GB/s ceiling for NIC writes into HBM.
+- **The CPU's message rate is not the limiter here.** Per-token posting costs about 20 µs more at 683 messages and about 120 µs at 21,711.
+- **CTA count hardly matters for B1**, because it is bandwidth-bound on this loopback. With 7 KiB tokens, a 128-token decode is still 4.9 MB, i.e. bandwidth-dominated.
+
+A smaller-hidden or smaller-batch variant would isolate the control path further; not run yet.
+
+**Caveats:**
+- B2 is the unpipelined NCCL-style handoff. A proxy fed in chunks could overlap too, at the cost of more GPU↔host round trips.
+- Everything shares one NIC and one GPU (loopback).
+- The IBGDA per-put SM cost (6–8 µs) is hidden here because many warps post in parallel and the NIC is the bottleneck. It shows up in held SMs (M3c), not in dispatch time.
 
 **Unresolved:** `ce_triggered.cu` (copy engine triggered from a kernel via `cuStreamWaitValue32`) blocks before its first kernel launch. Single wait+copy pairs and 400 queued device-to-host pairs work in isolation (`trig_dbg*.cu` in `~/loom-experiments/latency`), so the cause is still open.
 
@@ -138,6 +169,8 @@ cd ~/loom-experiments/latency && NIXPKGS_ALLOW_UNFREE=1 nix shell nixpkgs#numact
 NUMA=$(nix build --no-link --print-out-paths nixpkgs#numactl | grep -v -- -man | head -1)/bin/numactl
 cd ~/loom-experiments/latency && $NUMA -N 0 -m 0 ./proxy_b2 20000 > proxy_b2_numa0.csv
 cd ~/loom-experiments/latency && $NUMA -N 0 -m 0 ./fence_cost > fence_cost_numa0.csv
+sudo ~/loom-experiments/gpu-posted/run_dispatch.sh                                   # dispatch_ibgda.csv
+cd ~/loom-experiments/latency && $NUMA -N 0 -m 0 ./dispatch_proxy < /dev/null > dispatch_proxy.csv
 sudo ~/loom-experiments/nvshmem-loopback/run_put_lat.sh        # put_lat_steve.txt
 sudo ~/loom-experiments/nvshmem-loopback/run_put_lat.sh load   # put_lat_steve_load.txt, GEMM as an MPS client
 ```
@@ -155,4 +188,8 @@ sudo ~/loom-experiments/nvshmem-loopback/run_put_lat.sh load   # put_lat_steve_l
 - `proxy_b2_numa{0,1}.csv`: its outputs with the proxy on each socket.
 - `fence_cost.cu`: GPU fence, host-store and host-load costs.
 - `fence_cost_numa{0,1}.csv`: its outputs with the host page on each socket.
-- `build.sh`: builds `ce_latency`, `ce_triggered`, `proxy_b2` and `fence_cost` (proxy_b2 links nixpkgs rdma-core and libcuda).
+- `build.sh`: builds `ce_latency`, `ce_triggered`, `proxy_b2`, `fence_cost` and `dispatch_proxy` (the verbs programs link nixpkgs rdma-core and libcuda).
+- `dispatch_ibgda.cu`, `run_dispatch.sh`, `build_gpu_posted.sh`: the B1 dispatch benchmark (NVSHMEM; root for memlock). The runnable copy is in `~/loom-experiments/gpu-posted`.
+- `dispatch_ibgda.csv`: its outputs.
+- `dispatch_proxy.cu`: the B2 dispatch benchmark (verbs + CPU proxy).
+- `dispatch_proxy.csv`: its outputs.
