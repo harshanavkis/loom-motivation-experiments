@@ -97,6 +97,21 @@ A system-scope fence costs about 0.6 µs, and a dependent read of queue state ab
 
 **Interpretation.** GPU-initiated RDMA removes the GPU→CPU handoff, which is worth about 2 µs here (5.44 µs vs. the 3.3–3.5 µs raw CPU round trip). It then pays more than that back in the SM's serialized post path. On this hardware a CPU proxy has lower single-message latency (5.4 vs. 12.6 µs). What GPU initiation buys is no CPU in the loop and parallel posting from many SMs, at the cost of held SMs (`../m3-sm-share/gpu-posted`: the GEMM keeps 90.5 / 72.7 / 48.9% with 8 / 16 / 20 posting CTAs).
 
+## Why DeepEP uses GPU-initiated RDMA anyway
+
+The measurements above are the CPU proxy's best case: one message at a time, whose destination and size the CPU already knows. MoE dispatch/combine is close to the opposite, and that is why DeepEP (V1 on NVSHMEM IBGDA, V2.5 on NCCL GIN GDAKI) posts from the GPU even though each GPU post costs more:
+
+1. **Data-dependent communication known only on the GPU.** The top-k routing (which experts, hence how many bytes to which rank) is computed in a kernel. A CPU poster needs those counts on the host first: a D2H copy + synchronisation + kernel boundary per layer (the NCCL all-to-all pattern needs split sizes on the host). GPU initiation lets the routing kernel send each token the moment its destination is known.
+2. **Fusion and overlap.** Layout, FP8 packing and sending live in one kernel. In low-latency mode the send kernel returns while the bytes are in flight (the receive "hook"), so compute continues. A proxy needs a host thread, flags, and a stream arrangement around it.
+3. **CUDA Graphs.** Decode steps are captured as graphs. GPU-initiated communication lives inside the graph; a host proxy in the loop does not fit well.
+4. **Message rate and fan-out.** Each token goes to up to 8 destinations across many ranks: thousands of small messages per GPU per layer. GPU posting spreads this over many SMs in parallel; a proxy funnels it through a few host threads and a GPU→host FIFO.
+
+So DeepEP pays SM time per post (6–8 µs on this testbed) and holds SMs (M3c) to remove the host from a data-dependent control path. That trade-off is the gap Loom targets: triggered from inside the kernel like IBGDA (no host synchronisation), but executed by an engine outside the SMs (no fence chain, no held SMs).
+
+**Planned:** a dispatch-shaped benchmark on steve (GPU-computed top-k routing, 7 KiB tokens, IBGDA from many warps vs. a CPU proxy that must first read the GPU-computed counts), to quantify points 1 and 4 on real hardware. DeepEP itself cannot run here, since it needs NCCL GIN, which needs two GPUs.
+
+**Unresolved:** `ce_triggered.cu` (copy engine triggered from a kernel via `cuStreamWaitValue32`) blocks before its first kernel launch. Single wait+copy pairs and 400 queued device-to-host pairs work in isolation (`trig_dbg*.cu` in `~/loom-experiments/latency`), so the cause is still open.
+
 ## Caveats / fairness
 
 - **The cross-socket topology on steve inflates GPU-posted latency more than CPU-posted.** The GPU-posted path crosses the socket interconnect several extra times per operation: doorbell write, work-request fetch from HBM, completion write to HBM. Each GPU↔NIC access across sockets costs about 1 µs here (GPU vs. host memory at an otherwise equal method: 2.64 vs. 1.48 µs one-way). So treat 10.7 µs as an upper bound for well-placed GPUs and NICs, not a typical value. The published NVSHMEM IBGDA inter-node put figure (7.5 µs one-way, 256 B, including the wire; arXiv 2606.05951) is the other end of the bracket.
