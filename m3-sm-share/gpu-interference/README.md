@@ -111,6 +111,18 @@ Offloading does not remove HBM traffic: a CE moving 50–67 GB/s costs triad 2.4
 At token granularity the CE manages about 1.5 M copies/s, i.e. 10–18 GB/s, well below a 400G line rate. `cudaMemcpyAsync` in a loop is 3–4× worse still. An engine that replaces the SMs' scatter/gather needs scatter-gather descriptors, as a NIC's multi-SGE WQEs have (DeepEP PR #453 uses them). One copy per token will not do.
 - **Caveat on plain `cudaMemcpyAsync` D2D:** it reaches 1431 GB/s at 16 MB (`ce_size` rows), which is SM-kernel speed. When SMs are free, the driver apparently runs large D2D copies on SMs, even though the same call completes on a CE when all SMs are held (`ce_check`). Only `cudaMemcpyBatchAsync` with `PreferOverlapWithCompute` was used as "CE" in the tables above.
 
+### 5. CPU-posted RDMA next to compute (real NIC, steve CX-7 loopback)
+
+perftest `ib_write_bw` wrote 64 KiB messages from GPU memory (dma-buf GPUDirect) over steve's CX-7 port-0 ↔ port-1 cable while the workloads ran (`rdma_cpu_posted.sh`). The CPU posted the work requests and the NIC did the DMA; no SMs were used. Setup: [../steve-rdma/README.md](../steve-rdma/README.md).
+
+| workload | no RDMA | NIC reads HBM, 20.5 GB/s | NIC writes HBM, 20.8 GB/s |
+|---|---|---|---|
+| gemm (TFLOP/s) | 809.6 | 811.2 (100.2%) | 810.9 (100.2%) |
+| gemm_down (TFLOP/s) | 763.2 | 766.1 (100.4%) | 765.1 (100.2%) |
+| triad (GB/s) | 3993.0 | 3973.7 (99.5%) | 3982.4 (99.7%) |
+
+The posting thread used 1.00 CPU core in both directions: perftest busy-polls its completion queue. So CPU-posted RDMA at 20 GB/s costs GPU compute nothing measurable and costs one host core, which is the B2 trade-off. The GPU-posted counterpart (NVSHMEM IBGDA put kernel on k CTAs next to the GEMM) is not measured yet. IBGDA itself runs on steve (15.7 GB/s at 1 MiB puts, `../steve-rdma/nvshmem-loopback/put_bw_steve.txt`).
+
 ## Candidate claims for the paper
 
 1. "On an H200, a DeepEP-style kernel that holds 8–20 SMs to move 50 GB/s (a 400G NIC's line rate) costs a concurrent BF16 expert GEMM 9.5–51% of its throughput; the copy engine moving the same bytes costs 0.1%." (gemm: `smcopy d2d 50` 90.5 / 72.7 / 48.9% at k = 8 / 16 / 20; `ce d2d 50` 99.9%.)
@@ -127,9 +139,17 @@ At token granularity the CE manages about 1.5 M copies/s, i.e. 10–18 GB/s, wel
 - PCIe on steve trains at ×8, so every D2H number is capped at 29 GB/s.
 - The H100 on jamie was not used: it is in Confidential Compute mode and passed through to a SEV-SNP VM (see `~/doctor-cluster-config/hosts/jamie.nix`).
 
-## Not covered (needs other hardware)
+## Not covered yet, and what it needs
 
-- **Real RDMA:** GEMM next to GPU-posted RDMA (NCCL GIN / NVSHMEM IBGDA, where SMs build WQEs) vs. CPU-posted RDMA (`perftest --use_cuda`, where the NIC DMAs and no SMs are used). This needs two GPU hosts with cabled ConnectX NICs. steve's and polly's CX-7s are uncabled, and jamie's CX-7 goes to ian (no GPU), with jamie's GPU in the CoCo lane.
+- **Two hosts are needed only for NCCL GIN and DeepEP.** NCCL refuses two ranks on one GPU, and DeepEP V2.5 runs on NCCL GIN (it also needs Hopper or newer on both ends, which rules out jack's A40). Everything else runs on steve alone over its CX-7 port-0 ↔ port-1 loopback cable:
+  - CPU-posted RDMA from GPU memory (`perftest --use_cuda_dmabuf`);
+  - GPU-posted RDMA through NVSHMEM IBGDA, with two PEs on the H200 (NVSHMEM supports several PEs per GPU).
+
+  jamie (H100) plus steve would cover NCCL GIN and DeepEP, but the hosts are too far apart for the cable. That's parked until a longer optical cable (AOC) exists; jamie's config was left unchanged.
+- **Loopback on steve, as set up on 2026-09-30:**
+  - GPUDirect needs the CX-7's IOMMU groups (105/106) in passthrough. This was set at runtime, and a reboot reverts it.
+  - With that, 64 KiB RDMA writes reach 20.5 GB/s GPU → host and 14.9 GB/s GPU → GPU across steve's two sockets (`~/loom-experiments/perftest-cuda/loopback_steve_identity.txt`).
+- **Pure GPU-posted (IBGDA)** also needs the NVIDIA driver loaded with `NVreg_RegistryDwords="PeerMappingOverride=1;"`, so the GPU can map the NIC doorbell. steve currently has 0, and reloading the driver needs the owner.
 - **NVLink peer copies** (multi-GPU CEs): no multi-GPU host.
 
 ## Reproduce

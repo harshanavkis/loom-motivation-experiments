@@ -319,7 +319,7 @@ static void ce_sizes(Ctx& c, FILE* out, int reps) {
 int main(int argc, char** argv) {
   int reps = 5; std::string out_path = "results.csv"; std::vector<int> ks = {4, 8, 16, 20, 32};
   std::vector<double> rates = {50, 100, 0};  // GB/s; 0 = unpaced
-  bool quick = false, diag = false;
+  bool quick = false, diag = false, only_none = false;  // --only-none: workloads alone (external traffic runs beside)
   for (int i = 1; i < argc; i++) {
     std::string a = argv[i];
     if (a == "--reps") reps = atoi(argv[++i]);
@@ -327,6 +327,7 @@ int main(int argc, char** argv) {
     else if (a == "--quick") quick = true;
     else if (a == "--occ-cluster") g_occ_cluster = atoi(argv[++i]);
     else if (a == "--diag") { diag = true; }
+    else if (a == "--only-none") only_none = true;
   }
   if (quick) { reps = 1; ks = {8, 20}; rates = {50}; }
 
@@ -370,11 +371,12 @@ int main(int argc, char** argv) {
   FILE* out = fopen(out_path.c_str(), "w");
   fprintf(out, "# device=%s sms=%d cc=%d.%d gemm=%dx%dx%d gemm_down=%dx%dx%d bf16 triad_bytes=%zu occ_cluster=%d\n", p.name, c.nsm,
           p.major, p.minor, c.M, c.N, c.K, c.M, c.dN, c.dK, c.tri_n * 16, g_occ_cluster);
-  ce_check(c, out);
+  if (!only_none) ce_check(c, out);
 
   std::vector<Cfg> cfgs;
   for (std::string w : {"gemm", "gemm_down", "triad"}) {
     cfgs.push_back({w, NONE, false, 0, 0});
+    if (only_none) continue;
     if (w != "triad") for (int k : ks) cfgs.push_back({w, TARGET, false, k, 0});
     for (int k : ks) cfgs.push_back({w, IDLE, false, k, 0});
     for (int d2h = 0; d2h < 2; d2h++)
@@ -398,7 +400,7 @@ int main(int argc, char** argv) {
               g.workload == "triad" ? "GBps" : "TFLOPs", r.comm_GBps, r.distinct_sms);
       fflush(out);
     }
-  ce_sizes(c, out, quick ? 1 : 3);
+  if (!only_none) ce_sizes(c, out, quick ? 1 : 3);
   fclose(out);
   printf("wrote %s\n", out_path.c_str());
   return 0;

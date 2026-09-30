@@ -1,0 +1,17 @@
+# device=NVIDIA H200 NVL sms=132 cc=9.0 gemm=8192x4096x7168 gemm_down=8192x7168x2048 bf16 triad_bytes=1073741824 occ_cluster=2
+run,rep,workload,mode,dir,k,target_GBps,sm_target,work_ms,metric,unit,comm_GBps,distinct_sms
+run,0,gemm,none,-,0,0,132,59.222,812.26,TFLOPs,0.00,0
+run,0,gemm_down,none,-,0,0,132,31.499,763.57,TFLOPs,0.00,0
+run,0,triad,none,-,0,0,132,80.847,3984.36,GBps,0.00,0
+run,1,gemm,none,-,0,0,132,59.291,811.32,TFLOPs,0.00,0
+run,1,gemm_down,none,-,0,0,132,31.457,764.59,TFLOPs,0.00,0
+run,1,triad,none,-,0,0,132,80.885,3982.45,GBps,0.00,0
+run,2,gemm,none,-,0,0,132,59.323,810.87,TFLOPs,0.00,0
+run,2,gemm_down,none,-,0,0,132,31.436,765.12,TFLOPs,0.00,0
+run,2,triad,none,-,0,0,132,80.915,3981.00,GBps,0.00,0
+run,3,gemm,none,-,0,0,132,59.324,810.87,TFLOPs,0.00,0
+run,3,gemm_down,none,-,0,0,132,31.420,765.49,TFLOPs,0.00,0
+run,3,triad,none,-,0,0,132,80.906,3981.44,GBps,0.00,0
+run,4,gemm,none,-,0,0,132,59.320,810.92,TFLOPs,0.00,0
+run,4,gemm_down,none,-,0,0,132,31.421,765.47,TFLOPs,0.00,0
+run,4,triad,none,-,0,0,132,80.866,3983.41,GBps,0.00,0

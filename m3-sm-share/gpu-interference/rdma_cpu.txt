@@ -1,0 +1,4 @@
+gpu2host: poster CPU = 1.00 cores
+ 65536      15097963         0.00               20510.28		     0.328165
+host2gpu: poster CPU = 1.00 cores
+ 65536      15286755         0.00               20769.57		     0.332313
