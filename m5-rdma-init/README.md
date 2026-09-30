@@ -166,7 +166,24 @@ Three regimes:
 - Everything shares one NIC and one GPU (loopback).
 - The IBGDA per-put SM cost (6–8 µs) is hidden here because many warps post in parallel and the NIC is the bottleneck. It shows up in held SMs (M3c), not in dispatch time.
 
-**Unresolved:** `ce_triggered.cu` (copy engine triggered from a kernel via `cuStreamWaitValue32`) blocks before its first kernel launch. Single wait+copy pairs and 400 queued device-to-host pairs work in isolation (`trig_dbg*.cu` in `~/loom-experiments/latency`), so the cause is still open.
+### Copy engine triggered from a kernel (`ce_triggered.cu`)
+
+A copy engine cannot be *created* from device code, but a pre-enqueued copy can be *triggered* by a kernel.
+1. The host enqueues `cuStreamWaitValue32(flag ≥ i)` followed by a copy (`cudaMemcpyBatchAsync` + `PreferOverlapWithCompute`, i.e. a real copy engine), 200 pairs per batch.
+2. A 1-thread kernel writes the payload's tail, stamps `globaltimer`, writes flag = i, and spins until the tail appears at the destination.
+
+Everything is timed on one GPU clock: trigger → the GPU front end releases the wait → the copy engine copies → data landed. Median of 1,900 (10 launches × 190).
+
+| size | device → device | device → host (pinned) |
+|---|---|---|
+| 8 B – 4 KiB | **2.50–2.59 µs** (p99 2.8–3.0) | 10.8–10.9 µs |
+| 64 KiB | 3.46 µs | 12.5 µs |
+| 1 MiB | 15.3 µs | 47.2 µs |
+| 4 MiB | 52.0 µs (about 80 GB/s) | 157 µs (about 27 GB/s, PCIe ×8) |
+
+- **An off-SM engine triggered from a kernel delivers local data in 2.5 µs.** The IBGDA put + completion takes 12.6 µs and the kernel-timed CPU proxy 5.4 µs. The kernel's own cost is one store plus a system fence (about 0.6 µs, `fence_cost.cu`), not the 6–8 µs IBGDA post chain. This is the closest existing analogue of a GPU-triggered Loom engine, but local only: the copy engine cannot reach the network.
+- **The device → host figures are probably inflated** by the measurement: the kernel detects arrival by continuously reading pinned host memory over PCIe (about 0.7–0.8 µs per read), which likely slows the copy engine's writes. Do not quote them as copy-engine latency.
+- **Trap (the earlier hang):** with CUDA 12's default lazy module loading, the trigger kernel's *first* launch loads its module, and that load synchronises with the device, which is waiting on the kernel. Deadlock. The program sets `CUDA_MODULE_LOADING=EAGER`. The debug programs `trig_dbg*.cu` in `~/loom-experiments/latency` showed that enqueuing waits+copies alone never blocks.
 
 ## Caveats / fairness
 
@@ -194,6 +211,7 @@ cd ~/loom-experiments/latency && NIXPKGS_ALLOW_UNFREE=1 nix shell nixpkgs#numact
 NUMA=$(nix build --no-link --print-out-paths nixpkgs#numactl | grep -v -- -man | head -1)/bin/numactl
 cd ~/loom-experiments/latency && $NUMA -N 0 -m 0 ./proxy_b2 20000 > proxy_b2_numa0.csv
 cd ~/loom-experiments/latency && $NUMA -N 0 -m 0 ./fence_cost > fence_cost_numa0.csv
+cd ~/loom-experiments/latency && $NUMA -N 0 -m 0 ./ce_triggered < /dev/null > ce_triggered_idle.csv
 sudo ~/loom-experiments/gpu-posted/run_dispatch.sh < /dev/null                       # B1 sweep: dispatch_ibgda_H{1024,7168}_load{0,1}.csv
 ~/loom-experiments/latency/run_dispatch_proxy.sh                                      # B2 sweep: dispatch_proxy_H*_load*.csv
 cd ~/loom-experiments/latency && $NUMA -N 0 -m 0 ./dispatch_proxy < /dev/null > dispatch_proxy.csv
@@ -213,6 +231,8 @@ sudo ~/loom-experiments/nvshmem-loopback/run_put_lat.sh load   # put_lat_steve_l
 - `proxy_b2.cu`: B2 as used for GPU data (kernel → CPU proxy → RDMA → kernel), kernel-timed.
 - `proxy_b2_numa{0,1}.csv`: its outputs with the proxy on each socket.
 - `fence_cost.cu`: GPU fence, host-store and host-load costs.
+- `ce_triggered.cu`: the kernel-triggered copy engine.
+- `ce_triggered_idle.csv`: its outputs.
 - `fence_cost_numa{0,1}.csv`: its outputs with the host page on each socket.
 - `build.sh`: builds `ce_latency`, `ce_triggered`, `proxy_b2`, `fence_cost` and `dispatch_proxy` (the verbs programs link nixpkgs rdma-core and libcuda).
 - `dispatch_ibgda.cu`, `run_dispatch.sh`, `build_gpu_posted.sh`: the B1 dispatch benchmark (NVSHMEM; root for memlock). The runnable copy is in `~/loom-experiments/gpu-posted`.

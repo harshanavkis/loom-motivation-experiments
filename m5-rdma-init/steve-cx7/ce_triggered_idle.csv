@@ -1,0 +1,14 @@
+# device=NVIDIA H200 NVL iters=2000  (trigger->data-landed, GPU globaltimer, us)
+test,dir,size,median_us,p99_us
+triggered,d2d,8,2.50,2.82
+triggered,d2d,512,2.50,2.91
+triggered,d2d,4096,2.59,2.98
+triggered,d2d,65536,3.46,3.71
+triggered,d2d,1048576,15.30,15.62
+triggered,d2d,4194304,52.00,52.45
+triggered,d2h,8,10.85,11.26
+triggered,d2h,512,10.78,11.84
+triggered,d2h,4096,10.94,12.13
+triggered,d2h,65536,12.51,13.57
+triggered,d2h,1048576,47.20,48.77
+triggered,d2h,4194304,157.06,158.53
