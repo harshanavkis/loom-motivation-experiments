@@ -1,0 +1,82 @@
+
+## rank 0/8 (NVIDIA H200, 132 SMs) file /scratch/harshanavkis/chakra-traces/Mixtral/Mixtral-8x7B/nemo_raw/device_0.json
+ProfilerStep#0 on GPU: 5872.0 ms
+GPU busy (any kernel/memcpy/memset): 4747.1 ms = 80.8% of step
+comm-kernel wall time (union of NCCL kernel intervals): 2365.3 ms = 40.3% of step
+compute wall time (union of non-NCCL kernels+memcpy/memset): 2458.9 ms = 41.9% of step
+comm overlapped with compute: 77.2 ms = 3.3% of comm wall time
+exposed comm (comm running, no compute running): 2288.1 ms = 39.0% of step
+type | class | kernels | sum dur ms | % of step (sum dur) | SM-time (SM*ms) | CTA counts (grid) histogram
+ALL_TO_ALL | intra | 1024 | 1723.2 | 29.3 | 55143 | {32: 1024}
+ALL_GATHER | intra | 1322 | 346.6 | 5.9 | 8318 | {24: 1322}
+REDUCE_SCATTER | intra | 1058 | 308.3 | 5.3 | 7399 | {24: 1058}
+ALL_REDUCE | intra | 291 | 31.6 | 0.5 | 34 | {1: 266, 2: 24, 24: 1}
+SM-time NCCL = 70895 SM*ms; non-NCCL kernels = 302067 SM*ms
+NCCL share of kernel SM-time = 19.0%
+NCCL SM-time / SM capacity of step (132 SMs x step) = 9.15%; non-NCCL / capacity = 39.0%
+avg SMs held by NCCL while a NCCL kernel runs = 30.0
+process groups seen on NCCL kernels: {'0': [0, 1, 2, 3, 4, 5, 6, 7], '1': [0, 2, 4, 6], '5': [0, 2, 4, 6], '22': [0, 1], '52': [0, 1], '57': [0, 2, 4, 6]}
+
+## rank 2/8 (NVIDIA H200, 132 SMs) file /scratch/harshanavkis/chakra-traces/Mixtral/Mixtral-8x7B/nemo_raw/device_2.json
+ProfilerStep#0 on GPU: 5873.2 ms
+GPU busy (any kernel/memcpy/memset): 4974.8 ms = 84.7% of step
+comm-kernel wall time (union of NCCL kernel intervals): 2592.7 ms = 44.1% of step
+compute wall time (union of non-NCCL kernels+memcpy/memset): 2452.2 ms = 41.8% of step
+comm overlapped with compute: 70.1 ms = 2.7% of comm wall time
+exposed comm (comm running, no compute running): 2522.6 ms = 43.0% of step
+type | class | kernels | sum dur ms | % of step (sum dur) | SM-time (SM*ms) | CTA counts (grid) histogram
+ALL_TO_ALL | intra | 1024 | 2132.9 | 36.3 | 68253 | {32: 1024}
+ALL_GATHER | intra | 1322 | 243.8 | 4.2 | 5851 | {24: 1322}
+REDUCE_SCATTER | intra | 1058 | 231.4 | 3.9 | 5555 | {24: 1058}
+ALL_REDUCE | intra | 291 | 28.6 | 0.5 | 30 | {1: 266, 2: 24, 24: 1}
+BROADCAST | intra | 2 | 1.7 | 0.0 | 2 | {1: 2}
+SM-time NCCL = 79689 SM*ms; non-NCCL kernels = 301270 SM*ms
+NCCL share of kernel SM-time = 20.9%
+NCCL SM-time / SM capacity of step (132 SMs x step) = 10.28%; non-NCCL / capacity = 38.9%
+avg SMs held by NCCL while a NCCL kernel runs = 30.7
+process groups seen on NCCL kernels: {'0': [0, 1, 2, 3, 4, 5, 6, 7], '1': [0, 2, 4, 6], '5': [0, 2, 4, 6], '23': [2, 3], '53': [2, 3], '57': [0, 2, 4, 6]}
+
+## rank 3/8 (NVIDIA H200, 132 SMs) file /scratch/harshanavkis/chakra-traces/Mixtral/Mixtral-8x7B/nemo_raw/device_3.json
+ProfilerStep#0 on GPU: 5873.3 ms
+GPU busy (any kernel/memcpy/memset): 5013.1 ms = 85.4% of step
+comm-kernel wall time (union of NCCL kernel intervals): 2608.6 ms = 44.4% of step
+compute wall time (union of non-NCCL kernels+memcpy/memset): 2471.7 ms = 42.1% of step
+comm overlapped with compute: 67.1 ms = 2.6% of comm wall time
+exposed comm (comm running, no compute running): 2541.5 ms = 43.3% of step
+type | class | kernels | sum dur ms | % of step (sum dur) | SM-time (SM*ms) | CTA counts (grid) histogram
+ALL_TO_ALL | intra | 1024 | 1900.2 | 32.4 | 60805 | {32: 1024}
+ALL_GATHER | intra | 1322 | 478.9 | 8.2 | 11493 | {24: 1322}
+REDUCE_SCATTER | intra | 1058 | 219.4 | 3.7 | 5267 | {24: 1058}
+ALL_REDUCE | intra | 291 | 37.1 | 0.6 | 39 | {1: 266, 2: 24, 24: 1}
+BROADCAST | intra | 2 | 2.4 | 0.0 | 2 | {1: 2}
+SM-time NCCL = 77605 SM*ms; non-NCCL kernels = 303693 SM*ms
+NCCL share of kernel SM-time = 20.4%
+NCCL SM-time / SM capacity of step (132 SMs x step) = 10.01%; non-NCCL / capacity = 39.2%
+avg SMs held by NCCL while a NCCL kernel runs = 29.7
+process groups seen on NCCL kernels: {'0': [0, 1, 2, 3, 4, 5, 6, 7], '3': [1, 3, 5, 7], '7': [1, 3, 5, 7], '23': [2, 3], '53': [2, 3], '58': [1, 3, 5, 7]}
+
+## rank 6/8 (NVIDIA H200, 132 SMs) file /scratch/harshanavkis/chakra-traces/Mixtral/Mixtral-8x7B/nemo_raw/device_6.json
+ProfilerStep#0 on GPU: 5873.5 ms
+GPU busy (any kernel/memcpy/memset): 3263.1 ms = 55.6% of step
+comm-kernel wall time (union of NCCL kernel intervals): 810.1 ms = 13.8% of step
+compute wall time (union of non-NCCL kernels+memcpy/memset): 2465.3 ms = 42.0% of step
+comm overlapped with compute: 12.4 ms = 1.5% of comm wall time
+exposed comm (comm running, no compute running): 797.8 ms = 13.6% of step
+type | class | kernels | sum dur ms | % of step (sum dur) | SM-time (SM*ms) | CTA counts (grid) histogram
+ALL_TO_ALL | intra | 1024 | 443.5 | 7.6 | 14192 | {32: 1024}
+ALL_GATHER | intra | 1322 | 216.9 | 3.7 | 5205 | {24: 1322}
+REDUCE_SCATTER | intra | 1058 | 141.4 | 2.4 | 3393 | {24: 1058}
+ALL_REDUCE | intra | 291 | 5.8 | 0.1 | 7 | {1: 266, 2: 24, 24: 1}
+BROADCAST | intra | 2 | 2.6 | 0.0 | 3 | {1: 2}
+SM-time NCCL = 22800 SM*ms; non-NCCL kernels = 303119 SM*ms
+NCCL share of kernel SM-time = 7.0%
+NCCL SM-time / SM capacity of step (132 SMs x step) = 2.94%; non-NCCL / capacity = 39.1%
+avg SMs held by NCCL while a NCCL kernel runs = 28.1
+process groups seen on NCCL kernels: {'0': [0, 1, 2, 3, 4, 5, 6, 7], '1': [0, 2, 4, 6], '5': [0, 2, 4, 6], '25': [6, 7], '55': [6, 7], '57': [0, 2, 4, 6]}
+
+## summary
+rank | step ms | comm wall % step | % comm overlapped | exposed comm % step | NCCL % of kernel SM-time | NCCL % of SM capacity
+0 | 5872.0 | 40.3 | 3.3 | 39.0 | 19.0 | 9.15
+2 | 5873.2 | 44.1 | 2.7 | 43.0 | 20.9 | 10.28
+3 | 5873.3 | 44.4 | 2.6 | 43.3 | 20.4 | 10.01
+6 | 5873.5 | 13.8 | 1.5 | 13.6 | 7.0 | 2.94

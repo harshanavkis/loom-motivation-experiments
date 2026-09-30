@@ -1,0 +1,62 @@
+# Mixtral-8x7B: 8 rank ETs, ranks 0..7; ASSUMED gpus/node = 8
+# nodes implied by rank count = 1
+
+## Process groups (membership inferred = ranks issuing collectives on the pg_name)
+pg | size | members | nodes | class | collective types
+0 | 8 | [0, 1, 2, 3, 4, 5, 6, 7] | [0] | intra | ALL_REDUCE,BROADCAST
+1 | 4 | [0, 2, 4, 6] | [0] | intra | ALL_REDUCE
+3 | 4 | [1, 3, 5, 7] | [0] | intra | ALL_REDUCE
+5 | 4 | [0, 2, 4, 6] | [0] | intra | ALL_GATHER,REDUCE_SCATTER
+7 | 4 | [1, 3, 5, 7] | [0] | intra | ALL_GATHER,REDUCE_SCATTER
+22 | 2 | [0, 1] | [0] | intra | ALL_GATHER,ALL_REDUCE,REDUCE_SCATTER
+23 | 2 | [2, 3] | [0] | intra | ALL_GATHER,ALL_REDUCE,REDUCE_SCATTER
+24 | 2 | [4, 5] | [0] | intra | ALL_GATHER,ALL_REDUCE,REDUCE_SCATTER
+25 | 2 | [6, 7] | [0] | intra | ALL_GATHER,ALL_REDUCE,REDUCE_SCATTER
+52 | 2 | [0, 1] | [0] | intra | ALL_REDUCE
+53 | 2 | [2, 3] | [0] | intra | ALL_REDUCE
+54 | 2 | [4, 5] | [0] | intra | ALL_REDUCE
+55 | 2 | [6, 7] | [0] | intra | ALL_REDUCE
+57 | 4 | [0, 2, 4, 6] | [0] | intra | ALL_TO_ALL
+58 | 4 | [1, 3, 5, 7] | [0] | intra | ALL_TO_ALL
+
+## NCCL kernel names seen (all ranks, counts)
+ALL_GATHER|ncclDevKernel_AllGather_RING_LL : 10576
+ALL_REDUCE|ncclDevKernel_AllReduce_Sum_bf16_RING_LL : 2056
+ALL_REDUCE|ncclDevKernel_AllReduce_Sum_f32_RING_LL : 272
+ALL_TO_ALL|ncclDevKernel_SendRecv : 8192
+BROADCAST|ncclDevKernel_Broadcast_RING_LL : 16
+REDUCE_SCATTER|ncclDevKernel_ReduceScatter_Sum_bf16_RING_LL : 8464
+
+## Per-rank summary (times in ms; comm = sum of NCCL kernel durations)
+rank | ET window | GPU kernel sum | max stream busy (stream) | stream-7 busy | comm sum | comm intra | comm inter | comm/GPU-kernel-sum | comm/ET-window
+0 | 10032 | 4858.5 | 2436.1 (7) | 2436.1 | 2408.0 | 2408.0 | 0.0 | 0.496 | 0.240
+1 | 10106 | 4721.3 | 2417.5 (7) | 2417.5 | 2290.3 | 2290.3 | 0.0 | 0.485 | 0.227
+2 | 10032 | 5080.4 | 2429.0 (7) | 2429.0 | 2636.6 | 2636.6 | 0.0 | 0.519 | 0.263
+3 | 10048 | 5100.4 | 2448.6 (7) | 2448.6 | 2636.1 | 2636.1 | 0.0 | 0.517 | 0.262
+4 | 10036 | 4719.9 | 2416.5 (7) | 2416.5 | 2289.8 | 2289.8 | 0.0 | 0.485 | 0.228
+5 | 10081 | 5139.1 | 2440.3 (7) | 2440.3 | 2683.4 | 2683.4 | 0.0 | 0.522 | 0.266
+6 | 10033 | 3266.5 | 2443.4 (7) | 2443.4 | 808.2 | 808.2 | 0.0 | 0.247 | 0.081
+7 | 10035 | 4644.5 | 2461.4 (7) | 2461.4 | 2169.6 | 2169.6 | 0.0 | 0.467 | 0.216
+
+comm/GPU-kernel-sum across ranks: min 0.247 median 0.496 max 0.522
+inter-node share of comm time across ranks: min 0.000 median 0.000 max 0.000
+
+## Rank 0: comm by collective type x class (ms, % of this rank's comm, % of GPU kernel sum)
+type | class | pg(s) | count | time ms | % comm | % GPU-kernel-sum | MB issued
+ALL_TO_ALL | intra | 57 | 1024 | 1722.7 | 71.5 | 35.5 | 34359.7
+ALL_GATHER | intra | 22,5 | 1322 | 345.9 | 14.4 | 7.1 | 30869.2
+REDUCE_SCATTER | intra | 22,5 | 1058 | 307.8 | 12.8 | 6.3 | 53683.4
+ALL_REDUCE | intra | 0,1,22,52 | 291 | 31.4 | 1.3 | 0.6 | 3.0
+BROADCAST | intra | 0 | 2 | 0.1 | 0.0 | 0.0 | 0.0
+stream busy (ms): {7: 2436.1, 52: 1722.7, 48: 592.6, 44: 61.5, 64: 18.7, 56: 14.3, 60: 10.5, 32: 2.0}
+
+## Rank 4: comm by collective type x class (ms, % of this rank's comm, % of GPU kernel sum)
+type | class | pg(s) | count | time ms | % comm | % GPU-kernel-sum | MB issued
+ALL_TO_ALL | intra | 57 | 1024 | 1822.3 | 79.6 | 38.6 | 34359.7
+ALL_GATHER | intra | 24,5 | 1322 | 236.8 | 10.3 | 5.0 | 30869.2
+REDUCE_SCATTER | intra | 24,5 | 1058 | 210.7 | 9.2 | 4.5 | 53683.4
+ALL_REDUCE | intra | 0,1,24,54 | 291 | 17.6 | 0.8 | 0.4 | 3.0
+BROADCAST | intra | 0 | 2 | 2.4 | 0.1 | 0.0 | 0.0
+stream busy (ms): {7: 2416.5, 52: 1822.3, 48: 387.5, 44: 60.3, 56: 13.7, 60: 11.6, 32: 5.5, 64: 2.7}
+
+(raw per-rank aggregates written to /scratch/harshanavkis/loom-proj/motivation-experiments/m3-sm-share/chakra/et_summary_Mixtral-8x7B.json)

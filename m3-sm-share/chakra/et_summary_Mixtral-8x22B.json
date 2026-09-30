@@ -1,0 +1,2826 @@
+{
+ "label": "Mixtral-8x22B",
+ "gpus_per_node_assumed": 8,
+ "pg_members": {
+  "58": [
+   0,
+   1,
+   2,
+   3
+  ],
+  "164": [
+   0,
+   1,
+   2,
+   3
+  ],
+  "173": [
+   0,
+   4,
+   8,
+   12,
+   16,
+   20,
+   24,
+   28
+  ],
+  "1": [
+   0,
+   4,
+   8,
+   12,
+   16,
+   20,
+   24,
+   28
+  ],
+  "9": [
+   0,
+   4,
+   8,
+   12,
+   16,
+   20,
+   24,
+   28
+  ],
+  "0": [
+   0,
+   1,
+   2,
+   3,
+   4,
+   5,
+   6,
+   7,
+   8,
+   9,
+   10,
+   11,
+   12,
+   13,
+   14,
+   15,
+   16,
+   17,
+   18,
+   19,
+   20,
+   21,
+   22,
+   23,
+   24,
+   25,
+   26,
+   27,
+   28,
+   29,
+   30,
+   31
+  ],
+  "174": [
+   1,
+   5,
+   9,
+   13,
+   17,
+   21,
+   25,
+   29
+  ],
+  "3": [
+   1,
+   5,
+   9,
+   13,
+   17,
+   21,
+   25,
+   29
+  ],
+  "11": [
+   1,
+   5,
+   9,
+   13,
+   17,
+   21,
+   25,
+   29
+  ],
+  "175": [
+   2,
+   6,
+   10,
+   14,
+   18,
+   22,
+   26,
+   30
+  ],
+  "5": [
+   2,
+   6,
+   10,
+   14,
+   18,
+   22,
+   26,
+   30
+  ],
+  "13": [
+   2,
+   6,
+   10,
+   14,
+   18,
+   22,
+   26,
+   30
+  ],
+  "176": [
+   3,
+   7,
+   11,
+   15,
+   19,
+   23,
+   27,
+   31
+  ],
+  "7": [
+   3,
+   7,
+   11,
+   15,
+   19,
+   23,
+   27,
+   31
+  ],
+  "15": [
+   3,
+   7,
+   11,
+   15,
+   19,
+   23,
+   27,
+   31
+  ],
+  "59": [
+   4,
+   5,
+   6,
+   7
+  ],
+  "165": [
+   4,
+   5,
+   6,
+   7
+  ],
+  "60": [
+   8,
+   9,
+   10,
+   11
+  ],
+  "166": [
+   8,
+   9,
+   10,
+   11
+  ],
+  "61": [
+   12,
+   13,
+   14,
+   15
+  ],
+  "167": [
+   12,
+   13,
+   14,
+   15
+  ],
+  "62": [
+   16,
+   17,
+   18,
+   19
+  ],
+  "168": [
+   16,
+   17,
+   18,
+   19
+  ],
+  "63": [
+   20,
+   21,
+   22,
+   23
+  ],
+  "169": [
+   20,
+   21,
+   22,
+   23
+  ],
+  "None": [
+   20
+  ],
+  "64": [
+   24,
+   25,
+   26,
+   27
+  ],
+  "170": [
+   24,
+   25,
+   26,
+   27
+  ],
+  "65": [
+   28,
+   29,
+   30,
+   31
+  ],
+  "171": [
+   28,
+   29,
+   30,
+   31
+  ]
+ },
+ "pg_class": {
+  "0": "inter",
+  "1": "inter",
+  "3": "inter",
+  "5": "inter",
+  "7": "inter",
+  "9": "inter",
+  "11": "inter",
+  "13": "inter",
+  "15": "inter",
+  "58": "intra",
+  "59": "intra",
+  "60": "intra",
+  "61": "intra",
+  "62": "intra",
+  "63": "intra",
+  "64": "intra",
+  "65": "intra",
+  "164": "intra",
+  "165": "intra",
+  "166": "intra",
+  "167": "intra",
+  "168": "intra",
+  "169": "intra",
+  "170": "intra",
+  "171": "intra",
+  "173": "inter",
+  "174": "inter",
+  "175": "inter",
+  "176": "inter",
+  "None": "intra"
+ },
+ "ranks": [
+  {
+   "rank": 0,
+   "path": "/scratch/harshanavkis/chakra-traces/Mixtral/Mixtral-8x22B/mixtral-8x22_chakra.0.et",
+   "window_ms": 19521,
+   "comm": {
+    "REDUCE_SCATTER|58": [
+     904,
+     198762,
+     68048388096
+    ],
+    "ALL_GATHER|58": [
+     1132,
+     2420300,
+     19881000960
+    ],
+    "ALL_REDUCE|164": [
+     224,
+     8611,
+     3584
+    ],
+    "ALL_TO_ALL|173": [
+     896,
+     9639744,
+     22548578304
+    ],
+    "ALL_REDUCE|58": [
+     13,
+     113577,
+     7090176
+    ],
+    "ALL_REDUCE|1": [
+     4,
+     24250,
+     16
+    ],
+    "REDUCE_SCATTER|9": [
+     1,
+     443788,
+     2671325184
+    ],
+    "ALL_REDUCE|0": [
+     2,
+     5018,
+     8
+    ],
+    "ALL_GATHER|9": [
+     2,
+     930724,
+     667831296
+    ],
+    "BROADCAST|0": [
+     2,
+     11,
+     12
+    ]
+   },
+   "stream_busy": {
+    "7": 1769179,
+    "44": 2732639,
+    "56": 8611,
+    "48": 9639744,
+    "52": 24250,
+    "60": 1374512,
+    "64": 5628,
+    "32": 5029
+   },
+   "gpu_total_us": 15559592,
+   "comm_total_us": 13784785,
+   "n_gpu": 28877,
+   "kernel_names": {
+    "REDUCE_SCATTER|ncclDevKernel_ReduceScatter_Sum_bf16_RING_LL": 905,
+    "ALL_GATHER|ncclDevKernel_AllGather_RING_LL": 1134,
+    "ALL_REDUCE|ncclDevKernel_AllReduce_Sum_bf16_RING_LL": 225,
+    "ALL_TO_ALL|ncclDevKernel_SendRecv": 896,
+    "ALL_REDUCE|ncclDevKernel_AllReduce_Sum_f32_RING_LL": 12,
+    "ALL_REDUCE|ncclDevKernel_AllReduce_Sum_f32_TREE_LL": 6,
+    "BROADCAST|ncclDevKernel_Broadcast_RING_LL": 2
+   }
+  },
+  {
+   "rank": 1,
+   "path": "/scratch/harshanavkis/chakra-traces/Mixtral/Mixtral-8x22B/mixtral-8x22_chakra.1.et",
+   "window_ms": 19549,
+   "comm": {
+    "REDUCE_SCATTER|58": [
+     904,
+     195174,
+     68048388096
+    ],
+    "ALL_GATHER|58": [
+     1132,
+     2288237,
+     19881000960
+    ],
+    "ALL_REDUCE|164": [
+     224,
+     8382,
+     3584
+    ],
+    "ALL_TO_ALL|174": [
+     896,
+     9777363,
+     22548578304
+    ],
+    "ALL_REDUCE|58": [
+     13,
+     304,
+     7090176
+    ],
+    "ALL_REDUCE|3": [
+     4,
+     26024,
+     16
+    ],
+    "REDUCE_SCATTER|11": [
+     1,
+     557061,
+     2671325184
+    ],
+    "ALL_REDUCE|0": [
+     2,
+     4395,
+     8
+    ],
+    "ALL_GATHER|11": [
+     2,
+     1024050,
+     667831296
+    ],
+    "BROADCAST|0": [
+     2,
+     16626,
+     12
+    ]
+   },
+   "stream_busy": {
+    "7": 1781775,
+    "44": 2483715,
+    "56": 8382,
+    "48": 9777363,
+    "52": 26024,
+    "60": 1581111,
+    "64": 5636,
+    "32": 21021
+   },
+   "gpu_total_us": 15685027,
+   "comm_total_us": 13897616,
+   "n_gpu": 28877,
+   "kernel_names": {
+    "REDUCE_SCATTER|ncclDevKernel_ReduceScatter_Sum_bf16_RING_LL": 905,
+    "ALL_GATHER|ncclDevKernel_AllGather_RING_LL": 1134,
+    "ALL_REDUCE|ncclDevKernel_AllReduce_Sum_bf16_RING_LL": 225,
+    "ALL_TO_ALL|ncclDevKernel_SendRecv": 896,
+    "ALL_REDUCE|ncclDevKernel_AllReduce_Sum_f32_RING_LL": 12,
+    "ALL_REDUCE|ncclDevKernel_AllReduce_Sum_f32_TREE_LL": 6,
+    "BROADCAST|ncclDevKernel_Broadcast_RING_LL": 2
+   }
+  },
+  {
+   "rank": 2,
+   "path": "/scratch/harshanavkis/chakra-traces/Mixtral/Mixtral-8x22B/mixtral-8x22_chakra.2.et",
+   "window_ms": 19559,
+   "comm": {
+    "REDUCE_SCATTER|58": [
+     904,
+     191110,
+     68048388096
+    ],
+    "ALL_GATHER|58": [
+     1132,
+     2535870,
+     19881000960
+    ],
+    "ALL_REDUCE|164": [
+     224,
+     6649,
+     3584
+    ],
+    "ALL_TO_ALL|175": [
+     896,
+     9514487,
+     22548578304
+    ],
+    "ALL_REDUCE|58": [
+     13,
+     51564,
+     7090176
+    ],
+    "ALL_REDUCE|5": [
+     4,
+     28646,
+     16
+    ],
+    "REDUCE_SCATTER|13": [
+     1,
+     505798,
+     2671325184
+    ],
+    "ALL_REDUCE|0": [
+     2,
+     4263,
+     8
+    ],
+    "ALL_GATHER|13": [
+     2,
+     1012395,
+     667831296
+    ],
+    "BROADCAST|0": [
+     2,
+     25806,
+     12
+    ]
+   },
+   "stream_busy": {
+    "7": 1782373,
+    "44": 2778544,
+    "56": 6649,
+    "48": 9514487,
+    "52": 28646,
+    "60": 1518193,
+    "64": 5633,
+    "32": 30069
+   },
+   "gpu_total_us": 15664594,
+   "comm_total_us": 13876588,
+   "n_gpu": 28877,
+   "kernel_names": {
+    "REDUCE_SCATTER|ncclDevKernel_ReduceScatter_Sum_bf16_RING_LL": 905,
+    "ALL_GATHER|ncclDevKernel_AllGather_RING_LL": 1134,
+    "ALL_REDUCE|ncclDevKernel_AllReduce_Sum_bf16_RING_LL": 225,
+    "ALL_TO_ALL|ncclDevKernel_SendRecv": 896,
+    "ALL_REDUCE|ncclDevKernel_AllReduce_Sum_f32_RING_LL": 12,
+    "ALL_REDUCE|ncclDevKernel_AllReduce_Sum_f32_TREE_LL": 6,
+    "BROADCAST|ncclDevKernel_Broadcast_RING_LL": 2
+   }
+  },
+  {
+   "rank": 3,
+   "path": "/scratch/harshanavkis/chakra-traces/Mixtral/Mixtral-8x22B/mixtral-8x22_chakra.3.et",
+   "window_ms": 19549,
+   "comm": {
+    "REDUCE_SCATTER|58": [
+     904,
+     199304,
+     68048388096
+    ],
+    "ALL_GATHER|58": [
+     1132,
+     2471843,
+     19881000960
+    ],
+    "ALL_REDUCE|164": [
+     224,
+     6983,
+     3584
+    ],
+    "ALL_TO_ALL|176": [
+     896,
+     9570289,
+     22548578304
+    ],
+    "ALL_REDUCE|58": [
+     13,
+     42377,
+     7090176
+    ],
+    "ALL_REDUCE|7": [
+     4,
+     28412,
+     16
+    ],
+    "REDUCE_SCATTER|15": [
+     1,
+     515009,
+     2671325184
+    ],
+    "ALL_REDUCE|0": [
+     2,
+     4538,
+     8
+    ],
+    "ALL_GATHER|15": [
+     2,
+     994799,
+     667831296
+    ],
+    "BROADCAST|0": [
+     2,
+     45272,
+     12
+    ]
+   },
+   "stream_busy": {
+    "7": 1774280,
+    "44": 2713524,
+    "56": 6983,
+    "48": 9570289,
+    "52": 28412,
+    "60": 1509808,
+    "64": 5624,
+    "32": 49810
+   },
+   "gpu_total_us": 15658730,
+   "comm_total_us": 13878826,
+   "n_gpu": 28877,
+   "kernel_names": {
+    "REDUCE_SCATTER|ncclDevKernel_ReduceScatter_Sum_bf16_RING_LL": 905,
+    "ALL_GATHER|ncclDevKernel_AllGather_RING_LL": 1134,
+    "ALL_REDUCE|ncclDevKernel_AllReduce_Sum_bf16_RING_LL": 225,
+    "ALL_TO_ALL|ncclDevKernel_SendRecv": 896,
+    "ALL_REDUCE|ncclDevKernel_AllReduce_Sum_f32_RING_LL": 12,
+    "ALL_REDUCE|ncclDevKernel_AllReduce_Sum_f32_TREE_LL": 6,
+    "BROADCAST|ncclDevKernel_Broadcast_RING_LL": 2
+   }
+  },
+  {
+   "rank": 4,
+   "path": "/scratch/harshanavkis/chakra-traces/Mixtral/Mixtral-8x22B/mixtral-8x22_chakra.4.et",
+   "window_ms": 19551,
+   "comm": {
+    "REDUCE_SCATTER|59": [
+     904,
+     195530,
+     68048388096
+    ],
+    "ALL_GATHER|59": [
+     1132,
+     2293346,
+     19881000960
+    ],
+    "ALL_REDUCE|165": [
+     224,
+     6328,
+     3584
+    ],
+    "ALL_TO_ALL|173": [
+     896,
+     9766116,
+     22548578304
+    ],
+    "ALL_REDUCE|59": [
+     13,
+     113657,
+     7090176
+    ],
+    "ALL_REDUCE|1": [
+     4,
+     57042,
+     16
+    ],
+    "REDUCE_SCATTER|9": [
+     1,
+     447647,
+     2671325184
+    ],
+    "ALL_REDUCE|0": [
+     2,
+     2993,
+     8
+    ],
+    "ALL_GATHER|9": [
+     2,
+     930715,
+     667831296
+    ],
+    "BROADCAST|0": [
+     2,
+     109480,
+     12
+    ]
+   },
+   "stream_busy": {
+    "7": 1749264,
+    "44": 2602533,
+    "56": 6328,
+    "48": 9766116,
+    "52": 57042,
+    "60": 1378362,
+    "64": 5517,
+    "32": 112473
+   },
+   "gpu_total_us": 15677635,
+   "comm_total_us": 13922854,
+   "n_gpu": 28895,
+   "kernel_names": {
+    "REDUCE_SCATTER|ncclDevKernel_ReduceScatter_Sum_bf16_RING_LL": 905,
+    "ALL_GATHER|ncclDevKernel_AllGather_RING_LL": 1134,
+    "ALL_REDUCE|ncclDevKernel_AllReduce_Sum_bf16_RING_LL": 225,
+    "ALL_TO_ALL|ncclDevKernel_SendRecv": 896,
+    "ALL_REDUCE|ncclDevKernel_AllReduce_Sum_f32_RING_LL": 12,
+    "ALL_REDUCE|ncclDevKernel_AllReduce_Sum_f32_TREE_LL": 6,
+    "BROADCAST|ncclDevKernel_Broadcast_RING_LL": 2
+   }
+  },
+  {
+   "rank": 5,
+   "path": "/scratch/harshanavkis/chakra-traces/Mixtral/Mixtral-8x22B/mixtral-8x22_chakra.5.et",
+   "window_ms": 19538,
+   "comm": {
+    "REDUCE_SCATTER|59": [
+     904,
+     194086,
+     68048388096
+    ],
+    "ALL_GATHER|59": [
+     1132,
+     2113959,
+     19881000960
+    ],
+    "ALL_REDUCE|165": [
+     224,
+     6180,
+     3584
+    ],
+    "ALL_TO_ALL|174": [
+     896,
+     9929339,
+     22548578304
+    ],
+    "ALL_REDUCE|59": [
+     13,
+     309,
+     7090176
+    ],
+    "ALL_REDUCE|3": [
+     4,
+     58814,
+     16
+    ],
+    "REDUCE_SCATTER|11": [
+     1,
+     560920,
+     2671325184
+    ],
+    "ALL_REDUCE|0": [
+     2,
+     3926,
+     8
+    ],
+    "ALL_GATHER|11": [
+     2,
+     1024491,
+     667831296
+    ],
+    "BROADCAST|0": [
+     2,
+     16021,
+     12
+    ]
+   },
+   "stream_busy": {
+    "7": 1760709,
+    "44": 2308354,
+    "56": 6180,
+    "48": 9929339,
+    "52": 58814,
+    "60": 1585411,
+    "64": 5625,
+    "32": 19947
+   },
+   "gpu_total_us": 15674379,
+   "comm_total_us": 13908045,
+   "n_gpu": 28894,
+   "kernel_names": {
+    "REDUCE_SCATTER|ncclDevKernel_ReduceScatter_Sum_bf16_RING_LL": 905,
+    "ALL_GATHER|ncclDevKernel_AllGather_RING_LL": 1134,
+    "ALL_REDUCE|ncclDevKernel_AllReduce_Sum_bf16_RING_LL": 225,
+    "ALL_TO_ALL|ncclDevKernel_SendRecv": 896,
+    "ALL_REDUCE|ncclDevKernel_AllReduce_Sum_f32_RING_LL": 12,
+    "ALL_REDUCE|ncclDevKernel_AllReduce_Sum_f32_TREE_LL": 6,
+    "BROADCAST|ncclDevKernel_Broadcast_RING_LL": 2
+   }
+  },
+  {
+   "rank": 6,
+   "path": "/scratch/harshanavkis/chakra-traces/Mixtral/Mixtral-8x22B/mixtral-8x22_chakra.6.et",
+   "window_ms": 19542,
+   "comm": {
+    "REDUCE_SCATTER|59": [
+     904,
+     193700,
+     68048388096
+    ],
+    "ALL_GATHER|59": [
+     1132,
+     2349620,
+     19881000960
+    ],
+    "ALL_REDUCE|165": [
+     224,
+     4200,
+     3584
+    ],
+    "ALL_TO_ALL|175": [
+     896,
+     9680246,
+     22548578304
+    ],
+    "ALL_REDUCE|59": [
+     13,
+     50459,
+     7090176
+    ],
+    "ALL_REDUCE|5": [
+     4,
+     61436,
+     16
+    ],
+    "REDUCE_SCATTER|13": [
+     1,
+     510734,
+     2671325184
+    ],
+    "ALL_REDUCE|0": [
+     2,
+     3679,
+     8
+    ],
+    "ALL_GATHER|13": [
+     2,
+     1018248,
+     667831296
+    ],
+    "BROADCAST|0": [
+     2,
+     22076,
+     12
+    ]
+   },
+   "stream_busy": {
+    "7": 1750483,
+    "44": 2593779,
+    "56": 4200,
+    "48": 9680246,
+    "52": 61436,
+    "60": 1528982,
+    "64": 5628,
+    "32": 25755
+   },
+   "gpu_total_us": 15650509,
+   "comm_total_us": 13894398,
+   "n_gpu": 28894,
+   "kernel_names": {
+    "REDUCE_SCATTER|ncclDevKernel_ReduceScatter_Sum_bf16_RING_LL": 905,
+    "ALL_GATHER|ncclDevKernel_AllGather_RING_LL": 1134,
+    "ALL_REDUCE|ncclDevKernel_AllReduce_Sum_bf16_RING_LL": 225,
+    "ALL_TO_ALL|ncclDevKernel_SendRecv": 896,
+    "ALL_REDUCE|ncclDevKernel_AllReduce_Sum_f32_RING_LL": 12,
+    "ALL_REDUCE|ncclDevKernel_AllReduce_Sum_f32_TREE_LL": 6,
+    "BROADCAST|ncclDevKernel_Broadcast_RING_LL": 2
+   }
+  },
+  {
+   "rank": 7,
+   "path": "/scratch/harshanavkis/chakra-traces/Mixtral/Mixtral-8x22B/mixtral-8x22_chakra.7.et",
+   "window_ms": 19514,
+   "comm": {
+    "REDUCE_SCATTER|59": [
+     904,
+     196031,
+     68048388096
+    ],
+    "ALL_GATHER|59": [
+     1132,
+     2552612,
+     19881000960
+    ],
+    "ALL_REDUCE|165": [
+     224,
+     6342,
+     3584
+    ],
+    "ALL_TO_ALL|176": [
+     896,
+     9497386,
+     22548578304
+    ],
+    "ALL_REDUCE|59": [
+     13,
+     35918,
+     7090176
+    ],
+    "ALL_REDUCE|7": [
+     4,
+     61197,
+     16
+    ],
+    "REDUCE_SCATTER|15": [
+     1,
+     525285,
+     2671325184
+    ],
+    "ALL_REDUCE|0": [
+     2,
+     3564,
+     8
+    ],
+    "ALL_GATHER|15": [
+     2,
+     995038,
+     667831296
+    ],
+    "BROADCAST|0": [
+     2,
+     63,
+     12
+    ]
+   },
+   "stream_busy": {
+    "7": 1755346,
+    "44": 2784561,
+    "56": 6342,
+    "48": 9497386,
+    "52": 61197,
+    "60": 1520323,
+    "64": 5622,
+    "32": 3627
+   },
+   "gpu_total_us": 15634404,
+   "comm_total_us": 13873436,
+   "n_gpu": 28894,
+   "kernel_names": {
+    "REDUCE_SCATTER|ncclDevKernel_ReduceScatter_Sum_bf16_RING_LL": 905,
+    "ALL_GATHER|ncclDevKernel_AllGather_RING_LL": 1134,
+    "ALL_REDUCE|ncclDevKernel_AllReduce_Sum_bf16_RING_LL": 225,
+    "ALL_TO_ALL|ncclDevKernel_SendRecv": 896,
+    "ALL_REDUCE|ncclDevKernel_AllReduce_Sum_f32_RING_LL": 12,
+    "ALL_REDUCE|ncclDevKernel_AllReduce_Sum_f32_TREE_LL": 6,
+    "BROADCAST|ncclDevKernel_Broadcast_RING_LL": 2
+   }
+  },
+  {
+   "rank": 8,
+   "path": "/scratch/harshanavkis/chakra-traces/Mixtral/Mixtral-8x22B/mixtral-8x22_chakra.8.et",
+   "window_ms": 19637,
+   "comm": {
+    "REDUCE_SCATTER|60": [
+     904,
+     192992,
+     68048388096
+    ],
+    "ALL_GATHER|60": [
+     1132,
+     2481841,
+     19881000960
+    ],
+    "ALL_REDUCE|166": [
+     224,
+     4339,
+     3584
+    ],
+    "ALL_TO_ALL|173": [
+     896,
+     9512228,
+     22548578304
+    ],
+    "ALL_REDUCE|60": [
+     13,
+     117001,
+     7090176
+    ],
+    "ALL_REDUCE|1": [
+     4,
+     62074,
+     16
+    ],
+    "REDUCE_SCATTER|9": [
+     1,
+     441730,
+     2671325184
+    ],
+    "ALL_REDUCE|0": [
+     2,
+     4058,
+     8
+    ],
+    "ALL_GATHER|9": [
+     2,
+     928307,
+     667831296
+    ],
+    "BROADCAST|0": [
+     2,
+     102706,
+     12
+    ]
+   },
+   "stream_busy": {
+    "7": 1770828,
+    "44": 2791834,
+    "56": 4339,
+    "48": 9512228,
+    "52": 62074,
+    "60": 1370037,
+    "64": 5523,
+    "32": 106764
+   },
+   "gpu_total_us": 15623627,
+   "comm_total_us": 13847276,
+   "n_gpu": 28897,
+   "kernel_names": {
+    "REDUCE_SCATTER|ncclDevKernel_ReduceScatter_Sum_bf16_RING_LL": 905,
+    "ALL_GATHER|ncclDevKernel_AllGather_RING_LL": 1134,
+    "ALL_REDUCE|ncclDevKernel_AllReduce_Sum_bf16_RING_LL": 225,
+    "ALL_TO_ALL|ncclDevKernel_SendRecv": 896,
+    "ALL_REDUCE|ncclDevKernel_AllReduce_Sum_f32_RING_LL": 12,
+    "ALL_REDUCE|ncclDevKernel_AllReduce_Sum_f32_TREE_LL": 6,
+    "BROADCAST|ncclDevKernel_Broadcast_RING_LL": 2
+   }
+  },
+  {
+   "rank": 9,
+   "path": "/scratch/harshanavkis/chakra-traces/Mixtral/Mixtral-8x22B/mixtral-8x22_chakra.9.et",
+   "window_ms": 19653,
+   "comm": {
+    "REDUCE_SCATTER|60": [
+     904,
+     189656,
+     68048388096
+    ],
+    "ALL_GATHER|60": [
+     1132,
+     2206063,
+     19881000960
+    ],
+    "ALL_REDUCE|166": [
+     224,
+     26125,
+     3584
+    ],
+    "ALL_TO_ALL|174": [
+     896,
+     9796817,
+     22548578304
+    ],
+    "ALL_REDUCE|60": [
+     13,
+     303,
+     7090176
+    ],
+    "ALL_REDUCE|3": [
+     4,
+     54601,
+     16
+    ],
+    "REDUCE_SCATTER|11": [
+     1,
+     558487,
+     2671325184
+    ],
+    "ALL_REDUCE|0": [
+     2,
+     3451,
+     8
+    ],
+    "ALL_GATHER|11": [
+     2,
+     1020636,
+     667831296
+    ],
+    "BROADCAST|0": [
+     2,
+     8999,
+     12
+    ]
+   },
+   "stream_busy": {
+    "7": 1770726,
+    "44": 2396022,
+    "56": 26125,
+    "48": 9796817,
+    "52": 54601,
+    "60": 1579123,
+    "64": 5517,
+    "32": 12450
+   },
+   "gpu_total_us": 15641381,
+   "comm_total_us": 13865138,
+   "n_gpu": 28896,
+   "kernel_names": {
+    "REDUCE_SCATTER|ncclDevKernel_ReduceScatter_Sum_bf16_RING_LL": 905,
+    "ALL_GATHER|ncclDevKernel_AllGather_RING_LL": 1134,
+    "ALL_REDUCE|ncclDevKernel_AllReduce_Sum_bf16_RING_LL": 225,
+    "ALL_TO_ALL|ncclDevKernel_SendRecv": 896,
+    "ALL_REDUCE|ncclDevKernel_AllReduce_Sum_f32_RING_LL": 12,
+    "ALL_REDUCE|ncclDevKernel_AllReduce_Sum_f32_TREE_LL": 6,
+    "BROADCAST|ncclDevKernel_Broadcast_RING_LL": 2
+   }
+  },
+  {
+   "rank": 10,
+   "path": "/scratch/harshanavkis/chakra-traces/Mixtral/Mixtral-8x22B/mixtral-8x22_chakra.10.et",
+   "window_ms": 19658,
+   "comm": {
+    "REDUCE_SCATTER|60": [
+     904,
+     204707,
+     68048388096
+    ],
+    "ALL_GATHER|60": [
+     1132,
+     2312279,
+     19881000960
+    ],
+    "ALL_REDUCE|166": [
+     224,
+     26166,
+     3584
+    ],
+    "ALL_TO_ALL|175": [
+     896,
+     9692666,
+     22548578304
+    ],
+    "ALL_REDUCE|60": [
+     13,
+     51300,
+     7090176
+    ],
+    "ALL_REDUCE|5": [
+     4,
+     57327,
+     16
+    ],
+    "REDUCE_SCATTER|13": [
+     1,
+     507514,
+     2671325184
+    ],
+    "ALL_REDUCE|0": [
+     2,
+     206,
+     8
+    ],
+    "ALL_GATHER|13": [
+     2,
+     1014064,
+     667831296
+    ],
+    "BROADCAST|0": [
+     2,
+     17092,
+     12
+    ]
+   },
+   "stream_busy": {
+    "7": 1770550,
+    "44": 2568286,
+    "56": 26166,
+    "48": 9692666,
+    "52": 57327,
+    "60": 1521578,
+    "64": 5523,
+    "32": 17298
+   },
+   "gpu_total_us": 15659394,
+   "comm_total_us": 13883321,
+   "n_gpu": 28896,
+   "kernel_names": {
+    "REDUCE_SCATTER|ncclDevKernel_ReduceScatter_Sum_bf16_RING_LL": 905,
+    "ALL_GATHER|ncclDevKernel_AllGather_RING_LL": 1134,
+    "ALL_REDUCE|ncclDevKernel_AllReduce_Sum_bf16_RING_LL": 225,
+    "ALL_TO_ALL|ncclDevKernel_SendRecv": 896,
+    "ALL_REDUCE|ncclDevKernel_AllReduce_Sum_f32_RING_LL": 12,
+    "ALL_REDUCE|ncclDevKernel_AllReduce_Sum_f32_TREE_LL": 6,
+    "BROADCAST|ncclDevKernel_Broadcast_RING_LL": 2
+   }
+  },
+  {
+   "rank": 11,
+   "path": "/scratch/harshanavkis/chakra-traces/Mixtral/Mixtral-8x22B/mixtral-8x22_chakra.11.et",
+   "window_ms": 19625,
+   "comm": {
+    "REDUCE_SCATTER|60": [
+     904,
+     193693,
+     68048388096
+    ],
+    "ALL_GATHER|60": [
+     1132,
+     2412496,
+     19881000960
+    ],
+    "ALL_REDUCE|166": [
+     224,
+     26762,
+     3584
+    ],
+    "ALL_TO_ALL|176": [
+     896,
+     9587604,
+     22548578304
+    ],
+    "ALL_REDUCE|60": [
+     13,
+     34895,
+     7090176
+    ],
+    "ALL_REDUCE|7": [
+     4,
+     55534,
+     16
+    ],
+    "REDUCE_SCATTER|15": [
+     1,
+     523799,
+     2671325184
+    ],
+    "ALL_REDUCE|0": [
+     2,
+     3385,
+     8
+    ],
+    "ALL_GATHER|15": [
+     2,
+     994944,
+     667831296
+    ],
+    "BROADCAST|0": [
+     2,
+     37571,
+     12
+    ]
+   },
+   "stream_busy": {
+    "7": 1767522,
+    "44": 2641084,
+    "56": 26762,
+    "48": 9587604,
+    "52": 55534,
+    "60": 1518743,
+    "64": 5615,
+    "32": 40956
+   },
+   "gpu_total_us": 15643820,
+   "comm_total_us": 13870683,
+   "n_gpu": 28896,
+   "kernel_names": {
+    "REDUCE_SCATTER|ncclDevKernel_ReduceScatter_Sum_bf16_RING_LL": 905,
+    "ALL_GATHER|ncclDevKernel_AllGather_RING_LL": 1134,
+    "ALL_REDUCE|ncclDevKernel_AllReduce_Sum_bf16_RING_LL": 225,
+    "ALL_TO_ALL|ncclDevKernel_SendRecv": 896,
+    "ALL_REDUCE|ncclDevKernel_AllReduce_Sum_f32_RING_LL": 12,
+    "ALL_REDUCE|ncclDevKernel_AllReduce_Sum_f32_TREE_LL": 6,
+    "BROADCAST|ncclDevKernel_Broadcast_RING_LL": 2
+   }
+  },
+  {
+   "rank": 12,
+   "path": "/scratch/harshanavkis/chakra-traces/Mixtral/Mixtral-8x22B/mixtral-8x22_chakra.12.et",
+   "window_ms": 19623,
+   "comm": {
+    "REDUCE_SCATTER|61": [
+     904,
+     197780,
+     68048388096
+    ],
+    "ALL_GATHER|61": [
+     1132,
+     2423113,
+     19881000960
+    ],
+    "ALL_REDUCE|167": [
+     224,
+     5551,
+     3584
+    ],
+    "ALL_TO_ALL|173": [
+     896,
+     9567454,
+     22548578304
+    ],
+    "ALL_REDUCE|61": [
+     13,
+     104053,
+     7090176
+    ],
+    "ALL_REDUCE|1": [
+     4,
+     76383,
+     16
+    ],
+    "REDUCE_SCATTER|9": [
+     1,
+     456461,
+     2671325184
+    ],
+    "ALL_REDUCE|0": [
+     2,
+     4013,
+     8
+    ],
+    "ALL_GATHER|9": [
+     2,
+     930573,
+     667831296
+    ],
+    "BROADCAST|0": [
+     2,
+     101910,
+     12
+    ]
+   },
+   "stream_busy": {
+    "7": 1761844,
+    "44": 2724946,
+    "56": 5551,
+    "48": 9567454,
+    "52": 76383,
+    "60": 1387034,
+    "64": 5623,
+    "32": 105923
+   },
+   "gpu_total_us": 15634758,
+   "comm_total_us": 13867291,
+   "n_gpu": 28895,
+   "kernel_names": {
+    "REDUCE_SCATTER|ncclDevKernel_ReduceScatter_Sum_bf16_RING_LL": 905,
+    "ALL_GATHER|ncclDevKernel_AllGather_RING_LL": 1134,
+    "ALL_REDUCE|ncclDevKernel_AllReduce_Sum_bf16_RING_LL": 225,
+    "ALL_TO_ALL|ncclDevKernel_SendRecv": 896,
+    "ALL_REDUCE|ncclDevKernel_AllReduce_Sum_f32_RING_LL": 12,
+    "ALL_REDUCE|ncclDevKernel_AllReduce_Sum_f32_TREE_LL": 6,
+    "BROADCAST|ncclDevKernel_Broadcast_RING_LL": 2
+   }
+  },
+  {
+   "rank": 13,
+   "path": "/scratch/harshanavkis/chakra-traces/Mixtral/Mixtral-8x22B/mixtral-8x22_chakra.13.et",
+   "window_ms": 19660,
+   "comm": {
+    "REDUCE_SCATTER|61": [
+     904,
+     187231,
+     68048388096
+    ],
+    "ALL_GATHER|61": [
+     1132,
+     2119699,
+     19881000960
+    ],
+    "ALL_REDUCE|167": [
+     224,
+     5957,
+     3584
+    ],
+    "ALL_TO_ALL|174": [
+     896,
+     9881070,
+     22548578304
+    ],
+    "ALL_REDUCE|61": [
+     13,
+     277,
+     7090176
+    ],
+    "ALL_REDUCE|3": [
+     4,
+     68904,
+     16
+    ],
+    "REDUCE_SCATTER|11": [
+     1,
+     560213,
+     2671325184
+    ],
+    "ALL_REDUCE|0": [
+     2,
+     3639,
+     8
+    ],
+    "ALL_GATHER|11": [
+     2,
+     1031357,
+     667831296
+    ],
+    "BROADCAST|0": [
+     2,
+     113,
+     12
+    ]
+   },
+   "stream_busy": {
+    "7": 1770481,
+    "44": 2307207,
+    "56": 5957,
+    "48": 9881070,
+    "52": 68904,
+    "60": 1591570,
+    "64": 5628,
+    "32": 3752
+   },
+   "gpu_total_us": 15634569,
+   "comm_total_us": 13858460,
+   "n_gpu": 28894,
+   "kernel_names": {
+    "REDUCE_SCATTER|ncclDevKernel_ReduceScatter_Sum_bf16_RING_LL": 905,
+    "ALL_GATHER|ncclDevKernel_AllGather_RING_LL": 1134,
+    "ALL_REDUCE|ncclDevKernel_AllReduce_Sum_bf16_RING_LL": 225,
+    "ALL_TO_ALL|ncclDevKernel_SendRecv": 896,
+    "ALL_REDUCE|ncclDevKernel_AllReduce_Sum_f32_RING_LL": 12,
+    "ALL_REDUCE|ncclDevKernel_AllReduce_Sum_f32_TREE_LL": 6,
+    "BROADCAST|ncclDevKernel_Broadcast_RING_LL": 2
+   }
+  },
+  {
+   "rank": 14,
+   "path": "/scratch/harshanavkis/chakra-traces/Mixtral/Mixtral-8x22B/mixtral-8x22_chakra.14.et",
+   "window_ms": 19628,
+   "comm": {
+    "REDUCE_SCATTER|61": [
+     904,
+     207397,
+     68048388096
+    ],
+    "ALL_GATHER|61": [
+     1132,
+     2454441,
+     19881000960
+    ],
+    "ALL_REDUCE|167": [
+     224,
+     6726,
+     3584
+    ],
+    "ALL_TO_ALL|175": [
+     896,
+     9547261,
+     22548578304
+    ],
+    "ALL_REDUCE|61": [
+     13,
+     46386,
+     7090176
+    ],
+    "ALL_REDUCE|5": [
+     4,
+     71639,
+     16
+    ],
+    "REDUCE_SCATTER|13": [
+     1,
+     514215,
+     2671325184
+    ],
+    "ALL_REDUCE|0": [
+     2,
+     3995,
+     8
+    ],
+    "ALL_GATHER|13": [
+     2,
+     1014670,
+     667831296
+    ],
+    "BROADCAST|0": [
+     2,
+     88,
+     12
+    ]
+   },
+   "stream_busy": {
+    "7": 1745412,
+    "44": 2708224,
+    "56": 6726,
+    "48": 9547261,
+    "52": 71639,
+    "60": 1528885,
+    "64": 5622,
+    "32": 4083
+   },
+   "gpu_total_us": 15617852,
+   "comm_total_us": 13866818,
+   "n_gpu": 28894,
+   "kernel_names": {
+    "REDUCE_SCATTER|ncclDevKernel_ReduceScatter_Sum_bf16_RING_LL": 905,
+    "ALL_GATHER|ncclDevKernel_AllGather_RING_LL": 1134,
+    "ALL_REDUCE|ncclDevKernel_AllReduce_Sum_bf16_RING_LL": 225,
+    "ALL_TO_ALL|ncclDevKernel_SendRecv": 896,
+    "ALL_REDUCE|ncclDevKernel_AllReduce_Sum_f32_RING_LL": 12,
+    "ALL_REDUCE|ncclDevKernel_AllReduce_Sum_f32_TREE_LL": 6,
+    "BROADCAST|ncclDevKernel_Broadcast_RING_LL": 2
+   }
+  },
+  {
+   "rank": 15,
+   "path": "/scratch/harshanavkis/chakra-traces/Mixtral/Mixtral-8x22B/mixtral-8x22_chakra.15.et",
+   "window_ms": 19653,
+   "comm": {
+    "REDUCE_SCATTER|61": [
+     904,
+     228336,
+     68048388096
+    ],
+    "ALL_GATHER|61": [
+     1132,
+     2662651,
+     19881000960
+    ],
+    "ALL_REDUCE|167": [
+     224,
+     6395,
+     3584
+    ],
+    "ALL_TO_ALL|176": [
+     896,
+     9347464,
+     22548578304
+    ],
+    "ALL_REDUCE|61": [
+     13,
+     35110,
+     7090176
+    ],
+    "ALL_REDUCE|7": [
+     4,
+     69845,
+     16
+    ],
+    "REDUCE_SCATTER|15": [
+     1,
+     525483,
+     2671325184
+    ],
+    "ALL_REDUCE|0": [
+     2,
+     4002,
+     8
+    ],
+    "ALL_GATHER|15": [
+     2,
+     995351,
+     667831296
+    ],
+    "BROADCAST|0": [
+     2,
+     37288,
+     12
+    ]
+   },
+   "stream_busy": {
+    "7": 1739445,
+    "44": 2926097,
+    "56": 6395,
+    "48": 9347464,
+    "52": 69845,
+    "60": 1520834,
+    "64": 5625,
+    "32": 41290
+   },
+   "gpu_total_us": 15656995,
+   "comm_total_us": 13911925,
+   "n_gpu": 28894,
+   "kernel_names": {
+    "REDUCE_SCATTER|ncclDevKernel_ReduceScatter_Sum_bf16_RING_LL": 905,
+    "ALL_GATHER|ncclDevKernel_AllGather_RING_LL": 1134,
+    "ALL_REDUCE|ncclDevKernel_AllReduce_Sum_bf16_RING_LL": 225,
+    "ALL_TO_ALL|ncclDevKernel_SendRecv": 896,
+    "ALL_REDUCE|ncclDevKernel_AllReduce_Sum_f32_RING_LL": 12,
+    "ALL_REDUCE|ncclDevKernel_AllReduce_Sum_f32_TREE_LL": 6,
+    "BROADCAST|ncclDevKernel_Broadcast_RING_LL": 2
+   }
+  },
+  {
+   "rank": 16,
+   "path": "/scratch/harshanavkis/chakra-traces/Mixtral/Mixtral-8x22B/mixtral-8x22_chakra.16.et",
+   "window_ms": 19557,
+   "comm": {
+    "REDUCE_SCATTER|62": [
+     904,
+     192366,
+     68048388096
+    ],
+    "ALL_GATHER|62": [
+     1132,
+     2531762,
+     19881000960
+    ],
+    "ALL_REDUCE|168": [
+     224,
+     6643,
+     3584
+    ],
+    "ALL_TO_ALL|173": [
+     896,
+     9544973,
+     22548578304
+    ],
+    "ALL_REDUCE|62": [
+     13,
+     113666,
+     7090176
+    ],
+    "ALL_REDUCE|1": [
+     4,
+     45522,
+     16
+    ],
+    "REDUCE_SCATTER|9": [
+     1,
+     443747,
+     2671325184
+    ],
+    "ALL_REDUCE|0": [
+     2,
+     5133,
+     8
+    ],
+    "ALL_GATHER|9": [
+     2,
+     929431,
+     667831296
+    ],
+    "BROADCAST|0": [
+     2,
+     103517,
+     12
+    ]
+   },
+   "stream_busy": {
+    "7": 1764135,
+    "44": 2837794,
+    "56": 6643,
+    "48": 9544973,
+    "52": 45522,
+    "60": 1373178,
+    "64": 5618,
+    "32": 108650
+   },
+   "gpu_total_us": 15686513,
+   "comm_total_us": 13916760,
+   "n_gpu": 28897,
+   "kernel_names": {
+    "REDUCE_SCATTER|ncclDevKernel_ReduceScatter_Sum_bf16_RING_LL": 905,
+    "ALL_GATHER|ncclDevKernel_AllGather_RING_LL": 1134,
+    "ALL_REDUCE|ncclDevKernel_AllReduce_Sum_bf16_RING_LL": 225,
+    "ALL_TO_ALL|ncclDevKernel_SendRecv": 896,
+    "ALL_REDUCE|ncclDevKernel_AllReduce_Sum_f32_RING_LL": 12,
+    "ALL_REDUCE|ncclDevKernel_AllReduce_Sum_f32_TREE_LL": 6,
+    "BROADCAST|ncclDevKernel_Broadcast_RING_LL": 2
+   }
+  },
+  {
+   "rank": 17,
+   "path": "/scratch/harshanavkis/chakra-traces/Mixtral/Mixtral-8x22B/mixtral-8x22_chakra.17.et",
+   "window_ms": 19537,
+   "comm": {
+    "REDUCE_SCATTER|62": [
+     904,
+     198192,
+     68048388096
+    ],
+    "ALL_GATHER|62": [
+     1132,
+     2249317,
+     19881000960
+    ],
+    "ALL_REDUCE|168": [
+     224,
+     4221,
+     3584
+    ],
+    "ALL_TO_ALL|174": [
+     896,
+     9817272,
+     22548578304
+    ],
+    "ALL_REDUCE|62": [
+     13,
+     238,
+     7090176
+    ],
+    "ALL_REDUCE|3": [
+     4,
+     43734,
+     16
+    ],
+    "REDUCE_SCATTER|11": [
+     1,
+     557177,
+     2671325184
+    ],
+    "ALL_REDUCE|0": [
+     2,
+     4357,
+     8
+    ],
+    "ALL_GATHER|11": [
+     2,
+     1023069,
+     667831296
+    ],
+    "BROADCAST|0": [
+     2,
+     8618,
+     12
+    ]
+   },
+   "stream_busy": {
+    "7": 1771445,
+    "44": 2447747,
+    "56": 4221,
+    "48": 9817272,
+    "52": 43734,
+    "60": 1580246,
+    "64": 5626,
+    "32": 12975
+   },
+   "gpu_total_us": 15683266,
+   "comm_total_us": 13906195,
+   "n_gpu": 28896,
+   "kernel_names": {
+    "REDUCE_SCATTER|ncclDevKernel_ReduceScatter_Sum_bf16_RING_LL": 905,
+    "ALL_GATHER|ncclDevKernel_AllGather_RING_LL": 1134,
+    "ALL_REDUCE|ncclDevKernel_AllReduce_Sum_bf16_RING_LL": 225,
+    "ALL_TO_ALL|ncclDevKernel_SendRecv": 896,
+    "ALL_REDUCE|ncclDevKernel_AllReduce_Sum_f32_RING_LL": 12,
+    "ALL_REDUCE|ncclDevKernel_AllReduce_Sum_f32_TREE_LL": 6,
+    "BROADCAST|ncclDevKernel_Broadcast_RING_LL": 2
+   }
+  },
+  {
+   "rank": 18,
+   "path": "/scratch/harshanavkis/chakra-traces/Mixtral/Mixtral-8x22B/mixtral-8x22_chakra.18.et",
+   "window_ms": 19581,
+   "comm": {
+    "REDUCE_SCATTER|62": [
+     904,
+     210795,
+     68048388096
+    ],
+    "ALL_GATHER|62": [
+     1132,
+     2520310,
+     19881000960
+    ],
+    "ALL_REDUCE|168": [
+     224,
+     5511,
+     3584
+    ],
+    "ALL_TO_ALL|175": [
+     896,
+     9568515,
+     22548578304
+    ],
+    "ALL_REDUCE|62": [
+     13,
+     49600,
+     7090176
+    ],
+    "ALL_REDUCE|5": [
+     4,
+     42843,
+     16
+    ],
+    "REDUCE_SCATTER|13": [
+     1,
+     507835,
+     2671325184
+    ],
+    "ALL_REDUCE|0": [
+     2,
+     4841,
+     8
+    ],
+    "ALL_GATHER|13": [
+     2,
+     1015720,
+     667831296
+    ],
+    "BROADCAST|0": [
+     2,
+     17187,
+     12
+    ]
+   },
+   "stream_busy": {
+    "7": 1753803,
+    "44": 2780705,
+    "56": 5511,
+    "48": 9568515,
+    "52": 42843,
+    "60": 1523555,
+    "64": 5627,
+    "32": 22028
+   },
+   "gpu_total_us": 15702587,
+   "comm_total_us": 13943157,
+   "n_gpu": 28896,
+   "kernel_names": {
+    "REDUCE_SCATTER|ncclDevKernel_ReduceScatter_Sum_bf16_RING_LL": 905,
+    "ALL_GATHER|ncclDevKernel_AllGather_RING_LL": 1134,
+    "ALL_REDUCE|ncclDevKernel_AllReduce_Sum_bf16_RING_LL": 225,
+    "ALL_TO_ALL|ncclDevKernel_SendRecv": 896,
+    "ALL_REDUCE|ncclDevKernel_AllReduce_Sum_f32_RING_LL": 12,
+    "ALL_REDUCE|ncclDevKernel_AllReduce_Sum_f32_TREE_LL": 6,
+    "BROADCAST|ncclDevKernel_Broadcast_RING_LL": 2
+   }
+  },
+  {
+   "rank": 19,
+   "path": "/scratch/harshanavkis/chakra-traces/Mixtral/Mixtral-8x22B/mixtral-8x22_chakra.19.et",
+   "window_ms": 19571,
+   "comm": {
+    "REDUCE_SCATTER|62": [
+     904,
+     199492,
+     68048388096
+    ],
+    "ALL_GATHER|62": [
+     1132,
+     2417542,
+     19881000960
+    ],
+    "ALL_REDUCE|168": [
+     224,
+     6092,
+     3584
+    ],
+    "ALL_TO_ALL|176": [
+     896,
+     9661154,
+     22548578304
+    ],
+    "ALL_REDUCE|62": [
+     13,
+     34365,
+     7090176
+    ],
+    "ALL_REDUCE|7": [
+     4,
+     48443,
+     16
+    ],
+    "REDUCE_SCATTER|15": [
+     1,
+     523070,
+     2671325184
+    ],
+    "ALL_REDUCE|0": [
+     2,
+     5503,
+     8
+    ],
+    "ALL_GATHER|15": [
+     2,
+     993910,
+     667831296
+    ],
+    "BROADCAST|0": [
+     2,
+     38950,
+     12
+    ]
+   },
+   "stream_busy": {
+    "7": 1751658,
+    "44": 2651399,
+    "56": 6092,
+    "48": 9661154,
+    "52": 48443,
+    "60": 1516980,
+    "64": 5631,
+    "32": 44453
+   },
+   "gpu_total_us": 15685810,
+   "comm_total_us": 13928521,
+   "n_gpu": 28896,
+   "kernel_names": {
+    "REDUCE_SCATTER|ncclDevKernel_ReduceScatter_Sum_bf16_RING_LL": 905,
+    "ALL_GATHER|ncclDevKernel_AllGather_RING_LL": 1134,
+    "ALL_REDUCE|ncclDevKernel_AllReduce_Sum_bf16_RING_LL": 225,
+    "ALL_TO_ALL|ncclDevKernel_SendRecv": 896,
+    "ALL_REDUCE|ncclDevKernel_AllReduce_Sum_f32_RING_LL": 12,
+    "ALL_REDUCE|ncclDevKernel_AllReduce_Sum_f32_TREE_LL": 6,
+    "BROADCAST|ncclDevKernel_Broadcast_RING_LL": 2
+   }
+  },
+  {
+   "rank": 20,
+   "path": "/scratch/harshanavkis/chakra-traces/Mixtral/Mixtral-8x22B/mixtral-8x22_chakra.20.et",
+   "window_ms": 19545,
+   "comm": {
+    "REDUCE_SCATTER|63": [
+     904,
+     193169,
+     68048388096
+    ],
+    "ALL_GATHER|63": [
+     1132,
+     2481099,
+     19881000960
+    ],
+    "ALL_REDUCE|169": [
+     224,
+     22570,
+     3584
+    ],
+    "ALL_TO_ALL|173": [
+     895,
+     9517739,
+     22523412480
+    ],
+    "ALL_REDUCE|63": [
+     13,
+     113907,
+     7090176
+    ],
+    "ALL_REDUCE|1": [
+     4,
+     77498,
+     16
+    ],
+    "ALL_TO_ALL|None": [
+     1,
+     13387,
+     25165824
+    ],
+    "REDUCE_SCATTER|9": [
+     1,
+     443881,
+     2671325184
+    ],
+    "ALL_REDUCE|0": [
+     2,
+     3314,
+     8
+    ],
+    "ALL_GATHER|9": [
+     2,
+     929374,
+     667831296
+    ],
+    "BROADCAST|0": [
+     2,
+     103300,
+     12
+    ]
+   },
+   "stream_busy": {
+    "7": 1784957,
+    "44": 2788175,
+    "56": 22570,
+    "48": 9531126,
+    "52": 77498,
+    "60": 1373255,
+    "64": 5624,
+    "32": 106614
+   },
+   "gpu_total_us": 15689819,
+   "comm_total_us": 13899238,
+   "n_gpu": 28901,
+   "kernel_names": {
+    "REDUCE_SCATTER|ncclDevKernel_ReduceScatter_Sum_bf16_RING_LL": 905,
+    "ALL_GATHER|ncclDevKernel_AllGather_RING_LL": 1134,
+    "ALL_REDUCE|ncclDevKernel_AllReduce_Sum_bf16_RING_LL": 225,
+    "ALL_TO_ALL|ncclDevKernel_SendRecv": 896,
+    "ALL_REDUCE|ncclDevKernel_AllReduce_Sum_f32_RING_LL": 12,
+    "ALL_REDUCE|ncclDevKernel_AllReduce_Sum_f32_TREE_LL": 6,
+    "BROADCAST|ncclDevKernel_Broadcast_RING_LL": 2
+   }
+  },
+  {
+   "rank": 21,
+   "path": "/scratch/harshanavkis/chakra-traces/Mixtral/Mixtral-8x22B/mixtral-8x22_chakra.21.et",
+   "window_ms": 19521,
+   "comm": {
+    "REDUCE_SCATTER|63": [
+     904,
+     208782,
+     68048388096
+    ],
+    "ALL_GATHER|63": [
+     1132,
+     2351079,
+     19881000960
+    ],
+    "ALL_REDUCE|169": [
+     224,
+     23747,
+     3584
+    ],
+    "ALL_TO_ALL|174": [
+     896,
+     9665561,
+     22548578304
+    ],
+    "ALL_REDUCE|63": [
+     13,
+     247,
+     7090176
+    ],
+    "ALL_REDUCE|3": [
+     4,
+     75711,
+     16
+    ],
+    "REDUCE_SCATTER|11": [
+     1,
+     557587,
+     2671325184
+    ],
+    "ALL_REDUCE|0": [
+     2,
+     4198,
+     8
+    ],
+    "ALL_GATHER|11": [
+     2,
+     1024483,
+     667831296
+    ],
+    "BROADCAST|0": [
+     2,
+     8070,
+     12
+    ]
+   },
+   "stream_busy": {
+    "7": 1768909,
+    "44": 2560108,
+    "56": 23747,
+    "48": 9665561,
+    "52": 75711,
+    "60": 1582070,
+    "64": 5631,
+    "32": 12268
+   },
+   "gpu_total_us": 15694005,
+   "comm_total_us": 13919465,
+   "n_gpu": 28900,
+   "kernel_names": {
+    "REDUCE_SCATTER|ncclDevKernel_ReduceScatter_Sum_bf16_RING_LL": 905,
+    "ALL_GATHER|ncclDevKernel_AllGather_RING_LL": 1134,
+    "ALL_REDUCE|ncclDevKernel_AllReduce_Sum_bf16_RING_LL": 225,
+    "ALL_TO_ALL|ncclDevKernel_SendRecv": 896,
+    "ALL_REDUCE|ncclDevKernel_AllReduce_Sum_f32_RING_LL": 12,
+    "ALL_REDUCE|ncclDevKernel_AllReduce_Sum_f32_TREE_LL": 6,
+    "BROADCAST|ncclDevKernel_Broadcast_RING_LL": 2
+   }
+  },
+  {
+   "rank": 22,
+   "path": "/scratch/harshanavkis/chakra-traces/Mixtral/Mixtral-8x22B/mixtral-8x22_chakra.22.et",
+   "window_ms": 19542,
+   "comm": {
+    "REDUCE_SCATTER|63": [
+     904,
+     189931,
+     68048388096
+    ],
+    "ALL_GATHER|63": [
+     1132,
+     2352474,
+     19881000960
+    ],
+    "ALL_REDUCE|169": [
+     224,
+     5533,
+     3584
+    ],
+    "ALL_TO_ALL|175": [
+     896,
+     9651018,
+     22548578304
+    ],
+    "ALL_REDUCE|63": [
+     13,
+     40401,
+     7090176
+    ],
+    "ALL_REDUCE|5": [
+     4,
+     74827,
+     16
+    ],
+    "REDUCE_SCATTER|13": [
+     1,
+     517454,
+     2671325184
+    ],
+    "ALL_REDUCE|0": [
+     2,
+     4278,
+     8
+    ],
+    "ALL_GATHER|13": [
+     2,
+     1016858,
+     667831296
+    ],
+    "BROADCAST|0": [
+     2,
+     15847,
+     12
+    ]
+   },
+   "stream_busy": {
+    "7": 1793046,
+    "44": 2582806,
+    "56": 5533,
+    "48": 9651018,
+    "52": 74827,
+    "60": 1534312,
+    "64": 5622,
+    "32": 20125
+   },
+   "gpu_total_us": 15667289,
+   "comm_total_us": 13868621,
+   "n_gpu": 28900,
+   "kernel_names": {
+    "REDUCE_SCATTER|ncclDevKernel_ReduceScatter_Sum_bf16_RING_LL": 905,
+    "ALL_GATHER|ncclDevKernel_AllGather_RING_LL": 1134,
+    "ALL_REDUCE|ncclDevKernel_AllReduce_Sum_bf16_RING_LL": 225,
+    "ALL_TO_ALL|ncclDevKernel_SendRecv": 896,
+    "ALL_REDUCE|ncclDevKernel_AllReduce_Sum_f32_RING_LL": 12,
+    "ALL_REDUCE|ncclDevKernel_AllReduce_Sum_f32_TREE_LL": 6,
+    "BROADCAST|ncclDevKernel_Broadcast_RING_LL": 2
+   }
+  },
+  {
+   "rank": 23,
+   "path": "/scratch/harshanavkis/chakra-traces/Mixtral/Mixtral-8x22B/mixtral-8x22_chakra.23.et",
+   "window_ms": 19539,
+   "comm": {
+    "REDUCE_SCATTER|63": [
+     904,
+     204223,
+     68048388096
+    ],
+    "ALL_GATHER|63": [
+     1132,
+     2628782,
+     19881000960
+    ],
+    "ALL_REDUCE|169": [
+     224,
+     24340,
+     3584
+    ],
+    "ALL_TO_ALL|176": [
+     896,
+     9351017,
+     22548578304
+    ],
+    "ALL_REDUCE|63": [
+     13,
+     44491,
+     7090176
+    ],
+    "ALL_REDUCE|7": [
+     4,
+     80421,
+     16
+    ],
+    "REDUCE_SCATTER|15": [
+     1,
+     513494,
+     2671325184
+    ],
+    "ALL_REDUCE|0": [
+     2,
+     4168,
+     8
+    ],
+    "ALL_GATHER|15": [
+     2,
+     997727,
+     667831296
+    ],
+    "BROADCAST|0": [
+     2,
+     34671,
+     12
+    ]
+   },
+   "stream_busy": {
+    "7": 1775844,
+    "44": 2877496,
+    "56": 24340,
+    "48": 9351017,
+    "52": 80421,
+    "60": 1511221,
+    "64": 5516,
+    "32": 38839
+   },
+   "gpu_total_us": 15664694,
+   "comm_total_us": 13883334,
+   "n_gpu": 28900,
+   "kernel_names": {
+    "REDUCE_SCATTER|ncclDevKernel_ReduceScatter_Sum_bf16_RING_LL": 905,
+    "ALL_GATHER|ncclDevKernel_AllGather_RING_LL": 1134,
+    "ALL_REDUCE|ncclDevKernel_AllReduce_Sum_bf16_RING_LL": 225,
+    "ALL_TO_ALL|ncclDevKernel_SendRecv": 896,
+    "ALL_REDUCE|ncclDevKernel_AllReduce_Sum_f32_RING_LL": 12,
+    "ALL_REDUCE|ncclDevKernel_AllReduce_Sum_f32_TREE_LL": 6,
+    "BROADCAST|ncclDevKernel_Broadcast_RING_LL": 2
+   }
+  },
+  {
+   "rank": 24,
+   "path": "/scratch/harshanavkis/chakra-traces/Mixtral/Mixtral-8x22B/mixtral-8x22_chakra.24.et",
+   "window_ms": 19546,
+   "comm": {
+    "REDUCE_SCATTER|64": [
+     904,
+     194603,
+     68048388096
+    ],
+    "ALL_GATHER|64": [
+     1132,
+     2314059,
+     19881000960
+    ],
+    "ALL_REDUCE|170": [
+     224,
+     47327,
+     3584
+    ],
+    "ALL_TO_ALL|173": [
+     896,
+     9665562,
+     22548578304
+    ],
+    "ALL_REDUCE|64": [
+     13,
+     116207,
+     7090176
+    ],
+    "ALL_REDUCE|1": [
+     4,
+     70458,
+     16
+    ],
+    "REDUCE_SCATTER|9": [
+     1,
+     447939,
+     2671325184
+    ],
+    "ALL_REDUCE|0": [
+     2,
+     1312,
+     8
+    ],
+    "ALL_GATHER|9": [
+     2,
+     929096,
+     667831296
+    ],
+    "BROADCAST|0": [
+     2,
+     108471,
+     12
+    ]
+   },
+   "stream_busy": {
+    "7": 1787663,
+    "44": 2624869,
+    "56": 47327,
+    "48": 9665562,
+    "52": 70458,
+    "60": 1377035,
+    "64": 5517,
+    "32": 109783
+   },
+   "gpu_total_us": 15688214,
+   "comm_total_us": 13895034,
+   "n_gpu": 28895,
+   "kernel_names": {
+    "REDUCE_SCATTER|ncclDevKernel_ReduceScatter_Sum_bf16_RING_LL": 905,
+    "ALL_GATHER|ncclDevKernel_AllGather_RING_LL": 1134,
+    "ALL_REDUCE|ncclDevKernel_AllReduce_Sum_bf16_RING_LL": 225,
+    "ALL_TO_ALL|ncclDevKernel_SendRecv": 896,
+    "ALL_REDUCE|ncclDevKernel_AllReduce_Sum_f32_RING_LL": 12,
+    "ALL_REDUCE|ncclDevKernel_AllReduce_Sum_f32_TREE_LL": 6,
+    "BROADCAST|ncclDevKernel_Broadcast_RING_LL": 2
+   }
+  },
+  {
+   "rank": 25,
+   "path": "/scratch/harshanavkis/chakra-traces/Mixtral/Mixtral-8x22B/mixtral-8x22_chakra.25.et",
+   "window_ms": 19549,
+   "comm": {
+    "REDUCE_SCATTER|64": [
+     904,
+     192013,
+     68048388096
+    ],
+    "ALL_GATHER|64": [
+     1132,
+     2150625,
+     19881000960
+    ],
+    "ALL_REDUCE|170": [
+     224,
+     30514,
+     3584
+    ],
+    "ALL_TO_ALL|174": [
+     896,
+     9836212,
+     22548578304
+    ],
+    "ALL_REDUCE|64": [
+     13,
+     315,
+     7090176
+    ],
+    "ALL_REDUCE|3": [
+     4,
+     62986,
+     16
+    ],
+    "REDUCE_SCATTER|11": [
+     1,
+     563775,
+     2671325184
+    ],
+    "ALL_REDUCE|0": [
+     2,
+     627,
+     8
+    ],
+    "ALL_GATHER|11": [
+     2,
+     1024206,
+     667831296
+    ],
+    "BROADCAST|0": [
+     2,
+     15163,
+     12
+    ]
+   },
+   "stream_busy": {
+    "7": 1778871,
+    "44": 2342953,
+    "56": 30514,
+    "48": 9836212,
+    "52": 62986,
+    "60": 1587981,
+    "64": 5624,
+    "32": 15790
+   },
+   "gpu_total_us": 15660931,
+   "comm_total_us": 13876436,
+   "n_gpu": 28894,
+   "kernel_names": {
+    "REDUCE_SCATTER|ncclDevKernel_ReduceScatter_Sum_bf16_RING_LL": 905,
+    "ALL_GATHER|ncclDevKernel_AllGather_RING_LL": 1134,
+    "ALL_REDUCE|ncclDevKernel_AllReduce_Sum_bf16_RING_LL": 225,
+    "ALL_TO_ALL|ncclDevKernel_SendRecv": 896,
+    "ALL_REDUCE|ncclDevKernel_AllReduce_Sum_f32_RING_LL": 12,
+    "ALL_REDUCE|ncclDevKernel_AllReduce_Sum_f32_TREE_LL": 6,
+    "BROADCAST|ncclDevKernel_Broadcast_RING_LL": 2
+   }
+  },
+  {
+   "rank": 26,
+   "path": "/scratch/harshanavkis/chakra-traces/Mixtral/Mixtral-8x22B/mixtral-8x22_chakra.26.et",
+   "window_ms": 19548,
+   "comm": {
+    "REDUCE_SCATTER|64": [
+     904,
+     209380,
+     68048388096
+    ],
+    "ALL_GATHER|64": [
+     1132,
+     2362489,
+     19881000960
+    ],
+    "ALL_REDUCE|170": [
+     224,
+     24384,
+     3584
+    ],
+    "ALL_TO_ALL|175": [
+     896,
+     9637921,
+     22548578304
+    ],
+    "ALL_REDUCE|64": [
+     13,
+     56819,
+     7090176
+    ],
+    "ALL_REDUCE|5": [
+     4,
+     65711,
+     16
+    ],
+    "REDUCE_SCATTER|13": [
+     1,
+     507269,
+     2671325184
+    ],
+    "ALL_REDUCE|0": [
+     2,
+     708,
+     8
+    ],
+    "ALL_GATHER|13": [
+     2,
+     1014586,
+     667831296
+    ],
+    "BROADCAST|0": [
+     2,
+     24882,
+     12
+    ]
+   },
+   "stream_busy": {
+    "7": 1759340,
+    "44": 2628688,
+    "56": 24384,
+    "48": 9637921,
+    "52": 65711,
+    "60": 1521855,
+    "64": 5627,
+    "32": 25590
+   },
+   "gpu_total_us": 15669116,
+   "comm_total_us": 13904149,
+   "n_gpu": 28894,
+   "kernel_names": {
+    "REDUCE_SCATTER|ncclDevKernel_ReduceScatter_Sum_bf16_RING_LL": 905,
+    "ALL_GATHER|ncclDevKernel_AllGather_RING_LL": 1134,
+    "ALL_REDUCE|ncclDevKernel_AllReduce_Sum_bf16_RING_LL": 225,
+    "ALL_TO_ALL|ncclDevKernel_SendRecv": 896,
+    "ALL_REDUCE|ncclDevKernel_AllReduce_Sum_f32_RING_LL": 12,
+    "ALL_REDUCE|ncclDevKernel_AllReduce_Sum_f32_TREE_LL": 6,
+    "BROADCAST|ncclDevKernel_Broadcast_RING_LL": 2
+   }
+  },
+  {
+   "rank": 27,
+   "path": "/scratch/harshanavkis/chakra-traces/Mixtral/Mixtral-8x22B/mixtral-8x22_chakra.27.et",
+   "window_ms": 19540,
+   "comm": {
+    "REDUCE_SCATTER|64": [
+     904,
+     200207,
+     68048388096
+    ],
+    "ALL_GATHER|64": [
+     1132,
+     2492296,
+     19881000960
+    ],
+    "ALL_REDUCE|170": [
+     224,
+     46140,
+     3584
+    ],
+    "ALL_TO_ALL|176": [
+     896,
+     9488585,
+     22548578304
+    ],
+    "ALL_REDUCE|64": [
+     13,
+     36333,
+     7090176
+    ],
+    "ALL_REDUCE|7": [
+     4,
+     63926,
+     16
+    ],
+    "REDUCE_SCATTER|15": [
+     1,
+     527837,
+     2671325184
+    ],
+    "ALL_REDUCE|0": [
+     2,
+     1641,
+     8
+    ],
+    "ALL_GATHER|15": [
+     2,
+     993855,
+     667831296
+    ],
+    "BROADCAST|0": [
+     2,
+     44496,
+     12
+    ]
+   },
+   "stream_busy": {
+    "7": 1769424,
+    "44": 2728836,
+    "56": 46140,
+    "48": 9488585,
+    "52": 63926,
+    "60": 1521692,
+    "64": 5517,
+    "32": 46137
+   },
+   "gpu_total_us": 15670257,
+   "comm_total_us": 13895316,
+   "n_gpu": 28894,
+   "kernel_names": {
+    "REDUCE_SCATTER|ncclDevKernel_ReduceScatter_Sum_bf16_RING_LL": 905,
+    "ALL_GATHER|ncclDevKernel_AllGather_RING_LL": 1134,
+    "ALL_REDUCE|ncclDevKernel_AllReduce_Sum_bf16_RING_LL": 225,
+    "ALL_TO_ALL|ncclDevKernel_SendRecv": 896,
+    "ALL_REDUCE|ncclDevKernel_AllReduce_Sum_f32_RING_LL": 12,
+    "ALL_REDUCE|ncclDevKernel_AllReduce_Sum_f32_TREE_LL": 6,
+    "BROADCAST|ncclDevKernel_Broadcast_RING_LL": 2
+   }
+  },
+  {
+   "rank": 28,
+   "path": "/scratch/harshanavkis/chakra-traces/Mixtral/Mixtral-8x22B/mixtral-8x22_chakra.28.et",
+   "window_ms": 19566,
+   "comm": {
+    "REDUCE_SCATTER|65": [
+     904,
+     191916,
+     68048388096
+    ],
+    "ALL_GATHER|65": [
+     1132,
+     2323917,
+     19881000960
+    ],
+    "ALL_REDUCE|171": [
+     224,
+     29265,
+     3584
+    ],
+    "ALL_TO_ALL|173": [
+     896,
+     9671247,
+     22548578304
+    ],
+    "ALL_REDUCE|65": [
+     13,
+     114805,
+     7090176
+    ],
+    "ALL_REDUCE|1": [
+     4,
+     59987,
+     16
+    ],
+    "REDUCE_SCATTER|9": [
+     1,
+     447034,
+     2671325184
+    ],
+    "ALL_REDUCE|0": [
+     2,
+     2587,
+     8
+    ],
+    "ALL_GATHER|9": [
+     2,
+     929592,
+     667831296
+    ],
+    "BROADCAST|0": [
+     2,
+     109773,
+     12
+    ]
+   },
+   "stream_busy": {
+    "7": 1787729,
+    "44": 2630638,
+    "56": 29265,
+    "48": 9671247,
+    "52": 59987,
+    "60": 1376626,
+    "64": 5632,
+    "32": 112360
+   },
+   "gpu_total_us": 15673484,
+   "comm_total_us": 13880123,
+   "n_gpu": 28871,
+   "kernel_names": {
+    "REDUCE_SCATTER|ncclDevKernel_ReduceScatter_Sum_bf16_RING_LL": 905,
+    "ALL_GATHER|ncclDevKernel_AllGather_RING_LL": 1134,
+    "ALL_REDUCE|ncclDevKernel_AllReduce_Sum_bf16_RING_LL": 225,
+    "ALL_TO_ALL|ncclDevKernel_SendRecv": 896,
+    "ALL_REDUCE|ncclDevKernel_AllReduce_Sum_f32_RING_LL": 12,
+    "ALL_REDUCE|ncclDevKernel_AllReduce_Sum_f32_TREE_LL": 6,
+    "BROADCAST|ncclDevKernel_Broadcast_RING_LL": 2
+   }
+  },
+  {
+   "rank": 29,
+   "path": "/scratch/harshanavkis/chakra-traces/Mixtral/Mixtral-8x22B/mixtral-8x22_chakra.29.et",
+   "window_ms": 19532,
+   "comm": {
+    "REDUCE_SCATTER|65": [
+     904,
+     196871,
+     68048388096
+    ],
+    "ALL_GATHER|65": [
+     1132,
+     2357421,
+     19881000960
+    ],
+    "ALL_REDUCE|171": [
+     224,
+     6132,
+     3584
+    ],
+    "ALL_TO_ALL|174": [
+     896,
+     9635544,
+     22548578304
+    ],
+    "ALL_REDUCE|65": [
+     13,
+     334,
+     7090176
+    ],
+    "ALL_REDUCE|3": [
+     4,
+     52512,
+     16
+    ],
+    "REDUCE_SCATTER|11": [
+     1,
+     561594,
+     2671325184
+    ],
+    "ALL_REDUCE|0": [
+     2,
+     2582,
+     8
+    ],
+    "ALL_GATHER|11": [
+     2,
+     1024623,
+     667831296
+    ],
+    "BROADCAST|0": [
+     2,
+     14751,
+     12
+    ]
+   },
+   "stream_busy": {
+    "7": 1781140,
+    "44": 2554626,
+    "56": 6132,
+    "48": 9635544,
+    "52": 52512,
+    "60": 1586217,
+    "64": 5629,
+    "32": 17333
+   },
+   "gpu_total_us": 15639133,
+   "comm_total_us": 13852364,
+   "n_gpu": 28871,
+   "kernel_names": {
+    "REDUCE_SCATTER|ncclDevKernel_ReduceScatter_Sum_bf16_RING_LL": 905,
+    "ALL_GATHER|ncclDevKernel_AllGather_RING_LL": 1134,
+    "ALL_REDUCE|ncclDevKernel_AllReduce_Sum_bf16_RING_LL": 225,
+    "ALL_TO_ALL|ncclDevKernel_SendRecv": 896,
+    "ALL_REDUCE|ncclDevKernel_AllReduce_Sum_f32_RING_LL": 12,
+    "ALL_REDUCE|ncclDevKernel_AllReduce_Sum_f32_TREE_LL": 6,
+    "BROADCAST|ncclDevKernel_Broadcast_RING_LL": 2
+   }
+  },
+  {
+   "rank": 30,
+   "path": "/scratch/harshanavkis/chakra-traces/Mixtral/Mixtral-8x22B/mixtral-8x22_chakra.30.et",
+   "window_ms": 19524,
+   "comm": {
+    "REDUCE_SCATTER|65": [
+     904,
+     202862,
+     68048388096
+    ],
+    "ALL_GATHER|65": [
+     1132,
+     2325311,
+     19881000960
+    ],
+    "ALL_REDUCE|171": [
+     224,
+     31946,
+     3584
+    ],
+    "ALL_TO_ALL|175": [
+     896,
+     9692149,
+     22548578304
+    ],
+    "ALL_REDUCE|65": [
+     13,
+     56362,
+     7090176
+    ],
+    "ALL_REDUCE|5": [
+     4,
+     55239,
+     16
+    ],
+    "REDUCE_SCATTER|13": [
+     1,
+     505578,
+     2671325184
+    ],
+    "ALL_REDUCE|0": [
+     2,
+     2627,
+     8
+    ],
+    "ALL_GATHER|13": [
+     2,
+     1017034,
+     667831296
+    ],
+    "BROADCAST|0": [
+     2,
+     22513,
+     12
+    ]
+   },
+   "stream_busy": {
+    "7": 1773235,
+    "44": 2584535,
+    "56": 31946,
+    "48": 9692149,
+    "52": 55239,
+    "60": 1522612,
+    "64": 5630,
+    "32": 25140
+   },
+   "gpu_total_us": 15690486,
+   "comm_total_us": 13911621,
+   "n_gpu": 28871,
+   "kernel_names": {
+    "REDUCE_SCATTER|ncclDevKernel_ReduceScatter_Sum_bf16_RING_LL": 905,
+    "ALL_GATHER|ncclDevKernel_AllGather_RING_LL": 1134,
+    "ALL_REDUCE|ncclDevKernel_AllReduce_Sum_bf16_RING_LL": 225,
+    "ALL_TO_ALL|ncclDevKernel_SendRecv": 896,
+    "ALL_REDUCE|ncclDevKernel_AllReduce_Sum_f32_RING_LL": 12,
+    "ALL_REDUCE|ncclDevKernel_AllReduce_Sum_f32_TREE_LL": 6,
+    "BROADCAST|ncclDevKernel_Broadcast_RING_LL": 2
+   }
+  },
+  {
+   "rank": 31,
+   "path": "/scratch/harshanavkis/chakra-traces/Mixtral/Mixtral-8x22B/mixtral-8x22_chakra.31.et",
+   "window_ms": 19535,
+   "comm": {
+    "REDUCE_SCATTER|65": [
+     904,
+     220554,
+     68048388096
+    ],
+    "ALL_GATHER|65": [
+     1132,
+     2544570,
+     19881000960
+    ],
+    "ALL_REDUCE|171": [
+     224,
+     31382,
+     3584
+    ],
+    "ALL_TO_ALL|176": [
+     896,
+     9479634,
+     22548578304
+    ],
+    "ALL_REDUCE|65": [
+     13,
+     36303,
+     7090176
+    ],
+    "ALL_REDUCE|7": [
+     4,
+     53447,
+     16
+    ],
+    "REDUCE_SCATTER|15": [
+     1,
+     525604,
+     2671325184
+    ],
+    "ALL_REDUCE|0": [
+     2,
+     2699,
+     8
+    ],
+    "ALL_GATHER|15": [
+     2,
+     1002424,
+     667831296
+    ],
+    "BROADCAST|0": [
+     2,
+     37095,
+     12
+    ]
+   },
+   "stream_busy": {
+    "7": 1749672,
+    "44": 2801427,
+    "56": 31382,
+    "48": 9479634,
+    "52": 53447,
+    "60": 1528028,
+    "64": 5634,
+    "32": 39794
+   },
+   "gpu_total_us": 15689018,
+   "comm_total_us": 13933712,
+   "n_gpu": 28871,
+   "kernel_names": {
+    "REDUCE_SCATTER|ncclDevKernel_ReduceScatter_Sum_bf16_RING_LL": 905,
+    "ALL_GATHER|ncclDevKernel_AllGather_RING_LL": 1134,
+    "ALL_REDUCE|ncclDevKernel_AllReduce_Sum_bf16_RING_LL": 225,
+    "ALL_TO_ALL|ncclDevKernel_SendRecv": 896,
+    "ALL_REDUCE|ncclDevKernel_AllReduce_Sum_f32_RING_LL": 12,
+    "ALL_REDUCE|ncclDevKernel_AllReduce_Sum_f32_TREE_LL": 6,
+    "BROADCAST|ncclDevKernel_Broadcast_RING_LL": 2
+   }
+  }
+ ]
+}

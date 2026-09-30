@@ -1,0 +1,108 @@
+# Mixtral-8x22B: 32 rank ETs, ranks 0..31; ASSUMED gpus/node = 8
+# nodes implied by rank count = 4
+
+## Process groups (membership inferred = ranks issuing collectives on the pg_name)
+pg | size | members | nodes | class | collective types
+0 | 32 | [0, 1, 2, 3, 4, 5, 6, 7]...(32) | [0, 1, 2, 3] | inter | ALL_REDUCE,BROADCAST
+1 | 8 | [0, 4, 8, 12, 16, 20, 24, 28] | [0, 1, 2, 3] | inter | ALL_REDUCE
+3 | 8 | [1, 5, 9, 13, 17, 21, 25, 29] | [0, 1, 2, 3] | inter | ALL_REDUCE
+5 | 8 | [2, 6, 10, 14, 18, 22, 26, 30] | [0, 1, 2, 3] | inter | ALL_REDUCE
+7 | 8 | [3, 7, 11, 15, 19, 23, 27, 31] | [0, 1, 2, 3] | inter | ALL_REDUCE
+9 | 8 | [0, 4, 8, 12, 16, 20, 24, 28] | [0, 1, 2, 3] | inter | ALL_GATHER,REDUCE_SCATTER
+11 | 8 | [1, 5, 9, 13, 17, 21, 25, 29] | [0, 1, 2, 3] | inter | ALL_GATHER,REDUCE_SCATTER
+13 | 8 | [2, 6, 10, 14, 18, 22, 26, 30] | [0, 1, 2, 3] | inter | ALL_GATHER,REDUCE_SCATTER
+15 | 8 | [3, 7, 11, 15, 19, 23, 27, 31] | [0, 1, 2, 3] | inter | ALL_GATHER,REDUCE_SCATTER
+58 | 4 | [0, 1, 2, 3] | [0] | intra | ALL_GATHER,ALL_REDUCE,REDUCE_SCATTER
+59 | 4 | [4, 5, 6, 7] | [0] | intra | ALL_GATHER,ALL_REDUCE,REDUCE_SCATTER
+60 | 4 | [8, 9, 10, 11] | [1] | intra | ALL_GATHER,ALL_REDUCE,REDUCE_SCATTER
+61 | 4 | [12, 13, 14, 15] | [1] | intra | ALL_GATHER,ALL_REDUCE,REDUCE_SCATTER
+62 | 4 | [16, 17, 18, 19] | [2] | intra | ALL_GATHER,ALL_REDUCE,REDUCE_SCATTER
+63 | 4 | [20, 21, 22, 23] | [2] | intra | ALL_GATHER,ALL_REDUCE,REDUCE_SCATTER
+64 | 4 | [24, 25, 26, 27] | [3] | intra | ALL_GATHER,ALL_REDUCE,REDUCE_SCATTER
+65 | 4 | [28, 29, 30, 31] | [3] | intra | ALL_GATHER,ALL_REDUCE,REDUCE_SCATTER
+164 | 4 | [0, 1, 2, 3] | [0] | intra | ALL_REDUCE
+165 | 4 | [4, 5, 6, 7] | [0] | intra | ALL_REDUCE
+166 | 4 | [8, 9, 10, 11] | [1] | intra | ALL_REDUCE
+167 | 4 | [12, 13, 14, 15] | [1] | intra | ALL_REDUCE
+168 | 4 | [16, 17, 18, 19] | [2] | intra | ALL_REDUCE
+169 | 4 | [20, 21, 22, 23] | [2] | intra | ALL_REDUCE
+170 | 4 | [24, 25, 26, 27] | [3] | intra | ALL_REDUCE
+171 | 4 | [28, 29, 30, 31] | [3] | intra | ALL_REDUCE
+173 | 8 | [0, 4, 8, 12, 16, 20, 24, 28] | [0, 1, 2, 3] | inter | ALL_TO_ALL
+174 | 8 | [1, 5, 9, 13, 17, 21, 25, 29] | [0, 1, 2, 3] | inter | ALL_TO_ALL
+175 | 8 | [2, 6, 10, 14, 18, 22, 26, 30] | [0, 1, 2, 3] | inter | ALL_TO_ALL
+176 | 8 | [3, 7, 11, 15, 19, 23, 27, 31] | [0, 1, 2, 3] | inter | ALL_TO_ALL
+None | 1 | [20] | [2] | intra | ALL_TO_ALL
+
+## NCCL kernel names seen (all ranks, counts)
+ALL_GATHER|ncclDevKernel_AllGather_RING_LL : 36288
+ALL_REDUCE|ncclDevKernel_AllReduce_Sum_bf16_RING_LL : 7200
+ALL_REDUCE|ncclDevKernel_AllReduce_Sum_f32_RING_LL : 384
+ALL_REDUCE|ncclDevKernel_AllReduce_Sum_f32_TREE_LL : 192
+ALL_TO_ALL|ncclDevKernel_SendRecv : 28672
+BROADCAST|ncclDevKernel_Broadcast_RING_LL : 64
+REDUCE_SCATTER|ncclDevKernel_ReduceScatter_Sum_bf16_RING_LL : 28960
+
+## Per-rank summary (times in ms; comm = sum of NCCL kernel durations)
+rank | ET window | GPU kernel sum | max stream busy (stream) | stream-7 busy | comm sum | comm intra | comm inter | comm/GPU-kernel-sum | comm/ET-window
+0 | 19521 | 15559.6 | 9639.7 (48) | 1769.2 | 13784.8 | 2741.2 | 11043.5 | 0.886 | 0.706
+1 | 19549 | 15685.0 | 9777.4 (48) | 1781.8 | 13897.6 | 2492.1 | 11405.5 | 0.886 | 0.711
+2 | 19559 | 15664.6 | 9514.5 (48) | 1782.4 | 13876.6 | 2785.2 | 11091.4 | 0.886 | 0.709
+3 | 19549 | 15658.7 | 9570.3 (48) | 1774.3 | 13878.8 | 2720.5 | 11158.3 | 0.886 | 0.710
+4 | 19551 | 15677.6 | 9766.1 (48) | 1749.3 | 13922.9 | 2608.9 | 11314.0 | 0.888 | 0.712
+5 | 19538 | 15674.4 | 9929.3 (48) | 1760.7 | 13908.0 | 2314.5 | 11593.5 | 0.887 | 0.712
+6 | 19542 | 15650.5 | 9680.2 (48) | 1750.5 | 13894.4 | 2598.0 | 11296.4 | 0.888 | 0.711
+7 | 19514 | 15634.4 | 9497.4 (48) | 1755.3 | 13873.4 | 2790.9 | 11082.5 | 0.887 | 0.711
+8 | 19637 | 15623.6 | 9512.2 (48) | 1770.8 | 13847.3 | 2796.2 | 11051.1 | 0.886 | 0.705
+9 | 19653 | 15641.4 | 9796.8 (48) | 1770.7 | 13865.1 | 2422.1 | 11443.0 | 0.886 | 0.705
+10 | 19658 | 15659.4 | 9692.7 (48) | 1770.5 | 13883.3 | 2594.5 | 11288.9 | 0.887 | 0.706
+11 | 19625 | 15643.8 | 9587.6 (48) | 1767.5 | 13870.7 | 2667.8 | 11202.8 | 0.887 | 0.707
+12 | 19623 | 15634.8 | 9567.5 (48) | 1761.8 | 13867.3 | 2730.5 | 11136.8 | 0.887 | 0.707
+13 | 19660 | 15634.6 | 9881.1 (48) | 1770.5 | 13858.5 | 2313.2 | 11545.3 | 0.886 | 0.705
+14 | 19628 | 15617.9 | 9547.3 (48) | 1745.4 | 13866.8 | 2714.9 | 11151.9 | 0.888 | 0.706
+15 | 19653 | 15657.0 | 9347.5 (48) | 1739.4 | 13911.9 | 2932.5 | 10979.4 | 0.889 | 0.708
+16 | 19557 | 15686.5 | 9545.0 (48) | 1764.1 | 13916.8 | 2844.4 | 11072.3 | 0.887 | 0.712
+17 | 19537 | 15683.3 | 9817.3 (48) | 1771.4 | 13906.2 | 2452.0 | 11454.2 | 0.887 | 0.712
+18 | 19581 | 15702.6 | 9568.5 (48) | 1753.8 | 13943.2 | 2786.2 | 11156.9 | 0.888 | 0.712
+19 | 19571 | 15685.8 | 9661.2 (48) | 1751.7 | 13928.5 | 2657.5 | 11271.0 | 0.888 | 0.712
+20 | 19545 | 15689.8 | 9531.1 (48) | 1785.0 | 13899.2 | 2824.1 | 11075.1 | 0.886 | 0.711
+21 | 19521 | 15694.0 | 9665.6 (48) | 1768.9 | 13919.5 | 2583.9 | 11335.6 | 0.887 | 0.713
+22 | 19542 | 15667.3 | 9651.0 (48) | 1793.0 | 13868.6 | 2588.3 | 11280.3 | 0.885 | 0.710
+23 | 19539 | 15664.7 | 9351.0 (48) | 1775.8 | 13883.3 | 2901.8 | 10981.5 | 0.886 | 0.711
+24 | 19546 | 15688.2 | 9665.6 (48) | 1787.7 | 13895.0 | 2672.2 | 11222.8 | 0.886 | 0.711
+25 | 19549 | 15660.9 | 9836.2 (48) | 1778.9 | 13876.4 | 2373.5 | 11503.0 | 0.886 | 0.710
+26 | 19548 | 15669.1 | 9637.9 (48) | 1759.3 | 13904.1 | 2653.1 | 11251.1 | 0.887 | 0.711
+27 | 19540 | 15670.3 | 9488.6 (48) | 1769.4 | 13895.3 | 2775.0 | 11120.3 | 0.887 | 0.711
+28 | 19566 | 15673.5 | 9671.2 (48) | 1787.7 | 13880.1 | 2659.9 | 11220.2 | 0.886 | 0.709
+29 | 19532 | 15639.1 | 9635.5 (48) | 1781.1 | 13852.4 | 2560.8 | 11291.6 | 0.886 | 0.709
+30 | 19524 | 15690.5 | 9692.1 (48) | 1773.2 | 13911.6 | 2616.5 | 11295.1 | 0.887 | 0.713
+31 | 19535 | 15689.0 | 9479.6 (48) | 1749.7 | 13933.7 | 2832.8 | 11100.9 | 0.888 | 0.713
+
+comm/GPU-kernel-sum across ranks: min 0.885 median 0.887 max 0.889
+inter-node share of comm time across ranks: min 0.789 median 0.808 max 0.834
+
+## Rank 0: comm by collective type x class (ms, % of this rank's comm, % of GPU kernel sum)
+type | class | pg(s) | count | time ms | % comm | % GPU-kernel-sum | MB issued
+ALL_TO_ALL | inter | 173 | 896 | 9639.7 | 69.9 | 62.0 | 22548.6
+ALL_GATHER | intra | 58 | 1132 | 2420.3 | 17.6 | 15.6 | 19881.0
+ALL_GATHER | inter | 9 | 2 | 930.7 | 6.8 | 6.0 | 667.8
+REDUCE_SCATTER | inter | 9 | 1 | 443.8 | 3.2 | 2.9 | 2671.3
+REDUCE_SCATTER | intra | 58 | 904 | 198.8 | 1.4 | 1.3 | 68048.4
+ALL_REDUCE | intra | 164,58 | 237 | 122.2 | 0.9 | 0.8 | 7.1
+ALL_REDUCE | inter | 0,1 | 6 | 29.3 | 0.2 | 0.2 | 0.0
+BROADCAST | inter | 0 | 2 | 0.0 | 0.0 | 0.0 | 0.0
+stream busy (ms): {48: 9639.7, 44: 2732.6, 7: 1769.2, 60: 1374.5, 52: 24.2, 56: 8.6, 64: 5.6, 32: 5.0}
+
+## Rank 17: comm by collective type x class (ms, % of this rank's comm, % of GPU kernel sum)
+type | class | pg(s) | count | time ms | % comm | % GPU-kernel-sum | MB issued
+ALL_TO_ALL | inter | 174 | 896 | 9817.3 | 70.6 | 62.6 | 22548.6
+ALL_GATHER | intra | 62 | 1132 | 2249.3 | 16.2 | 14.3 | 19881.0
+ALL_GATHER | inter | 11 | 2 | 1023.1 | 7.4 | 6.5 | 667.8
+REDUCE_SCATTER | inter | 11 | 1 | 557.2 | 4.0 | 3.6 | 2671.3
+REDUCE_SCATTER | intra | 62 | 904 | 198.2 | 1.4 | 1.3 | 68048.4
+ALL_REDUCE | inter | 0,3 | 6 | 48.1 | 0.3 | 0.3 | 0.0
+BROADCAST | inter | 0 | 2 | 8.6 | 0.1 | 0.1 | 0.0
+ALL_REDUCE | intra | 168,62 | 237 | 4.5 | 0.0 | 0.0 | 7.1
+stream busy (ms): {48: 9817.3, 44: 2447.7, 7: 1771.4, 60: 1580.2, 52: 43.7, 32: 13.0, 64: 5.6, 56: 4.2}
+
+(raw per-rank aggregates written to /scratch/harshanavkis/loom-proj/motivation-experiments/m3-sm-share/chakra/et_summary_Mixtral-8x22B.json)
