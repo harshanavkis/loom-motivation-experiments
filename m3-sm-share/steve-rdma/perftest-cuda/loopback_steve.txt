@@ -1,0 +1,20 @@
+1 same-port, host mem | client mlx5_0 host -> server mlx5_0 host | 22843.98 MiB/s, 0.365504 Mpps | wire tx MB: mlx5_0=0 mlx5_1=0
+2 same-port, GPU mem | client mlx5_0 --use_cuda=0 --use_cuda_dmabuf -> server mlx5_0 --use_cuda=0 --use_cuda_dmabuf | FAILED | wire tx MB: mlx5_0=0 mlx5_1=0
+ remote address: LID 0000 QPN 0x0129 PSN 0x460227 RKey 0x008706 VAddr 0x0076b091e10000
+ GID: 00:00:00:00:00:00:00:00:00:00:255:255:169:254:169:187
+---------------------------------------------------------------------------------------
+ #bytes     #iterations    BW peak[MiB/sec]    BW average[MiB/sec]   MsgRate[Mpps]
+destroying current CUDA Ctx
+3 port0->port1, host | client mlx5_0 host -> server mlx5_1 host | 22068.56 MiB/s, 0.353097 Mpps | wire tx MB: mlx5_0=73374 mlx5_1=74
+4 port0->port1, GPU->host | client mlx5_0 --use_cuda=0 --use_cuda_dmabuf -> server mlx5_1 host | FAILED | wire tx MB: mlx5_0=0 mlx5_1=0
+ remote address: LID 0000 QPN 0x0227 PSN 0xabd7bd RKey 0x044504 VAddr 0x00710e1e6fb000
+ GID: 00:00:00:00:00:00:00:00:00:00:255:255:169:254:48:90
+---------------------------------------------------------------------------------------
+ #bytes     #iterations    BW peak[MiB/sec]    BW average[MiB/sec]   MsgRate[Mpps]
+destroying current CUDA Ctx
+5 port0->port1, GPU->GPU | client mlx5_0 --use_cuda=0 --use_cuda_dmabuf -> server mlx5_1 --use_cuda=0 --use_cuda_dmabuf | FAILED | wire tx MB: mlx5_0=0 mlx5_1=0
+ remote address: LID 0000 QPN 0x0228 PSN 0xdfdc26 RKey 0x044504 VAddr 0x007f83c3e10000
+ GID: 00:00:00:00:00:00:00:00:00:00:255:255:169:254:48:90
+---------------------------------------------------------------------------------------
+ #bytes     #iterations    BW peak[MiB/sec]    BW average[MiB/sec]   MsgRate[Mpps]
+destroying current CUDA Ctx

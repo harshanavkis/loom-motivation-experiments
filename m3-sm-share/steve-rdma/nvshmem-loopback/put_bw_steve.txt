@@ -1,0 +1,267 @@
+# 2026-09-30T13:59:15+00:00 NVIDIA H200 NVL, 595.71.05
+RegistryDwords: "PeerMappingOverride=1;"
+Runtime options after parsing command line arguments 
+min_size: 4096, max_size: 4194304, step_factor: 4, iterations: 10, warmup iterations: 5, number of ctas: 32, threads per cta: 256 stride: 1, datatype: int, reduce_op: sum, threadgroup_scope: all_scopes, atomic_op: inc, dir: write, report_msgrate: 0, bidirectional: 0, putget_issue :on_stream, use_graph: 0, use_mmap: 0, mem_handle_type: 0, use_egm: 0
+Note: Above is full list of options, any given test will use only a subset of these variables.
+Runtime options after parsing command line arguments 
+min_size: 4096, max_size: 4194304, step_factor: 4, iterations: 10, warmup iterations: 5, number of ctas: 32, threads per cta: 256 stride: 1, datatype: int, reduce_op: sum, threadgroup_scope: all_scopes, atomic_op: inc, dir: write, report_msgrate: 0, bidirectional: 0, putget_issue :on_stream, use_graph: 0, use_mmap: 0, mem_handle_type: 0, use_egm: 0
+Note: Above is full list of options, any given test will use only a subset of these variables.
+steve:2878051:2878051 [0] NVSHMEM INFO PE distribution has been identified as NVSHMEMI_PE_DIST_BLOCK
+NVSHMEM configuration:
+  CUDA API                     12090
+  CUDA Runtime                 12090
+  CUDA Driver                  13020
+  Build Timestamp              Jan  1 1980 00:00:00
+  Build Variables             
+	NVSHMEM_DEBUG=OFF NVSHMEM_DEVEL=OFF NVSHMEM_DEFAULT_PMI2=OFF
+	NVSHMEM_DEFAULT_PMIX=OFF NVSHMEM_DEFAULT_UCX=OFF
+	NVSHMEM_ENABLE_ALL_DEVICE_INLINING=OFF NVSHMEM_GPU_COLL_USE_LDST=OFF
+	NVSHMEM_IBGDA_SUPPORT=TRUE NVSHMEM_IBGDA_SUPPORT_GPUMEM_ONLY=OFF
+	NVSHMEM_IBDEVX_SUPPORT=OFF NVSHMEM_IBRC_SUPPORT=ON
+	NVSHMEM_LIBFABRIC_SUPPORT=TRUE NVSHMEM_MPI_SUPPORT=TRUE NVSHMEM_NVTX=ON
+	NVSHMEM_PMIX_SUPPORT=TRUE NVSHMEM_SHMEM_SUPPORT=OFF NVSHMEM_TEST_STATIC_LIB=OFF
+	NVSHMEM_TIMEOUT_DEVICE_POLLING=OFF NVSHMEM_TRACE=OFF NVSHMEM_UCX_SUPPORT=TRUE
+	NVSHMEM_USE_DLMALLOC=OFF
+	PMIX_HOME=/nix/store/8qcryhyxvx7d8bklx1aci06kwjps8r9b-pmix-6.1.0-dev
+	SHMEM_HOME=/nix/store/dxprc1pln4nakw588jmm1dqb0wwlq9qj-openmpi-5.0.10
+	CUTLASS_HOME=
+	UCX_HOME=/nix/store/1vpxsfmnxi7kbjj22pygm8ldnsylk96j-ucx-1.20.1-dev
+
+steve:2878051:2878051 [0] NVSHMEM INFO PE 0 (process) affinity to 256 CPUs:
+     0  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25
+    27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50 51 52
+    54 55 56 57 58 59 60 61 62 63 64 65 66 67 68 69 70 71 72 73 74 75 76 77 78 79
+    81 82 83 84 85 86 87 88 89 90 91 92 93 94 95 96 97 98 99 100 101 102 103 104
+    106 107 108 109 110 111 112 113 114 115 116 117 118 119 120 121 122 123 124 125
+    126 127 128 129 130 131 132 133 134 135 136 137 138 139 140 141 142 143 144 145
+    146 147 148 149 150 151 152 153 154 155 156 157 158 159 160 161 162 163 164 165
+    166 167 168 169 170 171 172 173 174 175 176 177 178 179 180 181 182 183 184 185
+    186 187 188 189 190 191 192 193 194 195 196 197 198 199 200 201 202 203 204 205
+    206 207 208 209 210 211 212 213 214 215 216 217 218 219 220 221 222 223 224 225
+    226 227 228 229 230 231 232 233 234 235 236 237 238 239 240 241 242 243 244 245
+    246 247 248 249 250 251 252 
+steve:2878051:2878051 [0] NVSHMEM INFO cudaDriverVersion 13020
+steve:2878051:2878051 [0] NVSHMEM INFO NVSHMEM symmetric heap kind = DEVICE selected
+steve:2878051:2878051 [0] NVSHMEM INFO nvshmemi_common_init failed, continuing
+steve:2878052:2878052 [0] NVSHMEM INFO PE distribution has been identified as NVSHMEMI_PE_DIST_BLOCK
+steve:2878052:2878052 [0] NVSHMEM INFO PE 1 (process) affinity to 256 CPUs:
+     0  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25
+    27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50 51 52
+    54 55 56 57 58 59 60 61 62 63 64 65 66 67 68 69 70 71 72 73 74 75 76 77 78 79
+    81 82 83 84 85 86 87 88 89 90 91 92 93 94 95 96 97 98 99 100 101 102 103 104
+    106 107 108 109 110 111 112 113 114 115 116 117 118 119 120 121 122 123 124 125
+    126 127 128 129 130 131 132 133 134 135 136 137 138 139 140 141 142 143 144 145
+    146 147 148 149 150 151 152 153 154 155 156 157 158 159 160 161 162 163 164 165
+    166 167 168 169 170 171 172 173 174 175 176 177 178 179 180 181 182 183 184 185
+    186 187 188 189 190 191 192 193 194 195 196 197 198 199 200 201 202 203 204 205
+    206 207 208 209 210 211 212 213 214 215 216 217 218 219 220 221 222 223 224 225
+    226 227 228 229 230 231 232 233 234 235 236 237 238 239 240 241 242 243 244 245
+    246 247 248 249 250 251 252 
+steve:2878052:2878052 [0] NVSHMEM INFO cudaDriverVersion 13020
+steve:2878052:2878052 [0] NVSHMEM INFO NVSHMEM symmetric heap kind = DEVICE selected
+steve:2878052:2878052 [0] NVSHMEM INFO nvshmemi_common_init failed, continuing
+mype: 1 mype_node: 1 device name: NVIDIA H200 NVL bus id: 21 
+steve:2878052:2878052 [0] NVSHMEM INFO NVSHMEM symmetric heap kind = DEVICE selected
+steve:2878052:2878052 [0] NVSHMEM INFO [1] nvshmemi_get_cucontext->cuCtxSynchronize->CUDA_SUCCESS) my_stream (nil)
+steve:2878052:2878052 [0] NVSHMEM INFO in get_cucontext, queried and saved context for device: 0 context: 0x639d0add06f0
+steve:2878052:2878052 [0] NVSHMEM INFO [1] Created stream 0x639d0ba26240 for device 0
+steve:2878052:2878052 [0] NVSHMEM INFO NVML library found. libnvidia-ml.so.1
+mype: 0 mype_node: 0 device name: NVIDIA H200 NVL bus id: 21 
+steve:2878051:2878051 [0] NVSHMEM INFO NVSHMEM symmetric heap kind = DEVICE selected
+steve:2878051:2878051 [0] NVSHMEM INFO [0] nvshmemi_get_cucontext->cuCtxSynchronize->CUDA_SUCCESS) my_stream (nil)
+steve:2878051:2878051 [0] NVSHMEM INFO in get_cucontext, queried and saved context for device: 0 context: 0x5f9022e6b6f0
+steve:2878051:2878051 [0] NVSHMEM INFO [0] Created stream 0x5f9023ac1220 for device 0
+steve:2878051:2878051 [0] NVSHMEM INFO NVML library found. libnvidia-ml.so.1
+steve:2878051:2878051 [0] NVSHMEM INFO NVLS: cuMulticast is not supported on CUDA or disabled by user
+
+steve:2878052:2878052 [0] NVSHMEM INFO NVLS: cuMulticast is not supported on CUDA or disabled by user
+
+steve:2878051:2878051 [0] NVSHMEM INFO More than 1 PE per GPU detected. This is an MPG run.
+
+steve:2878051:2878051 [0] NVSHMEM INFO ALGO: FCOLLECT_ALGO set to 0
+steve:2878051:2878051 [0] NVSHMEM INFO ALGO: BCAST_ALGO set to 0
+steve:2878051:2878051 [0] NVSHMEM INFO ALGO: REDUCE_ALGO set to 0 (0 -> 1)
+steve:2878051:2878051 [0] NVSHMEM INFO ALGO: REDMAXLOC_ALGO set to 1
+steve:2878051:2878051 [0] NVSHMEM INFO ALGO: REDUCESCATTER_ALGO set to 0
+steve:2878051:2878051 [0] NVSHMEM INFO team psync mem req 620546 bytes, team mem total req 635441448 bytes, max teams 128
+
+
+steve:2878051:2878051 [0] /build/source/src/host/transport/transport.cpp:94 NVSHMEM WARN P2P access was disabled in the environment
+steve:2878051:2878051 [0] NVSHMEM INFO IBRC transport skipped in favor of: none
+
+steve:2878051:2878051 [0] NVSHMEM INFO UCX transport skipped in favor of: none
+
+steve:2878051:2878051 [0] NVSHMEM INFO Libfabric transport skipped in favor of: none
+
+steve:2878052:2878052 [0] NVSHMEM INFO More than 1 PE per GPU detected. This is an MPG run.
+
+steve:2878052:2878052 [0] NVSHMEM INFO ALGO: FCOLLECT_ALGO set to 0
+steve:2878052:2878052 [0] NVSHMEM INFO ALGO: BCAST_ALGO set to 0
+steve:2878052:2878052 [0] NVSHMEM INFO ALGO: REDUCE_ALGO set to 0 (0 -> 1)
+steve:2878052:2878052 [0] NVSHMEM INFO ALGO: REDMAXLOC_ALGO set to 1
+steve:2878052:2878052 [0] NVSHMEM INFO ALGO: REDUCESCATTER_ALGO set to 0
+steve:2878052:2878052 [0] NVSHMEM INFO team psync mem req 620546 bytes, team mem total req 635441448 bytes, max teams 128
+
+
+steve:2878052:2878052 [0] /build/source/src/host/transport/transport.cpp:94 NVSHMEM WARN P2P access was disabled in the environment
+steve:2878052:2878052 [0] NVSHMEM INFO IBRC transport skipped in favor of: none
+
+steve:2878052:2878052 [0] NVSHMEM INFO UCX transport skipped in favor of: none
+
+steve:2878052:2878052 [0] NVSHMEM INFO Libfabric transport skipped in favor of: none
+
+/build/source/src/modules/transport/common/transport_gdr_common.cpp 26 GDRCopy library not found. disabling GDRCopy.
+
+/build/source/src/modules/transport/common/transport_gdr_common.cpp 26 GDRCopy library not found. disabling GDRCopy.
+
+WARN: device irdma0 is not enumerated as an mlx5 device. Skipping...
+
+WARN: device irdma1 is not enumerated as an mlx5 device. Skipping...
+
+/build/source/src/modules/transport/common/transport_common.cpp 74 Begin - Parsed HCA list provided by user - 
+/build/source/src/modules/transport/common/transport_common.cpp 76 Parsed HCA list provided by user - i=0 (of 2), name=mlx5_0, port=1, count=1
+/build/source/src/modules/transport/common/transport_common.cpp 76 Parsed HCA list provided by user - i=1 (of 2), name=mlx5_1, port=1, count=1
+/build/source/src/modules/transport/common/transport_common.cpp 80 End - Parsed HCA list provided by user
+/build/source/src/modules/transport/ibgda/ibgda.cpp 4616 NVSHMEM_IBGDA_NIC_HANDLER: gpu
+
+/build/source/src/modules/transport/ibgda/ibgda.cpp 4619 Begin - Enumerating IB devices in the system ([<dev_id, device_name, num_ports>]) - 
+
+/build/source/src/modules/transport/common/transport_common.cpp 74 Begin - Parsed HCA list provided by user - 
+/build/source/src/modules/transport/common/transport_common.cpp 76 Parsed HCA list provided by user - i=0 (of 2), name=mlx5_0, port=1, count=1
+/build/source/src/modules/transport/common/transport_common.cpp 76 Parsed HCA list provided by user - i=1 (of 2), name=mlx5_1, port=1, count=1
+/build/source/src/modules/transport/common/transport_common.cpp 80 End - Parsed HCA list provided by user
+/build/source/src/modules/transport/ibgda/ibgda.cpp 4616 NVSHMEM_IBGDA_NIC_HANDLER: gpu
+
+/build/source/src/modules/transport/ibgda/ibgda.cpp 4619 Begin - Enumerating IB devices in the system ([<dev_id, device_name, num_ports>]) - 
+
+WARN: device irdma0 is not enumerated as an mlx5 device. Skipping...
+
+WARN: device irdma1 is not enumerated as an mlx5 device. Skipping...
+
+/build/source/src/modules/transport/ibgda/ibgda.cpp 4700 Enumerated IB devices in the system - device id=2 (of 4), name=mlx5_0, num_ports=1
+
+/build/source/src/modules/transport/ibgda/ibgda.cpp 4700 Enumerated IB devices in the system - device id=2 (of 4), name=mlx5_0, num_ports=1
+
+/build/source/src/modules/transport/ibgda/ibgda.cpp 4700 Enumerated IB devices in the system - device id=3 (of 4), name=mlx5_1, num_ports=1
+
+/build/source/src/modules/transport/ibgda/ibgda.cpp 4799 End - Enumerating IB devices in the system
+
+/build/source/src/modules/transport/ibgda/ibgda.cpp 4802 Begin - Ordered list of devices for assignment (after processing user provdied env vars (if any))  - 
+
+/build/source/src/modules/transport/ibgda/ibgda.cpp 4806 Ordered list of devices for assignment - idx=0 (of 2), device id=2, port_num=1
+
+/build/source/src/modules/transport/ibgda/ibgda.cpp 4806 Ordered list of devices for assignment - idx=1 (of 2), device id=3, port_num=1
+
+/build/source/src/modules/transport/ibgda/ibgda.cpp 4818 End - Ordered list of devices for assignment (after processing user provdied env vars (if any))
+
+steve:2878051:2878051 [0] NVSHMEM INFO Successfully initialized the transport: IBGDA. It will be used for device-side APIs over IB.
+/build/source/src/modules/transport/ibgda/ibgda.cpp 4850 NIC buffer will be on GPU memory.
+
+/build/source/src/modules/transport/ibgda/ibgda.cpp 4864 NIC handler will be GPU.
+
+/build/source/src/modules/transport/ibgda/ibgda.cpp 4700 Enumerated IB devices in the system - device id=3 (of 4), name=mlx5_1, num_ports=1
+
+/build/source/src/modules/transport/ibgda/ibgda.cpp 4799 End - Enumerating IB devices in the system
+
+/build/source/src/modules/transport/ibgda/ibgda.cpp 4802 Begin - Ordered list of devices for assignment (after processing user provdied env vars (if any))  - 
+
+/build/source/src/modules/transport/ibgda/ibgda.cpp 4806 Ordered list of devices for assignment - idx=0 (of 2), device id=2, port_num=1
+
+/build/source/src/modules/transport/ibgda/ibgda.cpp 4806 Ordered list of devices for assignment - idx=1 (of 2), device id=3, port_num=1
+
+/build/source/src/modules/transport/ibgda/ibgda.cpp 4818 End - Ordered list of devices for assignment (after processing user provdied env vars (if any))
+
+steve:2878052:2878052 [0] NVSHMEM INFO Successfully initialized the transport: IBGDA. It will be used for device-side APIs over IB.
+/build/source/src/modules/transport/ibgda/ibgda.cpp 4850 NIC buffer will be on GPU memory.
+
+/build/source/src/modules/transport/ibgda/ibgda.cpp 4864 NIC handler will be GPU.
+
+steve:2878052:2878052 [0] NVSHMEM INFO NVML library found. libnvidia-ml.so.1
+steve:2878052:2878052 [0] NVSHMEM INFO NVSHMEM has set MAX_PEER_STREAMS to 1
+steve:2878051:2878051 [0] NVSHMEM INFO NVML library found. libnvidia-ml.so.1
+steve:2878051:2878051 [0] NVSHMEM INFO NVSHMEM has set MAX_PEER_STREAMS to 1
+steve:2878051:2878051 [0] NVSHMEM INFO NVSHMEM_ENABLE_NIC_PE_MAPPING = 0, device 0 setting dev_id = 1
+/build/source/src/modules/transport/ibgda/ibgda.cpp 2754 IBGDA_DCI_MAP_BY is set to cta.
+/build/source/src/modules/transport/ibgda/ibgda.cpp 3024 IBGDA_RC_MAP_BY is set to cta.
+steve:2878052:2878052 [0] NVSHMEM INFO NVSHMEM_ENABLE_NIC_PE_MAPPING = 0, device 0 setting dev_id = 0
+/build/source/src/modules/transport/ibgda/ibgda.cpp 2754 IBGDA_DCI_MAP_BY is set to cta.
+/build/source/src/modules/transport/ibgda/ibgda.cpp 3024 IBGDA_RC_MAP_BY is set to cta.
+/build/source/src/modules/transport/common/transport_ib_common.cpp 109 ibv_reg_dmabuf_mr handle 0x5f9024d21f50 mr 0x5f9024e63cc0
+/build/source/src/modules/transport/common/transport_ib_common.cpp 109 ibv_reg_dmabuf_mr handle 0x639d0cc86f70 mr 0x639d0cdc8d10
+/build/source/src/modules/transport/ibgda/ibgda.cpp 2821 Creating 1 DCI QPs (shared: 1, exclusive: 0)
+/build/source/src/modules/transport/ibgda/ibgda.cpp 2821 Creating 1 DCI QPs (shared: 1, exclusive: 0)
+/build/source/src/modules/transport/ibgda/ibgda.cpp 3101 Creating 2 RC QPs
+/build/source/src/modules/transport/ibgda/ibgda.cpp 3101 Creating 2 RC QPs
+/build/source/src/modules/transport/common/transport_ib_common.cpp 109 ibv_reg_dmabuf_mr handle 0x639d0cf1fc50 mr 0x639d0cf1fc80
+/build/source/src/modules/transport/common/transport_ib_common.cpp 109 ibv_reg_dmabuf_mr handle 0x5f9024fbac50 mr 0x5f9024fbac80
+/build/source/src/modules/transport/common/transport_ib_common.cpp 109 ibv_reg_dmabuf_mr handle 0x5f9024fbd8a0 mr 0x5f9024fbd8d0
+/build/source/src/modules/transport/common/transport_ib_common.cpp 109 ibv_reg_dmabuf_mr handle 0x639d0cf228c0 mr 0x639d0cf228f0
+/build/source/src/modules/transport/ibgda/ibgda.cpp 3267 num_rc_handles: 4
+/build/source/src/modules/transport/ibgda/ibgda.cpp 3267 num_rc_handles: 4
+steve:2878051:2878051 [0] NVSHMEM INFO Disabling LL128 on unsupported platform. NVL OK: 1 NIC OK: 0
+steve:2878052:2878052 [0] NVSHMEM INFO Disabling LL128 on unsupported platform. NVL OK: 1 NIC OK: 0
+steve:2878051:2878051 [0] NVSHMEM INFO [0] status 0 cudaErrorInvalidValue 1 cudaErrorInvalidSymbol 13 cudaErrorInvalidMemcpyDirection 21 cudaErrorNoKernelImageForDevice 209
+steve:2878052:2878052 [0] NVSHMEM INFO [1] status 0 cudaErrorInvalidValue 1 cudaErrorInvalidSymbol 13 cudaErrorInvalidMemcpyDirection 21 cudaErrorNoKernelImageForDevice 209
+steve:2878051:2878051 [0] NVSHMEM INFO P2P list: 0 
+steve:2878052:2878052 [0] NVSHMEM INFO P2P list: 1 
+steve:2878051:2878051 [0] NVSHMEM INFO NVSHMEM_TEAM_SHARED: start=0, stride=1, size=1
+steve:2878052:2878052 [0] NVSHMEM INFO NVSHMEM_TEAM_SHARED: start=1, stride=1, size=1
+steve:2878052:2878052 [0] NVSHMEM INFO NVSHMEMX_TEAM_NODE: start=0, stride=1, size=2
+steve:2878052:2878052 [0] NVSHMEM INFO NVSHMEMX_TEAM_SAME_MYPE_NODE: start=1, stride=2, size=1
+steve:2878052:2878052 [0] NVSHMEM INFO NVSHMEMI_TEAM_SAME_GPU: start=0, stride=1, size=2
+steve:2878051:2878051 [0] NVSHMEM INFO NVSHMEMX_TEAM_NODE: start=0, stride=1, size=2
+steve:2878051:2878051 [0] NVSHMEM INFO NVSHMEMX_TEAM_SAME_MYPE_NODE: start=0, stride=2, size=1
+steve:2878051:2878051 [0] NVSHMEM INFO NVSHMEMI_TEAM_SAME_GPU: start=0, stride=1, size=2
+steve:2878051:2878051 [0] NVSHMEM INFO NVSHMEMI_TEAM_GPU_LEADERS: start=0, stride=2, size=1
+/build/source/src/modules/transport/ibgda/ibgda.cpp 751 [0] IBGDA: device used mlx5_1, data_direct support: 0
+/build/source/src/modules/transport/ibgda/ibgda.cpp 751 [1] IBGDA: device used mlx5_0, data_direct support: 0
+/build/source/src/modules/transport/common/transport_ib_common.cpp 109 ibv_reg_dmabuf_mr handle 0x7ffe9f47e160 mr 0x5f9025086cf0
+/build/source/src/modules/transport/common/transport_ib_common.cpp 109 ibv_reg_dmabuf_mr handle 0x7fff5f56df20 mr 0x639d0cfeab90
+/build/source/src/modules/transport/ibgda/ibgda.cpp 751 [0] IBGDA: device used mlx5_1, data_direct support: 0
+/build/source/src/modules/transport/ibgda/ibgda.cpp 751 [1] IBGDA: device used mlx5_0, data_direct support: 0
+/build/source/src/modules/transport/common/transport_ib_common.cpp 109 ibv_reg_dmabuf_mr handle 0x7fff5f56df20 mr 0x639d0cfefd20
+/build/source/src/modules/transport/common/transport_ib_common.cpp 109 ibv_reg_dmabuf_mr handle 0x7ffe9f47e160 mr 0x5f902508be80
+
+steve:2878052:2878052 [0] /build/source/src/host/team/team_internal.cpp:770 NVSHMEM WARN Skipping NVLINK SHARP resource initialized for team ID: 1
+
+
+steve:2878052:2878052 [0] /build/source/src/host/team/team_internal.cpp:770 NVSHMEM WARN Skipping NVLINK SHARP resource initialized for team ID: 3
+
+
+steve:2878051:2878051 [0] /build/source/src/host/team/team_internal.cpp:770 NVSHMEM WARN Skipping NVLINK SHARP resource initialized for team ID: 1
+
+
+steve:2878051:2878051 [0] /build/source/src/host/team/team_internal.cpp:770 NVSHMEM WARN Skipping NVLINK SHARP resource initialized for team ID: 3
+
+
+steve:2878051:2878051 [0] /build/source/src/host/team/team_internal.cpp:770 NVSHMEM WARN Skipping NVLINK SHARP resource initialized for team ID: 5
+
+steve:2878051:2878051 [0] NVSHMEM INFO pclose retuned error
+steve:2878051:2878051 [0] NVSHMEM INFO Multiple PEs per GPU (MPG) detected but MPS is not running. Hence limited MPG support is available
+steve:2878052:2878052 [0] NVSHMEM INFO Multiple PEs per GPU (MPG) detected but MPS is not running. Hence limited MPG support is available
+#shmem_put_bw_uni
+size(B)     scope     BW (GB/sec)     
+4096        None      0.316597        
+16384       None      1.329870        
+65536       None      5.148316        
+262144      None      12.533660       
+1048576     None      15.704018       
+4194304     None      9.181218        
+steve:2878051:2878051 [0] NVSHMEM INFO [2878051] in nvshmem_finalize:
+steve:2878052:2878052 [0] NVSHMEM INFO [2878052] in nvshmem_finalize:
+steve:2878052:2878052 [0] NVSHMEM INFO In nvshmemi_proxy_finalize
+steve:2878052:2878052 [0] NVSHMEM INFO In nvshmemi_teardown_handles
+/build/source/src/modules/transport/common/transport_ib_common.cpp 148 ibv_dereg_mr handle 0x639d0cfeade0 handle->mr 0x639d0cfeab90
+/build/source/src/modules/transport/common/transport_ib_common.cpp 148 ibv_dereg_mr handle 0x639d0cfeff70 handle->mr 0x639d0cfefd20
+steve:2878052:2878052 [0] NVSHMEM INFO In nvshmemi_transport_finalize
+steve:2878051:2878051 [0] NVSHMEM INFO In nvshmemi_proxy_finalize
+steve:2878051:2878051 [0] NVSHMEM INFO In nvshmemi_teardown_handles
+/build/source/src/modules/transport/common/transport_ib_common.cpp 148 ibv_dereg_mr handle 0x5f9025086d40 handle->mr 0x5f9025086cf0
+/build/source/src/modules/transport/common/transport_ib_common.cpp 148 ibv_dereg_mr handle 0x5f902508bed0 handle->mr 0x5f902508be80
+/build/source/src/modules/transport/common/transport_ib_common.cpp 148 ibv_dereg_mr handle 0x639d0cf1fc50 handle->mr 0x639d0cf1fc80
+steve:2878051:2878051 [0] NVSHMEM INFO In nvshmemi_transport_finalize
+/build/source/src/modules/transport/common/transport_ib_common.cpp 148 ibv_dereg_mr handle 0x639d0cf228c0 handle->mr 0x639d0cf228f0
+/build/source/src/modules/transport/common/transport_ib_common.cpp 148 ibv_dereg_mr handle 0x5f9024fbac50 handle->mr 0x5f9024fbac80
+/build/source/src/modules/transport/common/transport_ib_common.cpp 148 ibv_dereg_mr handle 0x5f9024fbd8a0 handle->mr 0x5f9024fbd8d0
+/build/source/src/modules/transport/common/transport_ib_common.cpp 148 ibv_dereg_mr handle 0x639d0cc86f70 handle->mr 0x639d0cdc8d10
+/build/source/src/modules/transport/common/transport_ib_common.cpp 148 ibv_dereg_mr handle 0x5f9024d21f50 handle->mr 0x5f9024e63cc0
