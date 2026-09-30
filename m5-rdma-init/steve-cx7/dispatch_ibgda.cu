@@ -9,6 +9,11 @@
 #include <vector>
 #include <algorithm>
 #include <unistd.h>
+#include <thread>
+#include <atomic>
+#include <string>
+#include <cuda_bf16.h>
+#include <cublas_v2.h>
 #include <cuda_runtime.h>
 #include <nvshmem.h>
 #include <nvshmemx.h>
@@ -48,14 +53,37 @@ __global__ void dispatch(const char* tok, char* recv, int T, int H, int E, int R
   nvshmem_quiet();
 }
 
+// background GEMM on another stream (same process), planned for 132 - reserve SMs
+struct Load {
+  std::atomic<bool> stop{false}; std::atomic<int> reserve{0}; std::thread th;
+  void start() {
+    th = std::thread([this] {
+      cublasHandle_t h; cublasCreate(&h); cudaStream_t s; cudaStreamCreateWithFlags(&s, cudaStreamNonBlocking); cublasSetStream(h, s);
+      void* ws; cudaMalloc(&ws, 256ull << 20); cublasSetWorkspace(h, ws, 256ull << 20);
+      const int M = 8192, N = 4096, K = 7168; __nv_bfloat16 *A, *B, *C;
+      cudaMalloc(&A, (size_t)M * K * 2); cudaMalloc(&B, (size_t)K * N * 2); cudaMalloc(&C, (size_t)M * N * 2);
+      cudaMemset(A, 0x3c, (size_t)M * K * 2); cudaMemset(B, 0x3c, (size_t)K * N * 2);
+      const float al = 1.f, be = 0.f;
+      while (!stop) {
+        cublasSetSmCountTarget(h, 132 - reserve);
+        for (int i = 0; i < 10; i++)
+          cublasGemmEx(h, CUBLAS_OP_N, CUBLAS_OP_N, N, M, K, &al, B, CUDA_R_16BF, N, A, CUDA_R_16BF, K, &be, C, CUDA_R_16BF, N,
+                       CUBLAS_COMPUTE_32F, CUBLAS_GEMM_DEFAULT);
+        cudaStreamSynchronize(s);
+      }
+    });
+  }
+};
+
 int main(int argc, char** argv) {
-  int iters = 20;
+  int iters = 20; int H = 7168; bool load = false;
+  for (int i = 1; i < argc; i++) { if (!strcmp(argv[i], "--H")) H = atoi(argv[++i]); else if (!strcmp(argv[i], "--load")) load = true; }
   nvshmem_init();
   int me = nvshmem_my_pe();
   CK(cudaSetDevice(0));
-  const int H = 7168, E = 256, R = 8, TOPK = 8, TMAX = 4096;
-  char* tok = (char*)nvshmem_malloc((size_t)TMAX * H);
-  char* recv = (char*)nvshmem_malloc((size_t)R * TMAX * H);
+  const int HMAX = 7168, E = 256, R = 8, TOPK = 8, TMAX = 4096;
+  char* tok = (char*)nvshmem_malloc((size_t)TMAX * HMAX);
+  char* recv = (char*)nvshmem_malloc((size_t)R * TMAX * HMAX);
   const char* done_file = "/tmp/loom_dispatch_ibgda.done";
   if (me == 0) unlink(done_file);
   nvshmem_barrier_all();
@@ -64,13 +92,16 @@ int main(int argc, char** argv) {
     nvshmem_barrier_all(); nvshmem_finalize(); return 0;
   }
   int* counters; CK(cudaMalloc(&counters, R * sizeof(int)));
-  CK(cudaMemset(tok, 1, (size_t)TMAX * H));
+  CK(cudaMemset(tok, 1, (size_t)TMAX * HMAX));
+  CK(cudaDeviceSynchronize());
+  Load L; if (load) { L.start(); usleep(500000); }
   cudaEvent_t a, b; CK(cudaEventCreate(&a)); CK(cudaEventCreate(&b));
-  printf("# B1 GPU-initiated dispatch (IBGDA, warp nbi puts), H=%d E=%d R=%d topk=%d, %s QPs/peer\n", H, E, R, TOPK,
+  printf("# B1 GPU-initiated dispatch (IBGDA, warp nbi puts), H=%d E=%d R=%d topk=%d load=%d, %s QPs/peer\n", H, E, R, TOPK, (int)load,
          getenv("NVSHMEM_IBGDA_NUM_RC_PER_PE") ? getenv("NVSHMEM_IBGDA_NUM_RC_PER_PE") : "default");
-  printf("test,tokens,ctas,warps_per_cta,messages,median_us,p10_us,p90_us,GBps\n");
-  for (int T : {128, 4096})
-    for (int ctas : {8, 20, 32}) {
+  printf("test,H,load,tokens,ctas,warps_per_cta,messages,median_us,p10_us,p90_us,GBps\n");
+  for (int T : {16, 32, 128, 1024, 4096})
+    for (int ctas : {8, 20}) {
+      L.reserve = ctas;
       std::vector<float> v; int msgs = 0;
       for (int it = 0; it < iters + 3; it++) {
         CK(cudaMemset(counters, 0, R * sizeof(int))); CK(cudaDeviceSynchronize());
@@ -82,10 +113,11 @@ int main(int argc, char** argv) {
       }
       std::sort(v.begin(), v.end());
       double med = v[v.size() / 2];
-      printf("ibgda,%d,%d,8,%d,%.1f,%.1f,%.1f,%.2f\n", T, ctas, msgs, med, v[v.size() / 10], v[v.size() * 9 / 10],
+      printf("ibgda,%d,%d,%d,%d,8,%d,%.1f,%.1f,%.1f,%.2f\n", H, (int)load, T, ctas, msgs, med, v[v.size() / 10], v[v.size() * 9 / 10],
              (double)msgs * H / (med * 1e-6) / 1e9);
       fflush(stdout);
     }
+  if (load) { L.stop = true; L.th.join(); }
   { FILE* f = fopen(done_file, "w"); if (f) fclose(f); }
   nvshmem_barrier_all();
   nvshmem_finalize();

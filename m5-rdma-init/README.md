@@ -134,7 +134,32 @@ Reading:
 - **The CPU's message rate is not the limiter here.** Per-token posting costs about 20 µs more at 683 messages and about 120 µs at 21,711.
 - **CTA count hardly matters for B1**, because it is bandwidth-bound on this loopback. With 7 KiB tokens, a 128-token decode is still 4.9 MB, i.e. bandwidth-dominated.
 
-A smaller-hidden or smaller-batch variant would isolate the control path further; not run yet.
+**Sweep: token size, batch size and GEMM load** (`dispatch_sweep_all.csv`: `--H 1024/7168`, `--load`).
+- Batches of 16/32/128/1024/4096 tokens.
+- With `--load`, a cuBLAS BF16 GEMM runs continuously on another stream of the same process, planned for 132−ctas SMs, so the dispatch kernel always finds free SMs.
+- Median µs; ranges over 8/20 CTAs.
+
+| H | tokens (messages) | B1 idle | B1 GEMM running | B2 packed, idle | B2 per-token, idle | B1 / B2 packed (idle) |
+|---|---|---|---|---|---|---|
+| 1 KiB | 16 (90) | **75–77** | 81–88 | 159–190 | 196–216 | 0.41–0.47 |
+| 1 KiB | 32 (170) | **77–78** | 94–96 | 168–203 | 244–269 | 0.39–0.46 |
+| 1 KiB | 128 (683) | 181–186 | 194–207 | 172–218 | 469–536 | 0.85–1.05 |
+| 1 KiB | 1024 (5,446) | 1,097–1,100 | 1,115–1,126 | **488–520** | 2,216–2,414 | 2.11–2.25 |
+| 1 KiB | 4096 (21,711) | 4,630–4,638 | 4,672–4,693 | **1,576–1,676** | 9,265–9,362 | 2.76–2.94 |
+| 7 KiB | 16 (90) | **90–92** | 90–103 | 202–212 | 215–262 | 0.43–0.45 |
+| 7 KiB | 32 (170) | **125** | 150–164 | 201–246 | 264–277 | 0.51–0.62 |
+| 7 KiB | 128 (683) | 368–382 | 401–429 | 457–464 | 500–541 | 0.79–0.83 |
+| 7 KiB | 1024 (5,446) | 2,732–2,746 | 2,862–2,902 | 2,638–2,723 | 2,678–2,778 | 1.00–1.04 |
+| 7 KiB | 4096 (21,711) | 10,683–10,705 | 11,216–11,322 | 10,662–11,168 | 10,793–11,282 | 0.96–1.00 |
+
+Three regimes:
+1. **Small decode batches (16–32 tokens): GPU-initiated is about 2× faster** (75–125 vs. 160–245 µs). The proxy's fixed path (finish routing, hand off to the host, then send) dominates; this is DeepEP's low-latency regime.
+2. **Many small tokens (1 KiB × ≥1024): the proxy with packing wins by 2.1–2.9×.** It sends 8 large writes instead of thousands of 1 KiB puts. Without packing the proxy is about 2× slower than B1: one CPU thread posts about 2.3 M writes/s (21,711 in 9.3 ms), while GPU warps post about 4.7 M puts/s (21,711 in 4.6 ms). Per-message posting is the cost on both sides, and batching wins.
+3. **Large tokens and batches:** both are bound by the ~15 GB/s NIC → HBM ceiling.
+
+**Under GEMM load**, B1 slows by up to about 30% at small batches (e.g. 77 → 94 µs, 32 × 1 KiB) and about 5% at large ones. B2 is unchanged within noise (its packing kernel also shares SMs, but its sends do not).
+
+**Implication for Loom:** the best dispatch wants GPU triggering (regime 1) *and* engine-side gathering into few large transfers (regime 2), without SM copies for packing and without the SM post chain (M3c). That is a GPU-triggered engine with scatter-gather descriptors, the same requirement as the copy-engine granularity result in `../m3-sm-share/gpu-interference`.
 
 **Caveats:**
 - B2 is the unpipelined NCCL-style handoff. A proxy fed in chunks could overlap too, at the cost of more GPU↔host round trips.
@@ -169,7 +194,8 @@ cd ~/loom-experiments/latency && NIXPKGS_ALLOW_UNFREE=1 nix shell nixpkgs#numact
 NUMA=$(nix build --no-link --print-out-paths nixpkgs#numactl | grep -v -- -man | head -1)/bin/numactl
 cd ~/loom-experiments/latency && $NUMA -N 0 -m 0 ./proxy_b2 20000 > proxy_b2_numa0.csv
 cd ~/loom-experiments/latency && $NUMA -N 0 -m 0 ./fence_cost > fence_cost_numa0.csv
-sudo ~/loom-experiments/gpu-posted/run_dispatch.sh                                   # dispatch_ibgda.csv
+sudo ~/loom-experiments/gpu-posted/run_dispatch.sh < /dev/null                       # B1 sweep: dispatch_ibgda_H{1024,7168}_load{0,1}.csv
+~/loom-experiments/latency/run_dispatch_proxy.sh                                      # B2 sweep: dispatch_proxy_H*_load*.csv
 cd ~/loom-experiments/latency && $NUMA -N 0 -m 0 ./dispatch_proxy < /dev/null > dispatch_proxy.csv
 sudo ~/loom-experiments/nvshmem-loopback/run_put_lat.sh        # put_lat_steve.txt
 sudo ~/loom-experiments/nvshmem-loopback/run_put_lat.sh load   # put_lat_steve_load.txt, GEMM as an MPS client
@@ -193,3 +219,5 @@ sudo ~/loom-experiments/nvshmem-loopback/run_put_lat.sh load   # put_lat_steve_l
 - `dispatch_ibgda.csv`: its outputs.
 - `dispatch_proxy.cu`: the B2 dispatch benchmark (verbs + CPU proxy).
 - `dispatch_proxy.csv`: its outputs.
+- `run_dispatch_proxy.sh`: the B2 sweep (H × load).
+- `dispatch_sweep_all.csv`: all sweep outputs, B1 and B2.

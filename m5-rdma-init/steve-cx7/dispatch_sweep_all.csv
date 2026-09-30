@@ -1,0 +1,168 @@
+WARN: device irdma0 is not enumerated as an mlx5 device. Skipping...
+
+WARN: device irdma1 is not enumerated as an mlx5 device. Skipping...
+
+WARN: device irdma0 is not enumerated as an mlx5 device. Skipping...
+
+WARN: device irdma1 is not enumerated as an mlx5 device. Skipping...
+
+# B1 GPU-initiated dispatch (IBGDA, warp nbi puts), H=1024 E=256 R=8 topk=8 load=0, 24 QPs/peer
+test,H,load,tokens,ctas,warps_per_cta,messages,median_us,p10_us,p90_us,GBps
+ibgda,1024,0,16,8,8,90,75.3,72.3,80.8,1.22
+ibgda,1024,0,16,20,8,90,77.2,72.8,83.6,1.19
+ibgda,1024,0,32,8,8,170,76.8,72.5,94.3,2.27
+ibgda,1024,0,32,20,8,170,78.4,73.7,88.9,2.22
+ibgda,1024,0,128,8,8,683,185.9,177.5,202.9,3.76
+ibgda,1024,0,128,20,8,683,180.9,168.1,204.6,3.87
+ibgda,1024,0,1024,8,8,5446,1096.5,1054.9,1121.2,5.09
+ibgda,1024,0,1024,20,8,5446,1100.4,1073.3,1143.1,5.07
+ibgda,1024,0,4096,8,8,21711,4630.3,4556.1,4713.1,4.80
+ibgda,1024,0,4096,20,8,21711,4637.8,4575.1,4699.6,4.79
+WARN: device irdma0 is not enumerated as an mlx5 device. Skipping...
+
+WARN: device irdma1 is not enumerated as an mlx5 device. Skipping...
+
+WARN: device irdma0 is not enumerated as an mlx5 device. Skipping...
+
+WARN: device irdma1 is not enumerated as an mlx5 device. Skipping...
+
+# B1 GPU-initiated dispatch (IBGDA, warp nbi puts), H=1024 E=256 R=8 topk=8 load=1, 24 QPs/peer
+test,H,load,tokens,ctas,warps_per_cta,messages,median_us,p10_us,p90_us,GBps
+ibgda,1024,1,16,8,8,90,88.3,76.0,113.8,1.04
+ibgda,1024,1,16,20,8,90,80.8,73.3,98.9,1.14
+ibgda,1024,1,32,8,8,170,96.1,86.6,114.8,1.81
+ibgda,1024,1,32,20,8,170,94.0,84.2,107.5,1.85
+ibgda,1024,1,128,8,8,683,206.8,188.4,249.3,3.38
+ibgda,1024,1,128,20,8,683,194.3,180.9,212.1,3.60
+ibgda,1024,1,1024,8,8,5446,1115.3,1098.0,1186.2,5.00
+ibgda,1024,1,1024,20,8,5446,1126.1,1106.7,1185.3,4.95
+ibgda,1024,1,4096,8,8,21711,4672.0,4577.2,4736.2,4.76
+ibgda,1024,1,4096,20,8,21711,4693.0,4596.4,4748.2,4.74
+WARN: device irdma0 is not enumerated as an mlx5 device. Skipping...
+
+WARN: device irdma1 is not enumerated as an mlx5 device. Skipping...
+
+WARN: device irdma0 is not enumerated as an mlx5 device. Skipping...
+
+WARN: device irdma1 is not enumerated as an mlx5 device. Skipping...
+
+# B1 GPU-initiated dispatch (IBGDA, warp nbi puts), H=7168 E=256 R=8 topk=8 load=0, 24 QPs/peer
+test,H,load,tokens,ctas,warps_per_cta,messages,median_us,p10_us,p90_us,GBps
+ibgda,7168,0,16,8,8,90,90.1,83.3,114.8,7.16
+ibgda,7168,0,16,20,8,90,92.1,84.6,101.9,7.00
+ibgda,7168,0,32,8,8,170,125.1,119.7,143.2,9.74
+ibgda,7168,0,32,20,8,170,124.9,118.4,140.7,9.75
+ibgda,7168,0,128,8,8,683,381.9,363.1,403.8,12.82
+ibgda,7168,0,128,20,8,683,367.7,346.7,398.1,13.31
+ibgda,7168,0,1024,8,8,5446,2732.2,2700.9,2784.6,14.29
+ibgda,7168,0,1024,20,8,5446,2745.5,2707.8,2775.3,14.22
+ibgda,7168,0,4096,8,8,21711,10682.5,10639.8,10843.5,14.57
+ibgda,7168,0,4096,20,8,21711,10705.2,10612.5,10823.1,14.54
+WARN: device irdma0 is not enumerated as an mlx5 device. Skipping...
+
+WARN: device irdma1 is not enumerated as an mlx5 device. Skipping...
+
+WARN: device irdma0 is not enumerated as an mlx5 device. Skipping...
+
+WARN: device irdma1 is not enumerated as an mlx5 device. Skipping...
+
+# B1 GPU-initiated dispatch (IBGDA, warp nbi puts), H=7168 E=256 R=8 topk=8 load=1, 24 QPs/peer
+test,H,load,tokens,ctas,warps_per_cta,messages,median_us,p10_us,p90_us,GBps
+ibgda,7168,1,16,8,8,90,102.9,88.0,120.7,6.27
+ibgda,7168,1,16,20,8,90,89.7,85.8,124.8,7.19
+ibgda,7168,1,32,8,8,170,163.6,148.0,179.7,7.45
+ibgda,7168,1,32,20,8,170,150.2,139.8,175.7,8.11
+ibgda,7168,1,128,8,8,683,428.7,408.3,452.6,11.42
+ibgda,7168,1,128,20,8,683,400.6,379.6,435.0,12.22
+ibgda,7168,1,1024,8,8,5446,2901.7,2867.7,2926.0,13.45
+ibgda,7168,1,1024,20,8,5446,2862.2,2833.4,2898.0,13.64
+ibgda,7168,1,4096,8,8,21711,11322.0,11246.4,11405.2,13.75
+ibgda,7168,1,4096,20,8,21711,11215.9,11175.7,11268.6,13.88
+# B2 CPU-proxy dispatch (verbs), H=1024 E=256 R=8 topk=8 load=0; kernel routes+packs, proxy posts
+test,H,load,mode,tokens,ctas,messages,median_us,p10_us,p90_us,GBps,proxy_post_us
+proxy,1024,0,block,16,8,90,159.3,128.0,293.1,0.58,17.0
+proxy,1024,0,block,16,20,90,189.8,126.2,299.6,0.49,15.8
+proxy,1024,0,block,32,8,170,167.8,128.3,338.9,1.04,23.1
+proxy,1024,0,block,32,20,170,203.1,144.6,250.5,0.86,20.4
+proxy,1024,0,block,128,8,683,217.8,146.9,383.9,3.21,52.1
+proxy,1024,0,block,128,20,683,172.4,144.4,306.6,4.06,51.9
+proxy,1024,0,block,1024,8,5446,519.8,465.5,696.5,10.73,357.3
+proxy,1024,0,block,1024,20,5446,488.2,461.2,645.6,11.42,359.2
+proxy,1024,0,block,4096,8,21711,1676.0,1661.4,1691.7,13.27,1416.3
+proxy,1024,0,block,4096,20,21711,1575.7,1532.4,1605.4,14.11,1413.8
+proxy,1024,0,token,16,8,90,215.7,155.6,310.7,0.43,46.8
+proxy,1024,0,token,16,20,90,196.1,153.2,276.2,0.47,41.6
+proxy,1024,0,token,32,8,170,243.9,180.4,302.3,0.71,73.3
+proxy,1024,0,token,32,20,170,268.9,212.4,301.6,0.65,96.5
+proxy,1024,0,token,128,8,683,535.9,444.1,753.7,1.31,343.3
+proxy,1024,0,token,128,20,683,468.8,377.3,592.2,1.49,308.8
+proxy,1024,0,token,1024,8,5446,2215.8,2123.3,2501.9,2.52,2128.2
+proxy,1024,0,token,1024,20,5446,2413.7,2245.8,2880.1,2.31,2305.7
+proxy,1024,0,token,4096,8,21711,9362.3,9022.7,10182.7,2.37,9167.1
+proxy,1024,0,token,4096,20,21711,9265.2,8938.6,9824.8,2.40,9149.8
+# B2 CPU-proxy dispatch (verbs), H=1024 E=256 R=8 topk=8 load=1; kernel routes+packs, proxy posts
+test,H,load,mode,tokens,ctas,messages,median_us,p10_us,p90_us,GBps,proxy_post_us
+proxy,1024,1,block,16,8,90,156.2,125.7,250.7,0.59,17.8
+proxy,1024,1,block,16,20,90,165.2,117.0,226.0,0.56,15.8
+proxy,1024,1,block,32,8,170,164.1,131.0,208.3,1.06,24.3
+proxy,1024,1,block,32,20,170,132.2,116.4,174.0,1.32,21.7
+proxy,1024,1,block,128,8,683,167.3,155.8,220.4,4.18,54.5
+proxy,1024,1,block,128,20,683,167.6,149.6,214.4,4.17,54.7
+proxy,1024,1,block,1024,8,5446,511.9,497.9,586.6,10.89,392.0
+proxy,1024,1,block,1024,20,5446,508.6,473.9,605.7,10.97,388.9
+proxy,1024,1,block,4096,8,21711,1857.6,1832.9,1870.7,11.97,1532.7
+proxy,1024,1,block,4096,20,21711,1684.2,1655.1,1715.1,13.20,1524.6
+proxy,1024,1,token,16,8,90,195.3,139.3,240.0,0.47,52.0
+proxy,1024,1,token,16,20,90,187.9,141.3,229.2,0.49,50.9
+proxy,1024,1,token,32,8,170,208.5,174.4,254.7,0.83,87.7
+proxy,1024,1,token,32,20,170,214.4,148.8,242.9,0.81,84.9
+proxy,1024,1,token,128,8,683,434.3,395.0,535.4,1.61,317.2
+proxy,1024,1,token,128,20,683,424.1,380.1,572.5,1.65,310.9
+proxy,1024,1,token,1024,8,5446,2410.6,2325.0,2519.9,2.31,2273.6
+proxy,1024,1,token,1024,20,5446,2378.8,2343.9,2487.8,2.34,2269.5
+proxy,1024,1,token,4096,8,21711,9239.6,9063.7,9922.6,2.41,8998.1
+proxy,1024,1,token,4096,20,21711,9038.8,8886.4,9745.5,2.46,8967.2
+# B2 CPU-proxy dispatch (verbs), H=7168 E=256 R=8 topk=8 load=0; kernel routes+packs, proxy posts
+test,H,load,mode,tokens,ctas,messages,median_us,p10_us,p90_us,GBps,proxy_post_us
+proxy,7168,0,block,16,8,90,202.4,175.8,226.9,3.19,50.1
+proxy,7168,0,block,16,20,90,212.4,184.7,323.4,3.04,51.2
+proxy,7168,0,block,32,8,170,245.8,189.3,342.5,4.96,87.8
+proxy,7168,0,block,32,20,170,200.8,182.6,304.8,6.07,85.5
+proxy,7168,0,block,128,8,683,457.4,417.5,584.0,10.70,313.4
+proxy,7168,0,block,128,20,683,464.4,409.5,619.1,10.54,312.5
+proxy,7168,0,block,1024,8,5446,2722.6,2704.5,2762.6,14.34,2505.1
+proxy,7168,0,block,1024,20,5446,2637.5,2616.5,2774.4,14.80,2513.2
+proxy,7168,0,block,4096,8,21711,11168.2,11149.9,11186.3,13.93,10272.4
+proxy,7168,0,block,4096,20,21711,10661.6,10653.2,10688.4,14.60,10279.6
+proxy,7168,0,token,16,8,90,261.8,195.6,305.5,2.46,65.3
+proxy,7168,0,token,16,20,90,214.9,184.2,330.7,3.00,65.6
+proxy,7168,0,token,32,8,170,276.5,224.0,402.4,4.41,102.8
+proxy,7168,0,token,32,20,170,263.9,229.2,389.6,4.62,105.6
+proxy,7168,0,token,128,8,683,540.9,441.5,672.7,9.05,363.1
+proxy,7168,0,token,128,20,683,499.7,436.1,627.5,9.80,330.8
+proxy,7168,0,token,1024,8,5446,2777.5,2744.0,3013.6,14.05,2577.9
+proxy,7168,0,token,1024,20,5446,2678.3,2650.7,3026.0,14.58,2591.8
+proxy,7168,0,token,4096,8,21711,11281.8,11262.0,11328.9,13.79,10403.9
+proxy,7168,0,token,4096,20,21711,10793.2,10765.3,11047.9,14.42,10435.0
+# B2 CPU-proxy dispatch (verbs), H=7168 E=256 R=8 topk=8 load=1; kernel routes+packs, proxy posts
+test,H,load,mode,tokens,ctas,messages,median_us,p10_us,p90_us,GBps,proxy_post_us
+proxy,7168,1,block,16,8,90,178.0,151.7,252.7,3.62,52.6
+proxy,7168,1,block,16,20,90,184.1,150.1,236.2,3.50,52.7
+proxy,7168,1,block,32,8,170,231.4,194.8,273.2,5.27,98.4
+proxy,7168,1,block,32,20,170,206.6,188.8,269.2,5.90,91.4
+proxy,7168,1,block,128,8,683,469.7,438.1,562.9,10.42,341.4
+proxy,7168,1,block,128,20,683,478.3,448.3,515.2,10.23,342.0
+proxy,7168,1,block,1024,8,5446,2966.2,2944.4,2983.8,13.16,2686.1
+proxy,7168,1,block,1024,20,5446,2821.1,2799.1,2837.0,13.84,2669.5
+proxy,7168,1,block,4096,8,21711,11700.5,11674.0,11719.0,13.30,10680.7
+proxy,7168,1,block,4096,20,21711,11070.6,11041.0,11097.0,14.06,10626.7
+proxy,7168,1,token,16,8,90,176.5,153.6,285.4,3.66,63.3
+proxy,7168,1,token,16,20,90,190.0,145.1,292.1,3.40,63.7
+proxy,7168,1,token,32,8,170,209.0,185.4,317.9,5.83,103.2
+proxy,7168,1,token,32,20,170,225.8,200.6,264.5,5.40,102.9
+proxy,7168,1,token,128,8,683,495.9,467.0,527.5,9.87,374.9
+proxy,7168,1,token,128,20,683,509.5,446.3,568.0,9.61,373.0
+proxy,7168,1,token,1024,8,5446,3004.9,2990.2,3210.4,12.99,2762.1
+proxy,7168,1,token,1024,20,5446,2874.1,2838.8,3094.4,13.58,2756.9
+proxy,7168,1,token,4096,8,21711,11901.1,11811.5,12045.6,13.08,10887.2
+proxy,7168,1,token,4096,20,21711,11284.8,11169.5,11401.9,13.79,10845.6

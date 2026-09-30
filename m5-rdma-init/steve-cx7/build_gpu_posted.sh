@@ -14,5 +14,5 @@ nix shell --impure nixpkgs#cudaPackages.cuda_nvcc -c nvcc -O3 -std=c++17 -rdc=tr
 nix shell --impure nixpkgs#cudaPackages.cuda_nvcc -c nvcc -O3 -std=c++17 -rdc=true -arch=sm_90 \
   -I"$NV/include" -I"$CUDART/include" -I"$CCCL/include" -L"$NV/lib" -L"$CUDART/lib" -L/run/opengl-driver/lib \
   -Xlinker -rpath -Xlinker "$NV/lib:$CUDART/lib:/run/opengl-driver/lib" \
-  dispatch_ibgda.cu -o dispatch_ibgda -lnvshmem_host -lnvshmem_device -lcudart -lcuda
+  -I"$CUBLAS_INC/include" -L"$CUBLAS_LIB/lib" -Xlinker -rpath -Xlinker "$CUBLAS_LIB/lib" dispatch_ibgda.cu -o dispatch_ibgda -lnvshmem_host -lnvshmem_device -lcublas -lcudart -lcuda
 echo built ./nvshmem_interfere ./dispatch_ibgda

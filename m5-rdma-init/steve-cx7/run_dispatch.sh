@@ -12,7 +12,9 @@ export NVSHMEM_REMOTE_TRANSPORT=none       # only put_nbi + quiet: pure IBGDA, n
 export NVSHMEM_IBGDA_NUM_RC_PER_PE=24      # DeepEP V1's setting; default 2 would make k CTAs share 2 QPs
 export NVSHMEM_SYMMETRIC_SIZE=2G
 
-OUT=$D/dispatch_ibgda.csv
-timeout 1800 $MPI/bin/mpiexec -n 2 $NUMA --cpunodebind=0 --membind=0 $D/dispatch_ibgda > $OUT 2> $D/dispatch_ibgda.err
-echo "exit=$?  output: $OUT"
-chown harshanavkis $OUT $D/dispatch_ibgda.err
+for H in 1024 7168; do for LOAD in 0 1; do
+  OUT=$D/dispatch_ibgda_H${H}_load${LOAD}.csv; X=""; [ $LOAD = 1 ] && X="--load"
+  timeout 1800 $MPI/bin/mpiexec -n 2 $NUMA --cpunodebind=0 --membind=0 $D/dispatch_ibgda --H $H $X < /dev/null > $OUT 2> ${OUT%.csv}.err
+  echo "H=$H load=$LOAD exit=$?  output: $OUT"
+  chown harshanavkis $OUT ${OUT%.csv}.err
+done; done

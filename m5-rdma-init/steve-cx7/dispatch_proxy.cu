@@ -15,6 +15,9 @@
 #include <atomic>
 #include <algorithm>
 #include <x86intrin.h>
+#include <unistd.h>
+#include <cuda_bf16.h>
+#include <cublas_v2.h>
 #include <chrono>
 #include <infiniband/verbs.h>
 #include <cuda.h>
@@ -26,7 +29,7 @@
   fprintf(stderr, "%s:%d %s: %s\n", __FILE__, __LINE__, #x, m); exit(1); } } while (0)
 #define IB(x) do { if (!(x)) { perror(#x); fprintf(stderr, "%s:%d\n", __FILE__, __LINE__); exit(1); } } while (0)
 
-static const int GID = 3, R = 8, H = 7168, E = 256, TOPK = 8, TMAX = 4096;
+static const int GID = 3, R = 8, HMAX = 7168, E = 256, TOPK = 8, TMAX = 4096;
 
 struct End { ibv_context* ctx; ibv_pd* pd; ibv_cq* cq; ibv_qp* qp; ibv_gid gid; ibv_mr* mr; };
 static End open_end(const char* name, void* buf, size_t len) {
@@ -64,7 +67,7 @@ __device__ unsigned rank_mask(int t, int E_, int R_, int topk) {
   return mask;
 }
 
-__global__ void dispatch_pack(const int4* tok, int4* send, int T, int* counters, int* blocks_done,
+__global__ void dispatch_pack(const int4* tok, int4* send, int T, int H, int* counters, int* blocks_done,
                               volatile int* counts_h, volatile unsigned* req_h, volatile unsigned* done_h, unsigned iter) {
   const int lane = threadIdx.x & 31, warp = (blockIdx.x * blockDim.x + threadIdx.x) >> 5;
   const int nwarps = (gridDim.x * blockDim.x) >> 5, h16 = H / 16;
@@ -90,12 +93,34 @@ __global__ void dispatch_pack(const int4* tok, int4* send, int T, int* counters,
   }
 }
 
+struct Load {  // background GEMM on another stream (same process), planned for 132 - reserve SMs
+  std::atomic<bool> stop{false}; std::atomic<int> reserve{0}; std::thread th;
+  void start() {
+    th = std::thread([this] {
+      cublasHandle_t h; cublasCreate(&h); cudaStream_t s; cudaStreamCreateWithFlags(&s, cudaStreamNonBlocking); cublasSetStream(h, s);
+      void* ws; cudaMalloc(&ws, 256ull << 20); cublasSetWorkspace(h, ws, 256ull << 20);
+      const int M = 8192, N = 4096, K = 7168; __nv_bfloat16 *A, *B, *C;
+      cudaMalloc(&A, (size_t)M * K * 2); cudaMalloc(&B, (size_t)K * N * 2); cudaMalloc(&C, (size_t)M * N * 2);
+      cudaMemset(A, 0x3c, (size_t)M * K * 2); cudaMemset(B, 0x3c, (size_t)K * N * 2);
+      const float al = 1.f, be = 0.f;
+      while (!stop) {
+        cublasSetSmCountTarget(h, 132 - reserve);
+        for (int i = 0; i < 10; i++)
+          cublasGemmEx(h, CUBLAS_OP_N, CUBLAS_OP_N, N, M, K, &al, B, CUDA_R_16BF, N, A, CUDA_R_16BF, K, &be, C, CUDA_R_16BF, N,
+                       CUBLAS_COMPUTE_32F, CUBLAS_GEMM_DEFAULT);
+        cudaStreamSynchronize(s);
+      }
+    });
+  }
+};
+
 int main(int argc, char** argv) {
-  const int iters = 20;
+  const int iters = 20; int H = 7168; bool load = false;
+  for (int i = 1; i < argc; i++) { if (!strcmp(argv[i], "--H")) H = atoi(argv[++i]); else if (!strcmp(argv[i], "--load")) load = true; }
   CK(cudaSetDevice(0)); CK(cudaFree(0));
-  char *tok, *send, *recv; size_t blk = (size_t)R * TMAX * H;
-  CK(cudaMalloc(&tok, (size_t)TMAX * H)); CK(cudaMalloc(&send, blk)); CK(cudaMalloc(&recv, blk));
-  CK(cudaMemset(tok, 1, (size_t)TMAX * H));
+  char *tok, *send, *recv; size_t blk = (size_t)R * TMAX * HMAX;
+  CK(cudaMalloc(&tok, (size_t)TMAX * HMAX)); CK(cudaMalloc(&send, blk)); CK(cudaMalloc(&recv, blk));
+  CK(cudaMemset(tok, 1, (size_t)TMAX * HMAX));
   End a = open_end("mlx5_0", send, blk), b = open_end("mlx5_1", recv, blk);
   connect(a, b); connect(b, a);
   int *counters, *blocks_done; CK(cudaMalloc(&counters, R * 4)); CK(cudaMalloc(&blocks_done, 4));
@@ -107,12 +132,14 @@ int main(int argc, char** argv) {
   auto c0 = __rdtsc(); auto w0 = std::chrono::steady_clock::now();
   std::this_thread::sleep_for(std::chrono::milliseconds(200));
   const double tsc_per_us = (__rdtsc() - c0) / std::chrono::duration<double, std::micro>(std::chrono::steady_clock::now() - w0).count();
-  printf("# B2 CPU-proxy dispatch (verbs), H=%d E=%d R=%d topk=%d; kernel routes+packs, proxy posts\n", H, E, R, TOPK);
-  printf("test,mode,tokens,ctas,messages,median_us,p10_us,p90_us,GBps,proxy_post_us\n");
+  Load L; if (load) { L.start(); usleep(500000); }
+  printf("# B2 CPU-proxy dispatch (verbs), H=%d E=%d R=%d topk=%d load=%d; kernel routes+packs, proxy posts\n", H, E, R, TOPK, (int)load);
+  printf("test,H,load,mode,tokens,ctas,messages,median_us,p10_us,p90_us,GBps,proxy_post_us\n");
   unsigned iter = 0;
   for (int per_token = 0; per_token < 2; per_token++)
-    for (int T : {128, 4096})
-      for (int ctas : {8, 20, 32}) {
+    for (int T : {16, 32, 128, 1024, 4096})
+      for (int ctas : {8, 20}) {
+        L.reserve = ctas;
         std::vector<float> v; int msgs = 0; double post_us = 0;
         for (int it = 0; it < iters + 3; it++) {
           iter++;
@@ -152,7 +179,7 @@ int main(int argc, char** argv) {
             _mm_sfence(); *(volatile unsigned*)done_h = iter;
           });
           CK(cudaEventRecord(ea));
-          dispatch_pack<<<ctas, 256>>>((const int4*)tok, (int4*)send, T, counters, blocks_done, counts_d, req_d, done_d, iter);
+          dispatch_pack<<<ctas, 256>>>((const int4*)tok, (int4*)send, T, H, counters, blocks_done, counts_d, req_d, done_d, iter);
           CK(cudaEventRecord(eb)); CK(cudaEventSynchronize(eb)); CK(cudaGetLastError());
           proxy.join();
           if (fail) { fprintf(stderr, "proxy failed\n"); return 1; }
@@ -161,9 +188,10 @@ int main(int argc, char** argv) {
         }
         std::sort(v.begin(), v.end());
         double med = v[v.size() / 2];
-        printf("proxy,%s,%d,%d,%d,%.1f,%.1f,%.1f,%.2f,%.1f\n", per_token ? "token" : "block", T, ctas, msgs, med,
+        printf("proxy,%d,%d,%s,%d,%d,%d,%.1f,%.1f,%.1f,%.2f,%.1f\n", H, (int)load, per_token ? "token" : "block", T, ctas, msgs, med,
                v[v.size() / 10], v[v.size() * 9 / 10], (double)msgs * H / (med * 1e-6) / 1e9, post_us / iters / tsc_per_us);
         fflush(stdout);
       }
+  if (load) { L.stop = true; L.th.join(); }
   return 0;
 }
