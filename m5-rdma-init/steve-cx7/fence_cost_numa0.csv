@@ -1,0 +1,5 @@
+test,median_ns,p99_ns
+hbm_store+fence_sys,576,608
+sys_store+fence_sys,576,608
+sys_store_only,32,32
+sys_load,704,896

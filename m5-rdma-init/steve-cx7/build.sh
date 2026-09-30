@@ -11,4 +11,16 @@ nix shell --impure nixpkgs#cudaPackages.cuda_nvcc -c nvcc -O3 -std=c++17 -arch=s
   -L"$CUDART/lib" -L"$CUBLAS_LIB/lib" -L/run/opengl-driver/lib \
   -Xlinker -rpath -Xlinker "$CUDART/lib:$CUBLAS_LIB/lib:/run/opengl-driver/lib" \
   ce_latency.cu -o ce_latency -lcublas -lcudart
-echo built ./ce_latency
+nix shell --impure nixpkgs#cudaPackages.cuda_nvcc -c nvcc -O3 -std=c++17 -arch=sm_90 \
+  -I"$CUDART/include" -I"$CCCL/include" -L"$CUDART/lib" -L/run/opengl-driver/lib \
+  -Xlinker -rpath -Xlinker "$CUDART/lib:/run/opengl-driver/lib" \
+  ce_triggered.cu -o ce_triggered -lcudart -lcuda
+RC_DEV=$(nix build --no-link --print-out-paths 'nixpkgs#rdma-core^dev' | head -1); RC=$(nix build --no-link --print-out-paths 'nixpkgs#rdma-core^out' | head -1)
+nix shell --impure nixpkgs#cudaPackages.cuda_nvcc -c nvcc -O3 -std=c++17 -arch=sm_90 \
+  -I"$CUDART/include" -I"$CCCL/include" -I"$RC_DEV/include" -L"$CUDART/lib" -L"$RC/lib" -L/run/opengl-driver/lib \
+  -Xlinker -rpath -Xlinker "$CUDART/lib:$RC/lib:/run/opengl-driver/lib" \
+  proxy_b2.cu -o proxy_b2 -libverbs -lcudart -lcuda
+nix shell --impure nixpkgs#cudaPackages.cuda_nvcc -c nvcc -O3 -std=c++17 -arch=sm_90 \
+  -I"$CUDART/include" -I"$CCCL/include" -L"$CUDART/lib" -L/run/opengl-driver/lib \
+  -Xlinker -rpath -Xlinker "$CUDART/lib:/run/opengl-driver/lib" fence_cost.cu -o fence_cost -lcudart
+echo built ./ce_latency ./ce_triggered ./proxy_b2 ./fence_cost

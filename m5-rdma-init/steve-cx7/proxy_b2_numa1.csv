@@ -1,0 +1,9 @@
+# CPU-posted RDMA write GPU->GPU via a CPU proxy thread, timed from a kernel (GPU globaltimer)
+test,size,median_us,p99_us,proxy_post_us,proxy_poll_us
+proxy,8,5.82,7.36,0.332,3.41
+proxy,64,5.82,6.30,0.327,3.42
+proxy,512,5.95,8.26,0.323,3.52
+proxy,4096,6.02,13.79,0.324,3.87
+proxy,65536,9.09,26.18,0.315,7.03
+proxy,1048576,69.57,87.94,0.258,69.29
+proxy,4194304,277.79,281.54,0.299,267.98

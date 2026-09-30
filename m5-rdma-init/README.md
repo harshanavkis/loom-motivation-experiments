@@ -64,6 +64,39 @@ Reading the table:
 2. **Compute makes GPU-posted communication slower; CPU-posted doesn't notice.** A put from a thread, warp or block slows by 10–22% while the GEMM runs (a read by 2%). Every CPU-posted number changes by 0.02 µs or less.
 3. **Copy engine initiation costs about 4.6 µs to data visible in host memory, but it can only be started from the host.** That's an API call (1.8–2.0 µs), the driver's command submission, and a doorbell. Under load it stays within about 1 µs of idle, as long as it really is a copy engine: plain `cudaMemcpyAsync` device-to-device is silently executed as an SM kernel and waits behind the GEMM (p99 526 µs).
 
+## Follow-up: like-for-like from the kernel's point of view, and where the GPU's time goes
+
+The CPU-posted numbers above start when the CPU already knows the data is ready. In real use (the NCCL proxy model) a kernel produces the data, so it must hand off to a CPU thread and get a completion back. `proxy_b2.cu` measures that from the kernel:
+1. A 1-thread kernel stamps `globaltimer` and writes a request flag into pinned host memory.
+2. A CPU proxy thread polls it, `ibv_post_send`s an RDMA write (GPU buffer → GPU buffer, dma-buf MRs, mlx5_0 QP → mlx5_1 QP), polls the CQ, and writes a done flag.
+3. The kernel spins on the done flag.
+
+That is the same bracket as IBGDA put + `quiet` from a kernel.
+
+| 8 B, "kernel decides to send → kernel knows it's done" | proxy + flags on socket 0 (GPU's) | on socket 1 (NIC's) |
+|---|---|---|
+| **CPU proxy posts (B2)** | **5.44 µs** (p99 6.40) | 5.82 µs (p99 7.36) |
+| **GPU posts (B1, IBGDA put + quiet, 1 thread)** | **12.60 µs** | — |
+| CPU time inside `ibv_post_send` | 0.075 µs | 0.33 µs |
+| GPU time inside `nvshmem_putmem_nbi` (from `../m3-sm-share/gpu-posted`) | 6.0–7.8 µs | — |
+
+Larger messages (proxy, socket 0): 64 KiB 8.93 µs, 1 MiB 69.2 µs, 4 MiB 262 µs, i.e. converging to the ~15–16 GB/s cap for NIC writes into HBM.
+
+**Placement check.** Pinning the plain `ib_read_lat` run to each socket changes the CPU-posted GPU-memory read round trip by only 0.3 µs (3.53 vs. 3.27 µs; unpinned 3.35 µs). Host-memory buffers change more (3.40 vs. 2.48 µs). Placement does not explain the B1/B2 gap.
+
+**Where the GPU's posting time goes** (`fence_cost.cu`, one GPU thread, median):
+
+| operation | host page on socket 0 | on socket 1 |
+|---|---|---|
+| HBM store + `__threadfence_system()` | 0.58 µs | 0.58 µs |
+| host-memory store + system fence | 0.58 µs | 0.64 µs |
+| host-memory store, no fence (posted) | 0.03 µs | 0.03 µs |
+| host-memory load (PCIe round trip) | 0.70 µs | 0.83 µs |
+
+A system-scope fence costs about 0.6 µs, and a dependent read of queue state about as much again. The cross-socket part is only 0.06–0.13 µs per operation. One IBGDA put executes 4–5 atomics on queue-pair state, the WQE stores, 3 system fences, a doorbell-record store and the doorbell (M2). Most of these depend on the previous one, so they form a serial chain of 0.5–1 µs memory operations: that is the measured 6–8 µs. The CPU executes the same steps in its cache in 0.075 µs.
+
+**Interpretation.** GPU-initiated RDMA removes the GPU→CPU handoff, which is worth about 2 µs here (5.44 µs vs. the 3.3–3.5 µs raw CPU round trip). It then pays more than that back in the SM's serialized post path. On this hardware a CPU proxy has lower single-message latency (5.4 vs. 12.6 µs). What GPU initiation buys is no CPU in the loop and parallel posting from many SMs, at the cost of held SMs (`../m3-sm-share/gpu-posted`: the GEMM keeps 90.5 / 72.7 / 48.9% with 8 / 16 / 20 posting CTAs).
+
 ## Caveats / fairness
 
 - **The cross-socket topology on steve inflates GPU-posted latency more than CPU-posted.** The GPU-posted path crosses the socket interconnect several extra times per operation: doorbell write, work-request fetch from HBM, completion write to HBM. Each GPU↔NIC access across sockets costs about 1 µs here (GPU vs. host memory at an otherwise equal method: 2.64 vs. 1.48 µs one-way). So treat 10.7 µs as an upper bound for well-placed GPUs and NICs, not a typical value. The published NVSHMEM IBGDA inter-node put figure (7.5 µs one-way, 256 B, including the wire; arXiv 2606.05951) is the other end of the bracket.
@@ -87,6 +120,9 @@ cd ~/loom-experiments/latency && NIXPKGS_ALLOW_UNFREE=1 nix shell nixpkgs#numact
 cd ~/loom-experiments/latency && NIXPKGS_ALLOW_UNFREE=1 nix shell nixpkgs#numactl -c numactl --cpunodebind=0 --membind=0 ./ce_latency --iters 5000 --load > ce_latency_load.csv
 ~/loom-experiments/latency/lat_cpu_posted.sh idle      # lat_cpu_posted_idle.csv, about 8 min
 ~/loom-experiments/latency/lat_cpu_posted.sh load      # lat_cpu_posted_load.csv, about 15 min, GEMM in another process
+NUMA=$(nix build --no-link --print-out-paths nixpkgs#numactl | grep -v -- -man | head -1)/bin/numactl
+cd ~/loom-experiments/latency && $NUMA -N 0 -m 0 ./proxy_b2 20000 > proxy_b2_numa0.csv
+cd ~/loom-experiments/latency && $NUMA -N 0 -m 0 ./fence_cost > fence_cost_numa0.csv
 sudo ~/loom-experiments/nvshmem-loopback/run_put_lat.sh        # put_lat_steve.txt
 sudo ~/loom-experiments/nvshmem-loopback/run_put_lat.sh load   # put_lat_steve_load.txt, GEMM as an MPS client
 ```
@@ -100,3 +136,8 @@ sudo ~/loom-experiments/nvshmem-loopback/run_put_lat.sh load   # put_lat_steve_l
 - `run_put_lat.sh`: NVSHMEM IBGDA latency (MPS, 2 PEs), idle or loaded.
 - `put_lat_steve.txt`, `put_lat_steve_load.txt`: its outputs.
 - `nvshmem_env.sh`: the NVSHMEM environment (the MPG / IBGDA / HCA mapping settings).
+- `proxy_b2.cu`: B2 as used for GPU data (kernel → CPU proxy → RDMA → kernel), kernel-timed.
+- `proxy_b2_numa{0,1}.csv`: its outputs with the proxy on each socket.
+- `fence_cost.cu`: GPU fence, host-store and host-load costs.
+- `fence_cost_numa{0,1}.csv`: its outputs with the host page on each socket.
+- `build.sh`: builds `ce_latency`, `ce_triggered`, `proxy_b2` and `fence_cost` (proxy_b2 links nixpkgs rdma-core and libcuda).
