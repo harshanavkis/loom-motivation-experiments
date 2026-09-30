@@ -8,7 +8,7 @@ Each experiment folder has a `README.md` (question, methodology, results, caveat
 | M2 | Device-side transport state of GPU-initiated RDMA | [m2-device-state/](m2-device-state/) | done | DeepEP V2.5 on NCCL GIN GDAKI (129 contexts) holds 4,257 RC QPs and ≈592 MiB of HBM rings/doorbell records per GPU at EP256, plus 4,257 GPU-mapped NIC doorbells; one put costs 4 atomics, 3 WQE stores, 1 doorbell-record store, 2 MMIO doorbells and 4–5 fences on the SM. |
 | M3 | SM share | [m3-sm-share/](m3-sm-share/) | analysis done; GPU interference (steve) done; real-RDMA variant blocked (no cabled GPU+CX host) | DeepEP V2.5 hybrid comm kernel uses 4–16 SMs (3–12% of an H100); direct/V1 20–72 (15–55%). On an H200, holding 8–20 SMs to move 50 GB/s costs a BF16 expert GEMM 9.5–51% of its throughput; the copy engine moving the same bytes costs 0.1%. |
 | M4 | Who moves the bytes: dgemm+memcpy vs E810 RDMA on the FPGA testbed | – | not started (clara busy with a Vivado build; irdma not loaded after its reboot) | – |
-| M5 | E810 post+poll cost | – | not started | – |
+| M5 | Initiation cost (rdma_init): CPU-posted vs GPU-posted RDMA vs copy engine | [m5-rdma-init/](m5-rdma-init/) | CX-7 on steve done; E810 post+poll on the testbed not started | Same NIC and GPU buffers: GPU-posted (IBGDA) read round trip 14.1 µs vs CPU-posted 3.35 µs; GPU-posted puts slow by 10–22% next to a GEMM, CPU-posted is unchanged; plain cudaMemcpyAsync D2D hits p99 526 µs behind a GEMM (runs on SMs), the copy engine 8.9 µs. |
 
 ## Source clones (`src/`)
 

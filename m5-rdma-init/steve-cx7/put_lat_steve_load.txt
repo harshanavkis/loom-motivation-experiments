@@ -1,0 +1,64 @@
+# 2026-09-30T15:49:35+00:00 NVIDIA H200 NVL, 595.71.05
+RegistryDwords: "PeerMappingOverride=1;"
+## shmem_put_latency (REMOTE_TRANSPORT=none: pure IBGDA)
+Runtime options after parsing command line arguments 
+min_size: 8, max_size: 65536, step_factor: 8, iterations: 10000, warmup iterations: 1000, number of ctas: 32, threads per cta: 256 stride: 1, datatype: int, reduce_op: sum, threadgroup_scope: all_scopes, atomic_op: inc, dir: write, report_msgrate: 0, bidirectional: 0, putget_issue :on_stream, use_graph: 0, use_mmap: 0, mem_handle_type: 0, use_egm: 0
+Note: Above is full list of options, any given test will use only a subset of these variables.
+Runtime options after parsing command line arguments 
+min_size: 8, max_size: 65536, step_factor: 8, iterations: 10000, warmup iterations: 1000, number of ctas: 32, threads per cta: 256 stride: 1, datatype: int, reduce_op: sum, threadgroup_scope: all_scopes, atomic_op: inc, dir: write, report_msgrate: 0, bidirectional: 0, putget_issue :on_stream, use_graph: 0, use_mmap: 0, mem_handle_type: 0, use_egm: 0
+Note: Above is full list of options, any given test will use only a subset of these variables.
+mype: 1 mype_node: 1 device name: NVIDIA H200 NVL bus id: 21 
+mype: 0 mype_node: 0 device name: NVIDIA H200 NVL bus id: 21 
+WARN: device irdma0 is not enumerated as an mlx5 device. Skipping...
+
+WARN: device irdma1 is not enumerated as an mlx5 device. Skipping...
+
+WARN: device irdma0 is not enumerated as an mlx5 device. Skipping...
+
+WARN: device irdma1 is not enumerated as an mlx5 device. Skipping...
+
+#shmem_put_latency
+size(B)     scope     latency (us)    
+8           Thread    14.821460       
+64          Thread    14.982903       
+512         Thread    15.387952       
+4096        Thread    15.780831       
+32768       Thread    16.183537       
+#shmem_put_latency
+size(B)     scope     latency (us)    
+8           Warp      19.326567       
+64          Warp      19.252777       
+512         Warp      19.431927       
+4096        Warp      19.961891       
+32768       Warp      21.883881       
+#shmem_put_latency
+size(B)     scope     latency (us)    
+8           Block     17.532211       
+64          Block     17.515930       
+512         Block     19.320435       
+4096        Block     19.814739       
+32768       Block     22.259649       
+## shmem_g_latency (REMOTE_TRANSPORT=none: pure IBGDA)
+Runtime options after parsing command line arguments 
+min_size: 8, max_size: 65536, step_factor: 8, iterations: 10000, warmup iterations: 1000, number of ctas: 32, threads per cta: 256 stride: 1, datatype: int, reduce_op: sum, threadgroup_scope: all_scopes, atomic_op: inc, dir: write, report_msgrate: 0, bidirectional: 0, putget_issue :on_stream, use_graph: 0, use_mmap: 0, mem_handle_type: 0, use_egm: 0
+Note: Above is full list of options, any given test will use only a subset of these variables.
+Runtime options after parsing command line arguments 
+min_size: 8, max_size: 65536, step_factor: 8, iterations: 10000, warmup iterations: 1000, number of ctas: 32, threads per cta: 256 stride: 1, datatype: int, reduce_op: sum, threadgroup_scope: all_scopes, atomic_op: inc, dir: write, report_msgrate: 0, bidirectional: 0, putget_issue :on_stream, use_graph: 0, use_mmap: 0, mem_handle_type: 0, use_egm: 0
+Note: Above is full list of options, any given test will use only a subset of these variables.
+mype: 0 mype_node: 0 device name: NVIDIA H200 NVL bus id: 21 
+mype: 1 mype_node: 1 device name: NVIDIA H200 NVL bus id: 21 
+WARN: device irdma0 is not enumerated as an mlx5 device. Skipping...
+
+WARN: device irdma1 is not enumerated as an mlx5 device. Skipping...
+
+WARN: device irdma0 is not enumerated as an mlx5 device. Skipping...
+
+WARN: device irdma1 is not enumerated as an mlx5 device. Skipping...
+
+#shmem_g_latency
+size(B)     scope     latency (us)    
+8           None      14.391267       
+64          None      20.965261       
+512         None      19.910288       
+4096        None      77.171776       
+32768       None      590.605774      

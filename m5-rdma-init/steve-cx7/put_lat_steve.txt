@@ -1,0 +1,114 @@
+# 2026-09-30T15:46:04+00:00 NVIDIA H200 NVL, 595.71.05
+RegistryDwords: "PeerMappingOverride=1;"
+## shmem_put_latency (REMOTE_TRANSPORT=none: pure IBGDA)
+Runtime options after parsing command line arguments 
+min_size: 8, max_size: 65536, step_factor: 8, iterations: 10000, warmup iterations: 1000, number of ctas: 32, threads per cta: 256 stride: 1, datatype: int, reduce_op: sum, threadgroup_scope: all_scopes, atomic_op: inc, dir: write, report_msgrate: 0, bidirectional: 0, putget_issue :on_stream, use_graph: 0, use_mmap: 0, mem_handle_type: 0, use_egm: 0
+Note: Above is full list of options, any given test will use only a subset of these variables.
+Runtime options after parsing command line arguments 
+min_size: 8, max_size: 65536, step_factor: 8, iterations: 10000, warmup iterations: 1000, number of ctas: 32, threads per cta: 256 stride: 1, datatype: int, reduce_op: sum, threadgroup_scope: all_scopes, atomic_op: inc, dir: write, report_msgrate: 0, bidirectional: 0, putget_issue :on_stream, use_graph: 0, use_mmap: 0, mem_handle_type: 0, use_egm: 0
+Note: Above is full list of options, any given test will use only a subset of these variables.
+mype: 1 mype_node: 1 device name: NVIDIA H200 NVL bus id: 21 
+mype: 0 mype_node: 0 device name: NVIDIA H200 NVL bus id: 21 
+WARN: device irdma0 is not enumerated as an mlx5 device. Skipping...
+
+WARN: device irdma1 is not enumerated as an mlx5 device. Skipping...
+
+WARN: device irdma0 is not enumerated as an mlx5 device. Skipping...
+
+WARN: device irdma1 is not enumerated as an mlx5 device. Skipping...
+
+#shmem_put_latency
+size(B)     scope     latency (us)    
+8           Thread    12.597732       
+64          Thread    12.581588       
+512         Thread    12.683792       
+4096        Thread    13.098551       
+32768       Thread    14.519274       
+#shmem_put_latency
+size(B)     scope     latency (us)    
+8           Warp      15.902922       
+64          Warp      15.790725       
+512         Warp      15.903337       
+4096        Warp      16.355635       
+32768       Warp      17.807642       
+#shmem_put_latency
+size(B)     scope     latency (us)    
+8           Block     15.887117       
+64          Block     15.757589       
+512         Block     15.890064       
+4096        Block     16.365013       
+32768       Block     17.786659       
+## shmem_g_latency (REMOTE_TRANSPORT=none: pure IBGDA)
+Runtime options after parsing command line arguments 
+min_size: 8, max_size: 65536, step_factor: 8, iterations: 10000, warmup iterations: 1000, number of ctas: 32, threads per cta: 256 stride: 1, datatype: int, reduce_op: sum, threadgroup_scope: all_scopes, atomic_op: inc, dir: write, report_msgrate: 0, bidirectional: 0, putget_issue :on_stream, use_graph: 0, use_mmap: 0, mem_handle_type: 0, use_egm: 0
+Note: Above is full list of options, any given test will use only a subset of these variables.
+Runtime options after parsing command line arguments 
+min_size: 8, max_size: 65536, step_factor: 8, iterations: 10000, warmup iterations: 1000, number of ctas: 32, threads per cta: 256 stride: 1, datatype: int, reduce_op: sum, threadgroup_scope: all_scopes, atomic_op: inc, dir: write, report_msgrate: 0, bidirectional: 0, putget_issue :on_stream, use_graph: 0, use_mmap: 0, mem_handle_type: 0, use_egm: 0
+Note: Above is full list of options, any given test will use only a subset of these variables.
+mype: 0 mype_node: 0 device name: NVIDIA H200 NVL bus id: 21 
+mype: 1 mype_node: 1 device name: NVIDIA H200 NVL bus id: 21 
+WARN: device irdma0 is not enumerated as an mlx5 device. Skipping...
+
+WARN: device irdma1 is not enumerated as an mlx5 device. Skipping...
+
+WARN: device irdma0 is not enumerated as an mlx5 device. Skipping...
+
+WARN: device irdma1 is not enumerated as an mlx5 device. Skipping...
+
+#shmem_g_latency
+size(B)     scope     latency (us)    
+8           None      14.055691       
+64          None      18.186361       
+512         None      17.238678       
+4096        None      68.714790       
+32768       None      531.336670      
+## shmem_put_ping_pong_latency (ibrc proxy on: signal ops proxy-assisted)
+Runtime options after parsing command line arguments 
+min_size: 8, max_size: 65536, step_factor: 8, iterations: 10000, warmup iterations: 1000, number of ctas: 32, threads per cta: 256 stride: 1, datatype: int, reduce_op: sum, threadgroup_scope: all_scopes, atomic_op: inc, dir: write, report_msgrate: 0, bidirectional: 0, putget_issue :on_stream, use_graph: 0, use_mmap: 0, mem_handle_type: 0, use_egm: 0
+Note: Above is full list of options, any given test will use only a subset of these variables.
+Runtime options after parsing command line arguments 
+min_size: 8, max_size: 65536, step_factor: 8, iterations: 10000, warmup iterations: 1000, number of ctas: 32, threads per cta: 256 stride: 1, datatype: int, reduce_op: sum, threadgroup_scope: all_scopes, atomic_op: inc, dir: write, report_msgrate: 0, bidirectional: 0, putget_issue :on_stream, use_graph: 0, use_mmap: 0, mem_handle_type: 0, use_egm: 0
+Note: Above is full list of options, any given test will use only a subset of these variables.
+mype: 1 mype_node: 1 device name: NVIDIA H200 NVL bus id: 21 
+mype: 0 mype_node: 0 device name: NVIDIA H200 NVL bus id: 21 
+WARN: device irdma0 is not enumerated as an mlx5 device. Skipping...
+
+WARN: device irdma1 is not enumerated as an mlx5 device. Skipping...
+
+WARN: device irdma0 is not enumerated as an mlx5 device. Skipping...
+
+WARN: device irdma1 is not enumerated as an mlx5 device. Skipping...
+
+Note: This test measures full round-trip latency
+#shmem_put_ping_lat
+size(B)     scope     latency (us)    
+8           None      59.885796       
+64          None      56.541077       
+512         None      60.247112       
+4096        None      57.618450       
+32768       None      63.878914       
+## shmem_p_ping_pong_latency (ibrc proxy on: signal ops proxy-assisted)
+Runtime options after parsing command line arguments 
+min_size: 8, max_size: 65536, step_factor: 8, iterations: 10000, warmup iterations: 1000, number of ctas: 32, threads per cta: 256 stride: 1, datatype: int, reduce_op: sum, threadgroup_scope: all_scopes, atomic_op: inc, dir: write, report_msgrate: 0, bidirectional: 0, putget_issue :on_stream, use_graph: 0, use_mmap: 0, mem_handle_type: 0, use_egm: 0
+Note: Above is full list of options, any given test will use only a subset of these variables.
+Runtime options after parsing command line arguments 
+min_size: 8, max_size: 65536, step_factor: 8, iterations: 10000, warmup iterations: 1000, number of ctas: 32, threads per cta: 256 stride: 1, datatype: int, reduce_op: sum, threadgroup_scope: all_scopes, atomic_op: inc, dir: write, report_msgrate: 0, bidirectional: 0, putget_issue :on_stream, use_graph: 0, use_mmap: 0, mem_handle_type: 0, use_egm: 0
+Note: Above is full list of options, any given test will use only a subset of these variables.
+mype: 1 mype_node: 1 device name: NVIDIA H200 NVL bus id: 21 
+mype: 0 mype_node: 0 device name: NVIDIA H200 NVL bus id: 21 
+WARN: device irdma0 is not enumerated as an mlx5 device. Skipping...
+
+WARN: device irdma1 is not enumerated as an mlx5 device. Skipping...
+
+WARN: device irdma0 is not enumerated as an mlx5 device. Skipping...
+
+WARN: device irdma1 is not enumerated as an mlx5 device. Skipping...
+
+Note: This test measures full round-trip latency
+#shmem_ping_pong_lat
+size(B)     scope     latency (us)    
+8           None      50.059200       
+64          None      52.346638       
+512         None      66.959190       
+4096        None      142.473419      
+32768       None      670.476257      
