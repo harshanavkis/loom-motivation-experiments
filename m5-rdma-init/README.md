@@ -8,7 +8,7 @@ These are the `rdma_init` inputs the astra-sim model needs. The model adds `rdma
 
 Status:
 - **CX-7 on steve: done** (`steve-cx7/`).
-- **E810 post+poll on the FPGA testbed (amy/clara): not started.**
+- **E810 post+poll on the FPGA testbed: dropped (2026-09-30).** The CX-7 numbers cover rdma_init for §2 and the simulator (the CX-7 is also the stronger baseline); the evaluation uses stock perf_rdma as the baseline NIC.
 
 ## Methodology
 
