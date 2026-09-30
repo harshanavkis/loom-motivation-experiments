@@ -163,6 +163,223 @@ This run is dominated by TP over 100 Gb/s InfiniBand, so treat it as an outlier 
 2. "In Mixtral-8x22B on 32 H200s (TP4 × EP8), every MoE layer uses both stacks: tensor-parallel all-gather/reduce-scatter inside a node and expert-parallel all-to-all across 4 nodes. NCCL kernels account for 88.7% (median) of GPU kernel time, and 81% of that is inter-node."
 3. "In Mixtral-8x22B the inter-node expert all-to-all alone keeps a stream busy for 9.6 s per step, 5.4× the 1.77 s of the main compute stream. For Llama3-70B with TP16 spanning two nodes, 100% of communication is inter-node and makes up 91.7% of GPU kernel time."
 
+## Extension: per-layer MoE breakdown, waiting vs. moving, message sizes, SM-holding projection
+
+This extension adds three scripts. Their outputs are saved next to them:
+
+| script | inputs | output |
+|---|---|---|
+| `analyze_moe.py` | 8x7B Kineto `device_{0,2,3,6}.json` + 8x7B ETs (size cross-check) | `out_moe_Mixtral-8x7B.txt`, `moe_summary_Mixtral-8x7B.json` |
+| `analyze_nccl_et.py` | all ETs of one model | `out_nccl_et_<model>.txt`, `nccl_et_<model>.json` |
+| `project_offsm.py` | the two JSON summaries + testbed constants (hard-coded, listed in its docstring) | `out_projection.txt` |
+
+No NeMo traces were present in `/home/harshanavkis/chakra-traces/nemo/`, either at the start or at the end of this work. The only Kineto/NeMo data is the 8x7B `nemo_raw` set that was already used.
+
+### E1. Methodology
+
+**Kernel → launching op (Kineto).** Each kernel's `correlation` id is joined to its `cuda_runtime` launch. The launch is then placed inside the enclosing `cpu_op` / `user_annotation` ranges on the same thread (a sweep-line nesting stack). This yields names such as `_LayerNormLinear`, `LinearWithGradAccumulationAndAsyncCommunication` and `_AllToAll`, which the Kineto kernel records do not carry.
+
+**Layer segmentation (8x7B Kineto).** Megatron/TE kernels serve as anchors:
+- A forward layer runs from the `rmsnorm_fwd` launched by `_LayerNormLinear` (input norm fused into QKV) to the next such kernel, or to the final-norm `rmsnorm_fwd`. The final norm is recognised as an `_RMSNorm` that directly follows another `_RMSNorm`.
+- A backward layer runs from the end of the previous `_LayerNormLinearBackward` `rmsnorm_bwd_finalize` (or of the final-norm backward) to the end of its own.
+- A kernel belongs to the layer in which it starts.
+
+The script finds exactly 256 forward and 256 backward layer instances per rank (8 micro-batches × 32 layers). Every instance contains **exactly two** EP all-to-all kernels, each of 32 MiB. Together the instances cover 90.8–91.8% of `ProfilerStep#0`; the rest is embedding, LM head, loss and optimizer.
+
+**Class assignment inside a layer.**
+- **a2a_1 / a2a_2**: `SendRecv` kernels on the EP group (pg 57 or 58, 4 ranks), numbered by call order.
+  - Forward: a2a_1 is the **dispatch** (tokens → experts) and a2a_2 is the **combine**. The CPU stacks confirm the order: router topk and bincount, then `_AllToAll`, then expert MLP, then `_AllToAll`.
+  - Backward: a2a_1 is the backward of the combine (output grads → experts) and a2a_2 is the backward of the dispatch.
+- **TP-MoE**: AG/RS on the 2-rank TP group that start between a2a_1 and a2a_2. These are the sequence-parallel gather and scatter of the dispatched tokens.
+- **TP-attn**: all other TP AG/RS.
+- **AR**: 1-CTA all-reduces (router aux-loss).
+- **DP**: 4-rank data-parallel AG/RS.
+- **expert_GEMM**: GEMM kernels launched under `LinearWithGradAccumulationAndAsyncCommunication` (Megatron `SequentialMLP` expert linears; attention uses TE `_LayerNormLinear`/`_Linear`).
+- **MoE_other**: other compute between the two a2a (SwiGLU, cat/split).
+- **dense_other**: everything else.
+- **idle**: the layer span minus the union of all GPU activity.
+
+Percentages are shares of the layer span. Because comm/compute overlap is only 1.5–3.3% of comm time, the class shares add up to about 100%.
+
+**Bytes.** Bytes come from Kineto `In msg nelems` × dtype size. `analyze_moe.py` matched them per process group, in call order, against the Chakra ET `comm_size` of the same rank. All 3697 NCCL kernels of rank 0 match exactly, and so do those of ranks 2, 3 and 6, with durations within 1 µs. So **ET `comm_size` = input bytes**: the per-rank shard for AG, and the full buffer for RS, AR and a2a. I rely on this for 8x22B and Llama3.
+
+**Bus bytes** follow the nccl-tests convention:
+- AG: (n−1)·in
+- RS: (n−1)/n·in
+- AR: 2(n−1)/n·in
+- a2a: (n−1)/n·in (equal splits: `In split size` is `[]` on every a2a, and all a2a in a layer have the same size)
+
+**Achieved bandwidth** is bus bytes / kernel duration. **Per held SM** is that value divided by grid CTAs. NCCL uses one CTA per channel and one SM each; the grids are 32 for a2a and 24 for AG/RS.
+
+**Link peaks.**
+- NVLink: 450 GB/s per direction.
+- InfiniBand: the metadata (`chakra_metadata.yaml`, both multi-node sets) says only `Inter-Node: type: InfiniBand-100Gbps, topology: Switch`. So 100 Gb/s = **12.5 GB/s** per NIC is verified. The number of NICs per node is **not** in the metadata, so I evaluate two bounds:
+  - **A**: one 100 Gb/s NIC per GPU.
+  - **B**: one 100 Gb/s NIC per node, shared by 8 GPUs.
+
+**Lower bound on kernel duration, t_min.**
+- Intra-node: bus / 450 GB/s.
+- Inter-node a2a: remote bytes = (n − m_loc)/n · in, where m_loc = group members on this node (2 of 8 for 8x22B EP). A: remote / 12.5 GB/s. B: 8 × remote / 12.5 GB/s.
+- Inter-node rings: A: bus / (m_loc · 12.5 GB/s). B: (8 / m_loc) · bus / 12.5 GB/s.
+
+From these I derive two estimates of waiting:
+- **Unexplained** = 1 − Σt_min / Σdur. This is an upper bound on the share of held time spent waiting, synchronising or paying latency rather than moving bytes at peak.
+- **Excess over min**: for each (type, scope, n, bytes), the fastest kernel in the trace counts as "moving" time, and excess = Σ(dur − min) / Σdur. This is an empirical estimate of waiting and skew that does not depend on any peak number.
+
+**Per-peer message size.**
+- AG: `in` (each rank's shard travels to every peer).
+- RS and AR: `in/n` (ring chunk).
+- a2a: `in/n` (equal splits: verified on 8x7B, **assumed** on 8x22B, whose ET has no split info).
+- broadcast: `in`.
+
+"Latency-bound" means < 64 KiB per peer.
+
+**Derived numbers.** Ratios and sums quoted in the prose, such as "6.3× the wire bound" or "47.5–55.1% of the layer", are plain arithmetic on values the scripts print. Everything in the tables is printed directly by the scripts.
+
+### E2. Per-layer MoE breakdown (Mixtral-8x7B, Kineto, `out_moe_Mixtral-8x7B.txt`)
+
+The table shows medians over the 256 layer instances of each pass, as ms (% of layer span). Excluding micro-batch 0 changes the medians by < 0.3 ms (see the output).
+
+| class | fwd r0 | fwd r2 | fwd r3 | fwd r6 | bwd r0 | bwd r2 | bwd r3 | bwd r6 |
+|---|---|---|---|---|---|---|---|---|
+| layer span | 9.84 | 9.83 | 9.83 | 9.82 | 10.20 | 10.22 | 10.23 | 10.20 |
+| a2a_1 (fwd: dispatch) | 3.80 (38.6) | 4.47 (46.2) | 3.88 (40.2) | 0.08 (0.8) | 2.23 (22.2) | 2.33 (22.9) | 1.84 (17.8) | 0.08 (0.8) |
+| a2a_2 (fwd: combine) | 0.87 (8.9) | 0.86 (8.9) | 0.84 (8.5) | 0.08 (0.9) | 1.11 (10.7) | 1.11 (10.7) | 1.07 (10.3) | 0.08 (0.8) |
+| TP-MoE (AG+RS) | 0.32 (3.2) | 0.32 (3.2) | 0.95 (9.7) | 0.31 (3.2) | 0.32 (3.1) | 0.33 (3.2) | 0.83 (8.2) | 0.31 (3.1) |
+| TP-attn (AG+RS) | 0.18 (1.9) | 0.18 (1.9) | 0.20 (2.0) | 0.18 (1.8) | 0.40 (4.0) | 0.40 (3.9) | 0.43 (4.1) | 0.27 (2.6) |
+| expert GEMM | 1.91 (19.4) | 1.91 (19.4) | 1.94 (19.7) | 1.94 (19.7) | 3.76 (36.8) | 3.76 (36.6) | 3.82 (37.2) | 3.83 (37.4) |
+| MoE other compute | 0.29 (2.9) | 0.29 (2.9) | 0.28 (2.9) | 0.29 (2.9) | 0.43 (4.2) | 0.42 (4.2) | 0.43 (4.2) | 0.43 (4.2) |
+| dense/other compute | 0.86 (8.8) | 0.86 (8.8) | 0.86 (8.8) | 0.87 (8.9) | 1.78 (17.1) | 1.77 (17.1) | 1.78 (17.1) | 1.73 (16.9) |
+| GPU idle | 1.49 (14.8) | 0.86 (8.4) | 0.67 (6.7) | 5.95 (61.1) | 0.21 (2.0) | 0.21 (2.1) | 0.20 (1.9) | 3.41 (33.6) |
+
+AR (aux-loss) and DP collectives are ≤ 0.2% of a layer.
+
+Per-step totals over all layer instances on rank 0:
+- a2a: 1285.0 + 438.2 ms
+- TP-MoE: 292.3 ms
+- TP-attn: 275.6 ms
+- expert GEMM: 1451.8 ms
+- idle: 786.4 ms
+
+Observations:
+- **Every MoE layer, forward and backward, issues 2 EP all-to-alls and 2 TP-MoE collectives.** This is exact for all 2048 layer instances (4 ranks × 512).
+- **Both passes are dominated by communication.** On ranks 0/2/3, the two a2a take 47.5–55.1% of a forward MoE layer and 28–34% of a backward one. Expert GEMMs take 19–20% (forward) and 37% (backward). NCCL wall time (union) is a median 53.8–61.1% of forward layer spans on ranks 0/2/3.
+- **The dispatch a2a is mostly waiting for a straggler.** The layer span is the same on all four ranks, at 9.8 ms forward. Rank 6 has 61% GPU idle in forward layers, and its a2a take the minimum time (0.08 ms). Ranks 0/2/3 spend 3.8–4.5 ms in the same dispatch. My inference: rank 6 is host/launch-bound, and the other ranks' dispatch kernels sit resident on 32 SMs until rank 6 joins.
+- **A2a time grows with layer index.** Rank 0's per-layer-index medians of forward a2a time rise from 2.47 ms (L1) to about 5 ms (L9–L32).
+
+### E3. Waiting vs. moving in NCCL kernels
+
+#### Mixtral-8x7B (Kineto, 4 ranks pooled; all intra-node NVLink; `out_moe_Mixtral-8x7B.txt`)
+
+| collective (group) | CTAs = SMs held | kernels | Σ dur ms | median busBW GB/s | max busBW GB/s | median GB/s per held SM | unexplained at 450 GB/s | excess over fastest same-size kernel |
+|---|---|---|---|---|---|---|---|---|
+| a2a EP (n=4, 32 MiB) | 32 | 4096 | 6199.8 | 24.1 | 315.7 | 0.75 | 96.3% | 94.7% (min 79.7 µs, median 1043.5 µs) |
+| AllGather TP (n=2) | 24 | 5216 | 1252.8 | 186.7 | 228.1 | 7.78 | 78.4% | 62.1% (32 MiB), 41.0% (16 MiB) |
+| ReduceScatter TP (n=2) | 24 | 4160 | 763.8 | 185.0 | 212.8 | 7.71 | 69.7% | 24.0% (64 MiB), 45.0% (32 MiB) |
+| ReduceScatter DP (n=4) | 24 | 72 | 136.8 | 32.4 | – | 1.35 | 92.2% | 87.4% (80 MiB) |
+| AllGather DP (n=4) | 24 | 72 | 33.3 | 217.4 | – | 9.06 | 67.9% | 49.6% (20 MiB) |
+| small AllReduce/Broadcast (≤ 16 KiB) | 1–2 | 1170 | ≈110 | ≈0 | – | ≈0 | ≈100% | 90.1–99.2% (AR), 24.2% (bcast) |
+
+Across all 14786 NCCL kernels (8496.3 ms), data movement at the 450 GB/s peak explains **8.9%** of the time, so 91.1% is unexplained. Relative to the fastest same-size kernel, **82.9%** is excess. Reaching the NVLink peak needs 14.1 GB/s per SM with 32 CTAs, or 18.8 with 24. The a2a median is 0.75 GB/s per held SM, and even the fastest a2a (315.7 GB/s, 70% of peak) is only 9.9 GB/s per SM.
+
+The ET-only version (`out_nccl_et_Mixtral-8x7B.txt`, all 8 ranks) agrees:
+- a2a: unexplained 96.1%, excess over min 94.5%.
+- all NCCL: unexplained 91.6%, excess over min 83.9%.
+
+#### Mixtral-8x22B (ET only, 32 ranks pooled; `out_nccl_et_Mixtral-8x22B.txt`)
+
+| collective | scope | kernels | % NCCL time | µs per bus-MiB | median busBW GB/s | max busBW GB/s | unexplained (intra peak, or A) | unexplained (B) | excess over min |
+|---|---|---|---|---|---|---|---|---|---|
+| a2a EP8 (24 MiB; 6 of 7 peers remote) | inter | 28671 | 69.35 | 511.9 | 2.31 | 25.85 | 86.0% | −12.4% | 92.1% |
+| AllGather TP4 | intra | 36224 | 17.21 | 42.0 | 209.72 | 298.41 | 94.5% | – | 90.6% (24 MiB), 92.1% (12 MiB) |
+| AllGather DP8 (318 MiB) | inter | 64 | 7.14 | 222.4 | 4.73 | 5.30 | 81.1% | −50.9% | 11.1% |
+| ReduceScatter DP8 | inter | 32 | 3.67 | 228.6 | 4.54 | 5.29 | 81.7% | −46.8% | 13.3% |
+| ReduceScatter TP4 | intra | 28928 | 1.43 | 4.1 | 263.98 | 291.50 | 43.0% | – | 7.6% (96 MiB), 15.1% (48 MiB) |
+
+- Intra-node NCCL time is 90.7% unexplained at peak. Inter-node time is 85.5% unexplained under A.
+- **Assumption B (one 100 Gb/s NIC per node) is contradicted by the trace.** 69.4% of the 24 MiB a2a kernels finish faster than B's 12.08 ms floor, and every DP ring kernel beats B's floor. Assumption A is consistent: its floor for the a2a is 1.51 ms, and 0.1% of kernels beat it.
+- a2a duration percentiles: p0 852 µs, p10 6481, p50 9527, p90 17082, p99 26916 µs.
+
+**Are the RDMA-path kernels held longer per byte? Yes.** The inter-node EP a2a holds its kernel for 511.9 µs per bus-MiB:
+- 12.2× the intra-node TP all-gather (42.0 µs/MiB);
+- 125× the TP reduce-scatter (4.1 µs/MiB).
+
+At the median, the per-byte gap is 91–114× (busBW 209.7 and 264.0 vs. 2.31 GB/s). For the fastest kernels it is 11.3–11.5×. For scale, the link-peak ratio is 36×. So the median gap is larger than the link difference. The caveat is that the TP AG itself is 90.6–92.1% excess-over-min (p90 6.3–8.0 ms against a 137–253 µs minimum): it waits for ranks delayed by the a2a. The ET has no grids, so **per-held-SM bandwidth cannot be computed for any inter-node kernel.**
+
+#### Llama3-70B (TP16 over 2 nodes; all inter-node; `out_nccl_et_Llama3-70B.txt`)
+
+- AG (8 MiB shard) and RS (128 MiB) run at a median 21.2–21.3 GB/s bus (max 25.2–25.9), which is 51.5–52.0 µs per bus-MiB.
+- Unexplained under A is 79.6–79.8%. B is again contradicted: 98.7–99.1% of kernels beat its floor.
+- **Excess over min is only 20.0–21.3%.** Unlike the MoE runs, these kernels are consistently slow, not waiting. p0 is 4.99 ms and p50 5.95 ms, against A's 1.26 ms floor. The time is transfer over the inter-node path at about 21 GB/s bus, which is 2 NICs' worth under A (inference).
+
+### E4. Message-size distribution (`out_nccl_et_<model>.txt`, "Per-peer message size histogram")
+
+Per-peer sizes and their share of NCCL kernel time, pooled over ranks:
+
+| model | collective (scope, n) | per-peer size bin | ops | % of model's NCCL time |
+|---|---|---|---|---|
+| 8x7B | a2a (intra, 4) | 4–16 MiB (8 MiB) | 8192 | 65.6 |
+| 8x7B | AG / RS (intra, 2) | 16–64 MiB | 10432 / 8320 | 18.2 / 11.3 |
+| 8x7B | AR (intra, 2) | < 1 KiB | 2048 | 2.5 |
+| 8x22B | a2a (inter, 8) | 1–4 MiB (3 MiB) | 28671 | 69.3 |
+| 8x22B | AG TP (intra, 4) | 4–16 MiB / 16–64 MiB | 21888 / 14336 | 8.5 / 8.7 |
+| 8x22B | AG / RS DP (inter, 8) | ≥ 64 MiB | 64 / 32 | 7.1 / 3.7 |
+| 8x22B | AR (intra 4 / inter 8) | < 1 KiB (mostly) | 7168 / 128 | 0.1 / 0.4 |
+| Llama3 | AG / RS (inter, 16) | 4–16 MiB | 247290 / 164861 | 60.2 / 39.7 |
+
+Latency-bound share (< 64 KiB per peer):
+
+| model | % of NCCL ops | % of NCCL time | intra ops / time | inter ops / time |
+|---|---|---|---|---|
+| Mixtral-8x7B | 7.9 | 3.06 | 7.9 / 3.06 | – |
+| Mixtral-8x22B | 7.7 | 0.83 | 10.4 / 0.61 | 0.9 / 0.89 |
+| Llama3-70B | 0.3 | 0.06 | – | 0.3 / 0.06 |
+
+In these Megatron runs, every sub-64 KiB operation is a tiny all-reduce or broadcast (aux-loss, grad-norm, flags). No bulk collective is latency-bound, and the smallest bulk per-peer message is 3 MiB (the 8x22B a2a). Latency-optimised paths are therefore not the lever for these traces; SM residency during large, skewed transfers is. This holds for these configurations only. Token-dropless or fine-grained, overlapped MoE kernels would issue much smaller messages.
+
+### E5. PROJECTION: compute lost to SM-holding, and what an off-SM engine recovers (`out_projection.txt`)
+
+> Everything in this subsection is a **projection**. It combines trace inputs with the H200 testbed curve: expert GEMM throughput with k SMs held = 90.5/72.7/48.9% (measured co-location) and 90.3/88.8/79.1% (perfect partitioning) for k = 8/16/20.
+
+**Assumptions.**
+- 8x7B NCCL kernels hold 32 (a2a) or 24 (AG/RS) SMs. The curve stops at k = 20, so θ(20) serves as a **lower bound** on the penalty. This assumes GEMM throughput does not recover as k grows.
+- S1 "as traced": only the traced comm/compute overlap O is slowed, so the loss is O·(1−θ).
+- S2 "overlapped MoE": expert GEMMs are scheduled concurrently with the MoE comm (EP a2a + TP), as an overlapped MoE implementation would do. The co-runnable GEMM work is W = min(E, θ·C), and the loss is W·(1/θ − 1).
+- C is either the traced held time ("held", including waiting) or the sum of fastest-same-size durations ("moving").
+- An off-SM engine (θ = 1) recovers the whole loss.
+
+| rank (8x7B) | step ms | E expert GEMM ms | C held / moving ms | S1 lost ms | S2-held lost ms (% step) | S2-moving lost ms (% step) | NCCL SM-time as full-GPU ms (% step) |
+|---|---|---|---|---|---|---|---|
+| 0 | 5872 | 1452 | 2015 / 352 | 16–39 | 384–1030 (6.5–17.5%) | 74–180 (1.3–3.1%) | 537 (9.1%) |
+| 2 | 5873 | 1451 | 2370 / 352 | 15–36 | 384–1211 (6.5–20.6%) | 74–180 (1.3–3.1%) | 604 (10.3%) |
+| 3 | 5873 | 1472 | 2372 / 352 | 14–34 | 389–1212 (6.6–20.6%) | 74–180 (1.3–3.1%) | 588 (10.0%) |
+| 6 | 5874 | 1475 | 664 / 352 | 3–6 | 139–339 (2.4–5.8%) | 74–180 (1.3–3.1%) | 173 (2.9%) |
+
+The "moving" C is identical across ranks by construction: per-size minima × identical kernel counts.
+
+- **k sweep (rank 0, S2-held).** k = 8 gives 152–156 ms, k = 16 gives 183–545 ms, and k = 20 gives 384–1030 ms. Even an 8-SM comm kernel, such as a lean GPU-initiated design, costs about 10% of expert GEMM time when co-scheduled.
+- **Mixtral-8x22B** (no grids, so k is swept; medians over 32 ranks). E = 1121 ms (includes the LM head). C held/moving = 12215 / 1149 ms. S2-held losses are 118–120, 141–421 and 296–1172 ms for k = 8, 16 and 20, which is 10–11%, 13–38% and 26–104% of E.
+- **Posting cost vs. held time** (8x22B inter-node a2a, one put per remote peer, 6 peers, 896 a2a per rank per step). IBGDA would spend 36–48 µs of SM time per a2a, or 32.3–43.0 SM-ms per step. The traced NCCL kernel is resident for a mean 10749 µs per a2a on all its CTAs. A CPU proxy would spend 0.45 µs of CPU per a2a (0.40 ms per step). Chunking multiplies the per-put costs.
+
+**Reading.**
+- In the run as traced, communication is barely overlapped, so SM-holding costs little compute directly (S1: < 0.7% of the step). The cost appears as exposed communication, 39–43% of the step (earlier section).
+- Once the communication is overlapped with expert compute (what a Loom-style or any overlapped MoE design needs), SMs held by the comm kernel cost 1.3–3.1% of the step if the kernels only moved data, and 6.5–20.6% if they also hold SMs while waiting, as they do in this trace. An off-SM engine recovers that range.
+
+### E6. Caveats (extension)
+
+- **Kineto coverage.** Only 4 of 8 ranks and one step. Rank 6 is a straggler, so the per-rank a2a medians differ by 50× between ranks. Which rank waits depends on who is late, but the SMs are held either way.
+- **Layer attribution.** Anchors are TE RMSNorm kernels and Megatron autograd names specific to this NeMo/Megatron build. Expert GEMMs are identified by the `LinearWithGradAccumulationAndAsyncCommunication` launcher. In the ET-based totals for 8x22B that class also includes the LM head. On Llama3 (dense) the same class totals 147 ms per rank, which is an estimate of that overcount's scale for a TP16 head. On 8x7B the ET total (1474.5 ms median) exceeds the in-layer Kineto total (1451.8 ms on rank 0) by about 1.5%.
+- **Link peaks and bounds.** 450 GB/s is the NVLink spec; nccl-tests typically reaches less, so "unexplained" is an upper bound on waiting. "Excess over min" can overstate the moving time, because the minimum kernel may itself include some waiting, which makes excess a lower bound on waiting. It can also understate it, if the fastest kernel benefited from peers that had already posted. NCCL kernel names such as `RING_LL` are the default specialisation and do not identify the runtime protocol.
+- **NIC count.** 12.5 GB/s per NIC is from the metadata, but the NIC count is not. The trace rules out one NIC per node (B). A (one per GPU) fits all but 0.1% of the 8x22B a2a kernels. The faster ones suggest that some a2a traffic leaves through additional NICs, e.g. NCCL PXN (inference).
+- **a2a equal splits** are verified on 8x7B and assumed for 8x22B. One 8x22B a2a kernel (13.4 ms) is on a pg that the usage-based membership inference sees on a single rank. It is listed as "intra, n=1" and ignored.
+- **Projection.** The testbed curve covers k ≤ 20, whereas the traced kernels hold 24–32 SMs, so the projection uses θ(20) as a bound. The GEMM shapes in the trace (e.g., FC1 fwd grid 56×2 = 112 CTAs, less than 132 SMs) differ from the testbed GEMM. S2 assumes a scheduler that co-runs expert GEMMs with communication, which the traced run does not do.
+
+### E7. New candidate claims (numbers from `out_moe_*.txt`, `out_nccl_et_*.txt`, `out_projection.txt`)
+
+4. "In Mixtral-8x7B (TP2 × EP4 on 8 H200s), every MoE layer, forward and backward, issues two expert-parallel all-to-alls and two tensor-parallel collectives. In a median forward layer (9.8 ms), the dispatch all-to-all alone holds 32 SMs for 3.8–4.5 ms (39–46%) on three of four profiled ranks, while the expert GEMMs take 1.9 ms (19%). The same 32 MiB all-to-all completes in 80 µs (316 GB/s) when no peer is late; 94.7% of all-to-all kernel time is excess over that minimum, i.e., SMs held while waiting."
+5. "Across 14,786 NCCL kernels in the Mixtral-8x7B step, data movement at NVLink peak explains only 8.9% of kernel residency. The median all-to-all moves 0.75 GB/s per held SM, versus the 14 GB/s per SM needed to saturate NVLink with its 32 CTAs."
+6. "In Mixtral-8x22B on 32 H200s, the inter-node (RDMA-path) expert all-to-all holds its kernel 12× longer per byte than the intra-node tensor-parallel all-gather (512 vs. 42 µs per MiB) and 125× longer than the reduce-scatter. Its median (9.5 ms) is 6.3× the 100 Gb/s wire bound and 11× its own fastest instance. Only 0.06–3.1% of NCCL time, in any of the three traces, is in latency-bound (< 64 KiB per peer) messages." A companion projection, clearly labelled: "if expert GEMMs were overlapped with this communication while it holds ≥ 20 SMs, 6.5–20.6% of the Mixtral-8x7B step would be lost to slowed GEMMs (1.3–3.1% if the kernels only moved data), which an off-SM engine would recover."
+
 ## Reproduce
 
 ```sh
@@ -174,6 +391,12 @@ python3 analyze_et.py Mixtral-8x22B 8 $T/Mixtral/Mixtral-8x22B/mixtral-8x22_chak
 python3 analyze_et.py Llama3-70B    8 $T/Llama3/Llama3-70B/16TP/rank.*.et              > out_et_Llama3-70B.txt   # ~1 min, 16 procs
 D=$T/Mixtral/Mixtral-8x7B/nemo_raw
 python3 analyze_kineto.py 8 $D/device_0.json $D/device_2.json $D/device_3.json $D/device_6.json > out_kineto_Mixtral-8x7B.txt
+# extension (E1-E5); args: NVLink GB/s/dir, [IB GB/s per NIC]
+python3 analyze_moe.py 450 $T/Mixtral/Mixtral-8x7B $D/device_0.json $D/device_2.json $D/device_3.json $D/device_6.json > out_moe_Mixtral-8x7B.txt   # ~10 s
+python3 analyze_nccl_et.py Mixtral-8x7B  8 450 12.5 $T/Mixtral/Mixtral-8x7B/chakra_trace.*.et         > out_nccl_et_Mixtral-8x7B.txt
+python3 analyze_nccl_et.py Mixtral-8x22B 8 450 12.5 $T/Mixtral/Mixtral-8x22B/mixtral-8x22_chakra.*.et  > out_nccl_et_Mixtral-8x22B.txt
+python3 analyze_nccl_et.py Llama3-70B    8 450 12.5 $T/Llama3/Llama3-70B/16TP/rank.*.et               > out_nccl_et_Llama3-70B.txt     # ~35 s, 16 procs
+python3 project_offsm.py > out_projection.txt   # reads moe_summary_Mixtral-8x7B.json, nccl_et_Mixtral-8x22B.json
 ```
 
 The scripts use only the Python standard library (tested with the system `python3`). `analyze_et.py` also writes per-rank aggregates to `et_summary_<model>.json`.

@@ -1,0 +1,41 @@
+# Llama3-70B: 16 ranks, 413264 NCCL GPU kernels; G=8 GPUs/node (assumed); NVLink 450.0 GB/s/dir; IB 12.5 GB/s per NIC
+
+## Hold time per byte and link-peak lower bounds, pooled over ranks (type x scope x group size)
+t_min: intra = bus/NVLink; inter A = one NIC per GPU, inter B = one NIC per node (see docstring)
+type | scope | n | m_loc | kernels | % of NCCL time | sum dur ms | us per MiB in (sum/sum) | median us/MiB | (us/MiB only for kernels >= 1 MiB in; nan otherwise) | us per bus-MiB (sum/sum) | median busBW GB/s | max busBW GB/s | unexplained % (intra or A) | unexplained % (B)
+ALL_GATHER | inter | 16 | 8 | 247290 | 60.17 | 1543090.7 | 780.0 | 743.4 | 52.0 | 21.16 | 25.21 | 79.8 | -61.3
+REDUCE_SCATTER | inter | 16 | 8 | 164861 | 39.75 | 1019296.6 | 48.3 | 46.1 | 51.5 | 21.34 | 25.85 | 79.6 | -62.8
+ALL_REDUCE | inter | 16 | 8 | 1056 | 0.06 | 1619.5 | nan | 6359.7 | nan | 0.13 | 1.41 | 99.8 | 98.8
+BROADCAST | inter | 16 | 8 | 48 | 0.01 | 372.7 | nan | nan | nan | 0.00 | 0.00 | 100.0 | 100.0
+ALL_GATHER | inter | 6 | 4 | 5 | 0.00 | 28.6 | 714.4 | 726.6 | 142.9 | 7.22 | 8.15 | 85.3 | -17.4
+REDUCE_SCATTER | inter | 6 | 4 | 2 | 0.00 | 12.3 | 48.2 | 48.2 | 57.8 | 18.34 | 20.30 | 63.7 | -190.2
+ALL_GATHER | inter | 6 | 2 | 1 | 0.00 | 5.7 | 713.4 | 713.4 | 142.7 | 7.35 | 7.35 | 70.6 | -135.2
+REDUCE_SCATTER | inter | 6 | 2 | 1 | 0.00 | 5.6 | 43.9 | 43.9 | 52.7 | 19.89 | 19.89 | 20.4 | -536.4
+inter: 413264 kernels, 2564431.7 ms (100.0% of NCCL time); unexplained at peak: A/intra 79.8%, B -61.8%
+
+## Duration percentiles vs. link-peak bounds (groups >= 5% of NCCL time)
+type | scope | n | in MiB | p0 | p10 | p50 | p90 | p99 (us) | t_min intra/A us | t_min B us | % kernels faster than A bound | % faster than B bound
+ALL_GATHER | inter | 16 | 8.00 | 4991 | 5518 | 5947 | 6762 | 12707 | 1258 | 10066 | 0.0 | 98.7
+REDUCE_SCATTER | inter | 16 | 128.00 | 4867 | 5423 | 5897 | 6837 | 9496 | 1258 | 10066 | 0.0 | 99.1
+
+## Excess over the fastest kernel of the same (type, scope, n, bytes), pooled over ranks (empirical wait estimate)
+type | scope | n | in MiB | kernels | min dur us | busBW at min GB/s | median dur us | sum dur ms | excess over min %
+ALL_GATHER | inter | 16 | 8.00 | 247290 | 4991 | 25.21 | 5947 | 1543090.7 | 20.0
+REDUCE_SCATTER | inter | 16 | 128.00 | 164861 | 4867 | 25.85 | 5897 | 1019296.6 | 21.3
+(groups < 0.5% of NCCL time omitted) all NCCL: excess over min = 20.6% of 2564431.7 ms
+
+## Per-peer message size histogram (count | % of NCCL time), pooled over ranks
+per-peer: AG = in bytes (each rank's shard); RS, AR = in/n (ring chunk); a2a = in/n (equal splits); bcast = in
+type | scope | n | <1K | 1K-4K | 4K-16K | 16K-64K | 64K-256K | 256K-1M | 1M-4M | 4M-16M | 16M-64M | >=64M | ops <64KiB % | time <64KiB %
+ALL_GATHER | inter | 6 | . | . | . | . | . | . | . | 6 (0.0) | . | . | 0.0 | 0.0
+ALL_GATHER | inter | 16 | . | . | . | . | . | . | . | 247290 (60.2) | . | . | 0.0 | 0.0
+ALL_REDUCE | inter | 16 | 16 (0.0) | 512 (0.0) | 512 (0.0) | . | . | 16 (0.0) | . | . | . | . | 98.5 | 75.0
+BROADCAST | inter | 16 | 48 (0.0) | . | . | . | . | . | . | . | . | . | 100.0 | 100.0
+REDUCE_SCATTER | inter | 6 | . | . | . | . | . | . | . | . | 3 (0.0) | . | 0.0 | 0.0
+REDUCE_SCATTER | inter | 16 | . | . | . | . | . | . | . | 164861 (39.7) | . | . | 0.0 | 0.0
+
+ALL: 1088/413264 ops = 0.3% of NCCL ops are < 64 KiB per peer; they take 0.06% of NCCL kernel time
+  inter: 0.3% of ops, 0.06% of inter NCCL time
+
+## GEMM time per rank (ms): all GEMM kernels median 11215.0; GEMMs under LinearWithGradAccumulationAndAsyncCommunication median 147.3 (min 145.1, max 149.4)
+(written /scratch/harshanavkis/loom-proj/motivation-experiments/m3-sm-share/chakra/nccl_et_Llama3-70B.json)

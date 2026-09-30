@@ -1,0 +1,507 @@
+# Mixtral-8x7B Kineto per-layer MoE breakdown and NCCL bandwidth; NVLink peak = 450.0 GB/s/direction
+
+## rank 0: step 5872.0 ms; EP pg 57; layer instances fwd 256 bwd 256; instances without exactly 2 EP a2a: 0
+size check: every fwd/bwd layer's two a2a have In bytes = [33554432]
+
+### rank 0 fwd layers, all micro-batches: n=256; median layer span 9.840 ms
+class | median us | p10 us | p90 us | median % of layer span | sum over instances ms
+a2a_1 | 3801.7 | 83.0 | 4716.7 | 38.6 | 800.5
+a2a_2 | 865.6 | 83.0 | 1052.9 | 8.9 | 203.5
+TP-MoE | 315.8 | 312.3 | 319.5 | 3.2 | 92.9
+TP-attn | 182.5 | 180.4 | 231.9 | 1.9 | 69.6
+AR | 7.1 | 6.8 | 14.0 | 0.1 | 18.8
+DP | 0.0 | 0.0 | 0.0 | 0.0 | 1.8
+expert_GEMM | 1910.0 | 1905.8 | 1913.7 | 19.4 | 488.9
+MoE_other | 286.4 | 284.7 | 289.9 | 2.9 | 73.4
+dense_other | 861.9 | 854.6 | 872.1 | 8.8 | 225.0
+idle | 1486.2 | 649.3 | 5799.9 | 14.8 | 654.8
+NCCL wall (union) median % of span 53.8; compute wall median % of span 31.2
+
+### rank 0 fwd layers, micro-batches 1..7 (excl. first): n=224; median layer span 9.761 ms
+class | median us | p10 us | p90 us | median % of layer span | sum over instances ms
+a2a_1 | 4041.9 | 82.8 | 4730.7 | 40.7 | 731.4
+a2a_2 | 860.7 | 82.8 | 954.7 | 8.8 | 171.6
+TP-MoE | 315.6 | 312.3 | 319.3 | 3.2 | 82.7
+TP-attn | 182.4 | 180.4 | 185.4 | 1.9 | 63.1
+AR | 7.1 | 6.8 | 20.3 | 0.1 | 18.6
+DP | 0.0 | 0.0 | 0.0 | 0.0 | 0.0
+expert_GEMM | 1910.4 | 1907.2 | 1913.9 | 19.6 | 427.9
+MoE_other | 286.5 | 284.8 | 290.0 | 2.9 | 64.3
+dense_other | 861.3 | 854.6 | 869.9 | 8.8 | 193.0
+idle | 1358.6 | 647.3 | 5799.9 | 13.5 | 510.3
+NCCL wall (union) median % of span 56.0; compute wall median % of span 31.3
+
+### rank 0 bwd layers, all micro-batches: n=256; median layer span 10.205 ms
+class | median us | p10 us | p90 us | median % of layer span | sum over instances ms
+a2a_1 | 2229.6 | 82.5 | 3076.1 | 22.2 | 484.4
+a2a_2 | 1113.9 | 83.8 | 1229.6 | 10.7 | 234.7
+TP-MoE | 317.3 | 314.0 | 2351.4 | 3.1 | 199.4
+TP-attn | 404.3 | 290.2 | 1730.9 | 4.0 | 206.0
+AR | 0.0 | 0.0 | 0.0 | 0.0 | 0.0
+DP | 0.0 | 0.0 | 0.0 | 0.0 | 39.1
+expert_GEMM | 3763.2 | 3711.1 | 3799.8 | 36.8 | 962.9
+MoE_other | 425.5 | 423.6 | 994.4 | 4.2 | 132.3
+dense_other | 1775.1 | 1704.2 | 1922.0 | 17.1 | 457.8
+idle | 207.7 | 193.6 | 873.2 | 2.0 | 131.6
+NCCL wall (union) median % of span 41.7; compute wall median % of span 58.3
+
+### rank 0 bwd layers, micro-batches 1..7 (excl. first): n=224; median layer span 10.216 ms
+class | median us | p10 us | p90 us | median % of layer span | sum over instances ms
+a2a_1 | 2263.0 | 82.5 | 3080.5 | 22.4 | 425.4
+a2a_2 | 1114.9 | 83.6 | 1239.4 | 10.6 | 203.1
+TP-MoE | 317.5 | 314.0 | 2363.9 | 3.1 | 185.9
+TP-attn | 404.7 | 290.0 | 1736.8 | 4.0 | 187.8
+AR | 0.0 | 0.0 | 0.0 | 0.0 | 0.0
+DP | 0.0 | 0.0 | 0.0 | 0.0 | 39.1
+expert_GEMM | 3765.0 | 3710.8 | 3800.8 | 36.7 | 842.8
+MoE_other | 425.6 | 423.9 | 998.3 | 4.2 | 118.7
+dense_other | 1777.7 | 1704.2 | 1933.6 | 17.0 | 400.9
+idle | 207.2 | 193.3 | 821.2 | 2.0 | 76.0
+NCCL wall (union) median % of span 42.0; compute wall median % of span 58.2
+
+### rank 0: per layer index (median over 8 micro-batches), ms: fwd span | fwd a2a_1+a2a_2 | fwd expert GEMM || bwd span | bwd a2a | bwd expert GEMM
+L01 | 13.33 | 2.47 | 1.91 || 10.14 | 2.83 | 3.68
+L02 | 10.32 | 2.22 | 1.91 || 10.65 | 3.21 | 3.71
+L03 | 10.31 | 2.58 | 1.91 || 10.15 | 3.27 | 3.79
+L04 | 10.22 | 2.94 | 1.91 || 10.46 | 3.37 | 3.75
+L05 | 10.27 | 3.52 | 1.91 || 10.09 | 3.10 | 3.76
+L06 | 10.12 | 3.80 | 1.91 || 10.16 | 3.43 | 3.75
+L07 | 10.02 | 3.94 | 1.91 || 10.16 | 3.43 | 3.76
+L08 | 9.90 | 4.13 | 1.91 || 10.17 | 3.43 | 3.75
+L09 | 9.91 | 4.80 | 1.91 || 10.22 | 3.40 | 3.77
+L10 | 9.87 | 4.98 | 1.91 || 10.17 | 3.25 | 3.78
+L11 | 9.87 | 5.10 | 1.91 || 10.12 | 3.13 | 3.77
+L12 | 9.99 | 5.32 | 1.91 || 10.22 | 3.16 | 3.77
+L13 | 10.07 | 5.06 | 1.91 || 10.16 | 3.14 | 3.78
+L14 | 9.81 | 4.66 | 1.91 || 10.17 | 3.14 | 3.76
+L15 | 10.00 | 4.86 | 1.91 || 10.54 | 3.05 | 3.79
+L16 | 9.69 | 4.89 | 1.91 || 10.13 | 3.14 | 3.74
+L17 | 9.71 | 4.89 | 1.91 || 10.16 | 2.99 | 3.77
+L18 | 9.62 | 4.69 | 1.91 || 10.05 | 2.47 | 3.79
+L19 | 9.64 | 4.79 | 1.91 || 10.49 | 3.30 | 3.77
+L20 | 9.79 | 4.98 | 1.91 || 10.56 | 3.41 | 3.74
+L21 | 9.56 | 4.90 | 1.91 || 10.40 | 3.42 | 3.80
+L22 | 9.50 | 4.76 | 1.91 || 10.14 | 3.26 | 3.76
+L23 | 9.60 | 5.05 | 1.91 || 10.16 | 3.28 | 3.76
+L24 | 9.75 | 5.15 | 1.91 || 10.47 | 3.22 | 3.69
+L25 | 9.55 | 5.17 | 1.91 || 10.13 | 3.04 | 3.78
+L26 | 9.67 | 4.90 | 1.91 || 10.19 | 3.37 | 3.76
+L27 | 9.58 | 5.23 | 1.91 || 10.18 | 3.46 | 3.75
+L28 | 9.65 | 5.21 | 1.91 || 10.51 | 3.51 | 3.77
+L29 | 9.59 | 4.92 | 1.91 || 10.29 | 3.52 | 3.75
+L30 | 9.69 | 5.19 | 1.91 || 10.71 | 3.57 | 3.79
+L31 | 9.65 | 4.81 | 1.91 || 10.54 | 3.91 | 3.75
+L32 | 9.68 | 4.92 | 1.91 || 13.09 | 5.78 | 3.75
+
+rank 0 totals over all layer instances (ms): a2a_1 1285.0, a2a_2 438.2, TP-MoE 292.3, TP-attn 275.6, AR 18.8, DP 40.9, expert_GEMM 1451.8, MoE_other 205.7, dense_other 682.8, idle 786.4, span 5361.0
+layer instances cover 91.3% of the step
+
+### rank 0: Kineto In-bytes vs. Chakra ET comm_size, per pg matched by call order
+pg 0: {'et': 4, 'kineto': 4, 'size_equal': 4, 'max_abs_dur_diff_us': 0.40800000000000125}
+pg 1: {'et': 8, 'kineto': 8, 'size_equal': 8, 'max_abs_dur_diff_us': 0.9920000000000009}
+pg 5: {'et': 36, 'kineto': 36, 'size_equal': 36, 'max_abs_dur_diff_us': 0.9839999999999236}
+pg 22: {'et': 2369, 'kineto': 2369, 'size_equal': 2369, 'max_abs_dur_diff_us': 0.9990000000000236}
+pg 52: {'et': 256, 'kineto': 256, 'size_equal': 256, 'max_abs_dur_diff_us': 0.984}
+pg 57: {'et': 1024, 'kineto': 1024, 'size_equal': 1024, 'max_abs_dur_diff_us': 0.9990000000000236}
+
+## rank 2: step 5873.2 ms; EP pg 57; layer instances fwd 256 bwd 256; instances without exactly 2 EP a2a: 0
+size check: every fwd/bwd layer's two a2a have In bytes = [33554432]
+
+### rank 2 fwd layers, all micro-batches: n=256; median layer span 9.832 ms
+class | median us | p10 us | p90 us | median % of layer span | sum over instances ms
+a2a_1 | 4466.5 | 1545.5 | 5032.7 | 46.2 | 1050.2
+a2a_2 | 863.3 | 814.9 | 1037.3 | 8.9 | 221.5
+TP-MoE | 316.4 | 314.0 | 323.1 | 3.2 | 92.6
+TP-attn | 181.5 | 179.4 | 447.2 | 1.9 | 63.7
+AR | 7.1 | 6.7 | 223.7 | 0.1 | 14.3
+DP | 0.0 | 0.0 | 0.0 | 0.0 | 2.8
+expert_GEMM | 1909.5 | 1907.3 | 1911.9 | 19.4 | 488.8
+MoE_other | 286.1 | 284.4 | 288.0 | 2.9 | 73.3
+dense_other | 861.3 | 855.1 | 870.1 | 8.8 | 223.4
+idle | 858.5 | 649.7 | 3052.0 | 8.4 | 430.0
+NCCL wall (union) median % of span 60.8; compute wall median % of span 31.2
+
+### rank 2 fwd layers, micro-batches 1..7 (excl. first): n=224; median layer span 9.762 ms
+class | median us | p10 us | p90 us | median % of layer span | sum over instances ms
+a2a_1 | 4507.2 | 3372.5 | 5080.0 | 46.7 | 1009.8
+a2a_2 | 863.2 | 822.8 | 976.9 | 8.9 | 197.6
+TP-MoE | 316.3 | 314.0 | 319.2 | 3.2 | 76.9
+TP-attn | 181.2 | 179.4 | 183.9 | 1.9 | 42.9
+AR | 7.1 | 6.7 | 11.8 | 0.1 | 3.6
+DP | 0.0 | 0.0 | 0.0 | 0.0 | 0.0
+expert_GEMM | 1909.7 | 1907.7 | 1912.2 | 19.6 | 427.8
+MoE_other | 286.1 | 284.5 | 288.0 | 2.9 | 64.1
+dense_other | 860.5 | 854.6 | 866.8 | 8.8 | 192.8
+idle | 737.4 | 649.4 | 2099.6 | 7.4 | 277.7
+NCCL wall (union) median % of span 61.1; compute wall median % of span 31.3
+
+### rank 2 bwd layers, all micro-batches: n=256; median layer span 10.219 ms
+class | median us | p10 us | p90 us | median % of layer span | sum over instances ms
+a2a_1 | 2332.9 | 1204.0 | 3073.9 | 22.9 | 581.6
+a2a_2 | 1113.8 | 955.8 | 1230.0 | 10.7 | 279.7
+TP-MoE | 331.4 | 317.4 | 1443.1 | 3.2 | 144.1
+TP-attn | 399.5 | 286.5 | 520.7 | 3.9 | 105.4
+AR | 0.0 | 0.0 | 0.0 | 0.0 | 0.0
+DP | 0.0 | 0.0 | 0.0 | 0.0 | 38.8
+expert_GEMM | 3763.9 | 3712.1 | 3795.2 | 36.6 | 962.6
+MoE_other | 424.0 | 421.9 | 989.9 | 4.2 | 132.3
+dense_other | 1768.1 | 1704.2 | 1851.2 | 17.1 | 453.3
+idle | 214.6 | 201.5 | 685.6 | 2.1 | 143.1
+NCCL wall (union) median % of span 41.8; compute wall median % of span 58.1
+
+### rank 2 bwd layers, micro-batches 1..7 (excl. first): n=224; median layer span 10.234 ms
+class | median us | p10 us | p90 us | median % of layer span | sum over instances ms
+a2a_1 | 2353.8 | 1217.2 | 3079.7 | 23.1 | 515.7
+a2a_2 | 1114.1 | 943.7 | 1232.0 | 10.6 | 245.1
+TP-MoE | 334.7 | 317.8 | 1456.2 | 3.2 | 133.3
+TP-attn | 399.6 | 287.3 | 525.1 | 3.9 | 93.1
+AR | 0.0 | 0.0 | 0.0 | 0.0 | 0.0
+DP | 0.0 | 0.0 | 0.0 | 0.0 | 38.8
+expert_GEMM | 3764.6 | 3713.2 | 3795.9 | 36.5 | 842.6
+MoE_other | 424.2 | 422.2 | 994.4 | 4.2 | 118.8
+dense_other | 1768.2 | 1704.5 | 1854.9 | 17.0 | 396.9
+idle | 214.8 | 201.3 | 497.1 | 2.1 | 89.9
+NCCL wall (union) median % of span 41.9; compute wall median % of span 58.0
+
+### rank 2: per layer index (median over 8 micro-batches), ms: fwd span | fwd a2a_1+a2a_2 | fwd expert GEMM || bwd span | bwd a2a | bwd expert GEMM
+L01 | 19.16 | 10.93 | 1.91 || 10.41 | 3.29 | 3.77
+L02 | 10.33 | 5.72 | 1.91 || 10.29 | 3.70 | 3.71
+L03 | 10.31 | 5.58 | 1.91 || 10.19 | 3.50 | 3.77
+L04 | 10.19 | 5.18 | 1.91 || 10.27 | 3.60 | 3.73
+L05 | 10.24 | 5.53 | 1.91 || 10.11 | 3.40 | 3.74
+L06 | 10.12 | 5.57 | 1.91 || 10.11 | 3.50 | 3.72
+L07 | 10.01 | 5.53 | 1.91 || 10.15 | 3.54 | 3.71
+L08 | 9.90 | 5.60 | 1.91 || 10.23 | 3.50 | 3.78
+L09 | 9.91 | 5.63 | 1.91 || 10.11 | 3.40 | 3.79
+L10 | 9.87 | 5.46 | 1.91 || 10.26 | 3.54 | 3.78
+L11 | 9.87 | 5.38 | 1.91 || 10.16 | 3.50 | 3.77
+L12 | 9.98 | 5.39 | 1.91 || 10.20 | 3.57 | 3.76
+L13 | 10.05 | 5.15 | 1.91 || 10.14 | 3.44 | 3.78
+L14 | 9.81 | 5.09 | 1.91 || 10.23 | 3.54 | 3.78
+L15 | 9.87 | 5.26 | 1.91 || 10.40 | 3.70 | 3.75
+L16 | 9.69 | 5.22 | 1.91 || 10.15 | 3.41 | 3.76
+L17 | 9.71 | 5.18 | 1.91 || 10.25 | 3.60 | 3.76
+L18 | 9.62 | 5.02 | 1.91 || 10.09 | 3.39 | 3.73
+L19 | 9.64 | 5.15 | 1.91 || 10.24 | 3.35 | 3.75
+L20 | 9.79 | 5.26 | 1.91 || 10.82 | 3.33 | 3.79
+L21 | 9.57 | 5.24 | 1.91 || 10.11 | 3.32 | 3.74
+L22 | 9.50 | 5.25 | 1.91 || 10.16 | 3.37 | 3.78
+L23 | 9.59 | 5.32 | 1.91 || 10.20 | 3.38 | 3.77
+L24 | 9.69 | 5.31 | 1.91 || 10.39 | 3.34 | 3.77
+L25 | 9.74 | 5.33 | 1.91 || 10.16 | 3.28 | 3.71
+L26 | 9.67 | 5.41 | 1.91 || 10.18 | 3.15 | 3.76
+L27 | 9.59 | 5.28 | 1.91 || 10.22 | 3.08 | 3.79
+L28 | 9.54 | 5.15 | 1.91 || 10.32 | 3.01 | 3.80
+L29 | 9.60 | 5.17 | 1.91 || 10.23 | 3.50 | 3.79
+L30 | 9.66 | 5.30 | 1.91 || 10.66 | 3.56 | 3.74
+L31 | 9.82 | 5.34 | 1.91 || 10.88 | 4.07 | 3.76
+L32 | 9.68 | 5.31 | 1.91 || 13.24 | 6.39 | 3.75
+
+rank 2 totals over all layer instances (ms): a2a_1 1631.8, a2a_2 501.1, TP-MoE 236.7, TP-attn 169.0, AR 14.3, DP 41.6, expert_GEMM 1451.5, MoE_other 205.6, dense_other 676.6, idle 573.1, span 5389.3
+layer instances cover 91.8% of the step
+
+### rank 2: Kineto In-bytes vs. Chakra ET comm_size, per pg matched by call order
+pg 0: {'et': 4, 'kineto': 4, 'size_equal': 4, 'max_abs_dur_diff_us': 0.5219999999999345}
+pg 1: {'et': 8, 'kineto': 8, 'size_equal': 8, 'max_abs_dur_diff_us': 0.9920000000000009}
+pg 5: {'et': 36, 'kineto': 36, 'size_equal': 36, 'max_abs_dur_diff_us': 0.987999999999829}
+pg 23: {'et': 2369, 'kineto': 2369, 'size_equal': 2369, 'max_abs_dur_diff_us': 0.9989999999999952}
+pg 53: {'et': 256, 'kineto': 256, 'size_equal': 256, 'max_abs_dur_diff_us': 0.9770000000000003}
+pg 57: {'et': 1024, 'kineto': 1024, 'size_equal': 1024, 'max_abs_dur_diff_us': 0.9989999999997963}
+
+## rank 3: step 5873.3 ms; EP pg 58; layer instances fwd 256 bwd 256; instances without exactly 2 EP a2a: 0
+size check: every fwd/bwd layer's two a2a have In bytes = [33554432]
+
+### rank 3 fwd layers, all micro-batches: n=256; median layer span 9.829 ms
+class | median us | p10 us | p90 us | median % of layer span | sum over instances ms
+a2a_1 | 3879.9 | 600.4 | 4472.4 | 40.2 | 927.5
+a2a_2 | 836.6 | 785.8 | 998.7 | 8.5 | 212.8
+TP-MoE | 946.6 | 476.2 | 1002.2 | 9.7 | 235.5
+TP-attn | 196.7 | 183.9 | 213.7 | 2.0 | 62.1
+AR | 24.2 | 7.4 | 428.9 | 0.2 | 27.4
+DP | 0.0 | 0.0 | 0.0 | 0.0 | 1.7
+expert_GEMM | 1937.5 | 1927.0 | 1939.8 | 19.7 | 495.6
+MoE_other | 284.8 | 283.4 | 286.7 | 2.9 | 72.9
+dense_other | 861.8 | 856.4 | 869.4 | 8.8 | 221.3
+idle | 667.2 | 623.5 | 4040.3 | 6.7 | 401.9
+NCCL wall (union) median % of span 61.1; compute wall median % of span 31.4
+
+### rank 3 fwd layers, micro-batches 1..7 (excl. first): n=224; median layer span 9.764 ms
+class | median us | p10 us | p90 us | median % of layer span | sum over instances ms
+a2a_1 | 3934.3 | 3310.2 | 4601.8 | 40.6 | 910.9
+a2a_2 | 836.6 | 792.6 | 926.6 | 8.5 | 190.7
+TP-MoE | 949.7 | 574.6 | 1004.6 | 9.7 | 213.0
+TP-attn | 197.1 | 189.4 | 209.3 | 2.0 | 54.5
+AR | 26.0 | 7.9 | 460.6 | 0.3 | 26.1
+DP | 0.0 | 0.0 | 0.0 | 0.0 | 0.0
+expert_GEMM | 1937.4 | 1926.9 | 1939.5 | 19.8 | 433.6
+MoE_other | 284.7 | 283.4 | 286.2 | 2.9 | 63.8
+dense_other | 861.1 | 856.2 | 867.0 | 8.8 | 192.9
+idle | 648.1 | 622.1 | 1499.3 | 6.6 | 207.4
+NCCL wall (union) median % of span 61.3; compute wall median % of span 31.6
+
+### rank 3 bwd layers, all micro-batches: n=256; median layer span 10.233 ms
+class | median us | p10 us | p90 us | median % of layer span | sum over instances ms
+a2a_1 | 1844.9 | 1180.2 | 2936.0 | 17.8 | 489.1
+a2a_2 | 1073.6 | 946.2 | 1193.1 | 10.3 | 270.7
+TP-MoE | 829.8 | 313.4 | 1462.5 | 8.2 | 236.0
+TP-attn | 426.9 | 309.9 | 556.4 | 4.1 | 115.8
+AR | 0.0 | 0.0 | 0.0 | 0.0 | 0.0
+DP | 0.0 | 0.0 | 0.0 | 0.0 | 26.0
+expert_GEMM | 3820.6 | 3766.9 | 3852.1 | 37.2 | 976.5
+MoE_other | 426.7 | 423.6 | 993.1 | 4.2 | 133.7
+dense_other | 1775.0 | 1706.5 | 1868.4 | 17.1 | 455.0
+idle | 196.3 | 188.9 | 376.0 | 1.9 | 129.0
+NCCL wall (union) median % of span 41.6; compute wall median % of span 58.7
+
+### rank 3 bwd layers, micro-batches 1..7 (excl. first): n=224; median layer span 10.240 ms
+class | median us | p10 us | p90 us | median % of layer span | sum over instances ms
+a2a_1 | 1875.0 | 1184.4 | 2945.3 | 17.8 | 433.3
+a2a_2 | 1076.8 | 939.5 | 1199.9 | 10.3 | 237.6
+TP-MoE | 1116.4 | 313.1 | 1474.2 | 10.9 | 214.6
+TP-attn | 423.8 | 307.6 | 551.7 | 4.1 | 101.2
+AR | 0.0 | 0.0 | 0.0 | 0.0 | 0.0
+DP | 0.0 | 0.0 | 0.0 | 0.0 | 26.0
+expert_GEMM | 3821.6 | 3768.7 | 3853.3 | 37.1 | 854.7
+MoE_other | 426.8 | 424.0 | 1001.0 | 4.2 | 120.1
+dense_other | 1776.6 | 1706.7 | 1870.7 | 17.1 | 398.6
+idle | 196.6 | 189.2 | 208.3 | 1.9 | 78.0
+NCCL wall (union) median % of span 41.8; compute wall median % of span 58.6
+
+### rank 3: per layer index (median over 8 micro-batches), ms: fwd span | fwd a2a_1+a2a_2 | fwd expert GEMM || bwd span | bwd a2a | bwd expert GEMM
+L01 | 19.17 | 10.67 | 1.94 || 10.41 | 3.39 | 3.82
+L02 | 10.33 | 5.20 | 1.94 || 10.36 | 3.39 | 3.76
+L03 | 10.31 | 5.29 | 1.94 || 10.20 | 3.32 | 3.83
+L04 | 10.22 | 4.66 | 1.94 || 10.29 | 3.29 | 3.79
+L05 | 10.26 | 4.87 | 1.94 || 10.07 | 2.97 | 3.80
+L06 | 10.12 | 4.88 | 1.94 || 10.12 | 2.91 | 3.78
+L07 | 10.00 | 4.78 | 1.94 || 10.17 | 3.02 | 3.77
+L08 | 9.90 | 4.91 | 1.94 || 10.22 | 2.98 | 3.84
+L09 | 9.91 | 4.92 | 1.94 || 10.12 | 2.90 | 3.85
+L10 | 9.87 | 4.79 | 1.94 || 10.23 | 2.98 | 3.84
+L11 | 9.87 | 4.78 | 1.94 || 10.17 | 3.07 | 3.83
+L12 | 10.05 | 4.82 | 1.94 || 10.19 | 2.88 | 3.81
+L13 | 9.89 | 4.85 | 1.94 || 10.16 | 2.99 | 3.83
+L14 | 9.79 | 4.88 | 1.94 || 10.23 | 2.75 | 3.84
+L15 | 9.87 | 4.85 | 1.94 || 10.44 | 3.23 | 3.81
+L16 | 9.69 | 4.80 | 1.94 || 10.16 | 2.95 | 3.82
+L17 | 9.71 | 4.78 | 1.94 || 10.23 | 3.12 | 3.82
+L18 | 9.62 | 4.39 | 1.94 || 10.10 | 3.02 | 3.79
+L19 | 9.63 | 4.47 | 1.94 || 10.24 | 2.90 | 3.81
+L20 | 9.79 | 4.54 | 1.94 || 10.79 | 2.91 | 3.85
+L21 | 9.57 | 4.62 | 1.94 || 10.15 | 2.50 | 3.80
+L22 | 9.50 | 4.65 | 1.94 || 10.12 | 2.81 | 3.84
+L23 | 9.60 | 4.65 | 1.94 || 10.22 | 2.61 | 3.82
+L24 | 9.64 | 4.64 | 1.94 || 10.38 | 2.87 | 3.83
+L25 | 9.77 | 4.65 | 1.94 || 10.17 | 2.63 | 3.77
+L26 | 9.67 | 4.79 | 1.94 || 10.22 | 2.71 | 3.82
+L27 | 9.59 | 4.67 | 1.94 || 10.26 | 2.36 | 3.84
+L28 | 9.59 | 4.48 | 1.94 || 10.32 | 3.17 | 3.86
+L29 | 9.59 | 4.51 | 1.94 || 10.24 | 2.52 | 3.84
+L30 | 9.64 | 4.64 | 1.94 || 10.66 | 3.07 | 3.80
+L31 | 9.73 | 4.69 | 1.94 || 10.88 | 3.15 | 3.81
+L32 | 9.68 | 4.76 | 1.94 || 13.26 | 5.48 | 3.81
+
+rank 3 totals over all layer instances (ms): a2a_1 1416.6, a2a_2 483.6, TP-MoE 471.5, TP-attn 177.8, AR 27.4, DP 27.7, expert_GEMM 1472.1, MoE_other 206.6, dense_other 676.4, idle 531.0, span 5388.4
+layer instances cover 91.7% of the step
+
+### rank 3: Kineto In-bytes vs. Chakra ET comm_size, per pg matched by call order
+pg 0: {'et': 4, 'kineto': 4, 'size_equal': 4, 'max_abs_dur_diff_us': 0.8559999999999945}
+pg 3: {'et': 8, 'kineto': 8, 'size_equal': 8, 'max_abs_dur_diff_us': 0.8790000000000191}
+pg 7: {'et': 36, 'kineto': 36, 'size_equal': 36, 'max_abs_dur_diff_us': 0.9880000000000564}
+pg 23: {'et': 2369, 'kineto': 2369, 'size_equal': 2369, 'max_abs_dur_diff_us': 0.9989999999999952}
+pg 53: {'et': 256, 'kineto': 256, 'size_equal': 256, 'max_abs_dur_diff_us': 0.9970000000000709}
+pg 58: {'et': 1024, 'kineto': 1024, 'size_equal': 1024, 'max_abs_dur_diff_us': 0.9990000000000236}
+
+## rank 6: step 5873.5 ms; EP pg 57; layer instances fwd 256 bwd 256; instances without exactly 2 EP a2a: 0
+size check: every fwd/bwd layer's two a2a have In bytes = [33554432]
+
+### rank 6 fwd layers, all micro-batches: n=256; median layer span 9.821 ms
+class | median us | p10 us | p90 us | median % of layer span | sum over instances ms
+a2a_1 | 82.8 | 81.0 | 2918.1 | 0.8 | 173.5
+a2a_2 | 83.1 | 81.3 | 816.1 | 0.9 | 78.6
+TP-MoE | 311.5 | 308.3 | 315.1 | 3.2 | 85.2
+TP-attn | 179.2 | 177.6 | 181.7 | 1.8 | 46.3
+AR | 6.7 | 6.4 | 6.9 | 0.1 | 1.7
+DP | 0.0 | 0.0 | 0.0 | 0.0 | 3.5
+expert_GEMM | 1938.9 | 1932.5 | 1945.2 | 19.7 | 496.4
+MoE_other | 287.1 | 284.8 | 290.3 | 2.9 | 73.6
+dense_other | 870.3 | 862.1 | 876.5 | 8.9 | 222.7
+idle | 5949.5 | 2462.1 | 6980.7 | 61.1 | 1432.6
+NCCL wall (union) median % of span 6.9; compute wall median % of span 31.5
+
+### rank 6 fwd layers, micro-batches 1..7 (excl. first): n=224; median layer span 9.760 ms
+class | median us | p10 us | p90 us | median % of layer span | sum over instances ms
+a2a_1 | 82.8 | 81.1 | 3042.0 | 0.9 | 170.7
+a2a_2 | 83.1 | 81.3 | 821.1 | 0.9 | 75.6
+TP-MoE | 311.5 | 308.4 | 315.1 | 3.2 | 75.3
+TP-attn | 179.4 | 177.7 | 181.8 | 1.8 | 40.5
+AR | 6.7 | 6.4 | 6.9 | 0.1 | 1.5
+DP | 0.0 | 0.0 | 0.0 | 0.0 | 0.0
+expert_GEMM | 1940.4 | 1934.5 | 1945.2 | 19.9 | 434.6
+MoE_other | 287.2 | 284.8 | 290.3 | 2.9 | 64.4
+dense_other | 870.2 | 862.1 | 875.7 | 8.9 | 194.7
+idle | 5866.8 | 2269.6 | 6745.1 | 60.9 | 1190.4
+NCCL wall (union) median % of span 6.9; compute wall median % of span 31.7
+
+### rank 6 bwd layers, all micro-batches: n=256; median layer span 10.204 ms
+class | median us | p10 us | p90 us | median % of layer span | sum over instances ms
+a2a_1 | 82.8 | 81.1 | 1287.4 | 0.8 | 103.2
+a2a_2 | 82.9 | 81.0 | 1031.6 | 0.8 | 88.2
+TP-MoE | 311.9 | 308.7 | 1386.8 | 3.1 | 134.7
+TP-attn | 268.3 | 265.5 | 409.7 | 2.6 | 78.3
+AR | 0.0 | 0.0 | 0.0 | 0.0 | 0.0
+DP | 0.0 | 0.0 | 0.0 | 0.0 | 3.4
+expert_GEMM | 3827.5 | 3780.6 | 3860.6 | 37.4 | 978.5
+MoE_other | 426.5 | 423.8 | 983.0 | 4.2 | 132.9
+dense_other | 1725.0 | 1706.8 | 1776.1 | 16.9 | 444.1
+idle | 3408.2 | 220.1 | 4200.4 | 33.6 | 780.8
+NCCL wall (union) median % of span 7.4; compute wall median % of span 58.6
+
+### rank 6 bwd layers, micro-batches 1..7 (excl. first): n=224; median layer span 10.213 ms
+class | median us | p10 us | p90 us | median % of layer span | sum over instances ms
+a2a_1 | 82.9 | 81.0 | 1291.6 | 0.8 | 100.6
+a2a_2 | 83.0 | 81.0 | 1037.9 | 0.8 | 85.2
+TP-MoE | 311.9 | 308.6 | 1395.9 | 3.1 | 124.4
+TP-attn | 268.3 | 265.5 | 411.9 | 2.6 | 69.6
+AR | 0.0 | 0.0 | 0.0 | 0.0 | 0.0
+DP | 0.0 | 0.0 | 0.0 | 0.0 | 3.4
+expert_GEMM | 3829.7 | 3780.6 | 3864.4 | 37.4 | 856.5
+MoE_other | 426.9 | 424.1 | 985.1 | 4.2 | 119.3
+dense_other | 1726.5 | 1707.6 | 1788.1 | 16.8 | 389.0
+idle | 3429.2 | 218.8 | 4187.1 | 33.7 | 634.6
+NCCL wall (union) median % of span 7.4; compute wall median % of span 58.5
+
+### rank 6: per layer index (median over 8 micro-batches), ms: fwd span | fwd a2a_1+a2a_2 | fwd expert GEMM || bwd span | bwd a2a | bwd expert GEMM
+L01 | 11.10 | 0.18 | 1.94 || 10.52 | 0.16 | 3.66
+L02 | 10.16 | 0.18 | 1.94 || 10.14 | 0.17 | 3.84
+L03 | 10.41 | 0.16 | 1.94 || 10.12 | 0.16 | 3.81
+L04 | 10.26 | 0.17 | 1.94 || 10.16 | 0.16 | 3.84
+L05 | 10.28 | 0.16 | 1.94 || 10.52 | 0.16 | 3.79
+L06 | 10.17 | 0.17 | 1.94 || 10.11 | 0.17 | 3.86
+L07 | 9.85 | 0.17 | 1.94 || 10.14 | 0.17 | 3.84
+L08 | 9.89 | 0.16 | 1.94 || 10.14 | 0.17 | 3.85
+L09 | 9.93 | 0.16 | 1.94 || 10.14 | 0.17 | 3.83
+L10 | 9.87 | 0.17 | 1.94 || 10.12 | 0.16 | 3.81
+L11 | 10.09 | 0.17 | 1.94 || 10.24 | 0.17 | 3.82
+L12 | 9.80 | 0.16 | 1.94 || 10.12 | 0.17 | 3.84
+L13 | 9.96 | 0.17 | 1.94 || 10.16 | 0.16 | 3.84
+L14 | 9.86 | 0.17 | 1.94 || 10.22 | 0.16 | 3.84
+L15 | 9.77 | 0.17 | 1.94 || 10.26 | 0.16 | 3.80
+L16 | 9.70 | 0.17 | 1.94 || 10.19 | 0.17 | 3.83
+L17 | 9.67 | 0.17 | 1.94 || 10.18 | 0.16 | 3.82
+L18 | 9.61 | 0.17 | 1.94 || 10.48 | 0.16 | 3.82
+L19 | 9.78 | 0.17 | 1.94 || 10.15 | 0.17 | 3.84
+L20 | 9.63 | 0.17 | 1.94 || 10.82 | 0.17 | 3.84
+L21 | 9.55 | 0.16 | 1.94 || 10.14 | 0.17 | 3.82
+L22 | 9.54 | 0.16 | 1.94 || 10.17 | 0.17 | 3.83
+L23 | 9.58 | 0.17 | 1.94 || 10.19 | 0.16 | 3.84
+L24 | 9.63 | 0.16 | 1.94 || 10.56 | 0.17 | 3.82
+L25 | 9.78 | 0.17 | 1.94 || 10.18 | 0.17 | 3.83
+L26 | 9.65 | 0.17 | 1.94 || 10.16 | 0.17 | 3.78
+L27 | 9.60 | 0.17 | 1.94 || 10.24 | 0.16 | 3.81
+L28 | 9.56 | 0.17 | 1.94 || 10.25 | 0.17 | 3.81
+L29 | 9.58 | 0.17 | 1.94 || 10.62 | 0.17 | 3.78
+L30 | 9.57 | 0.16 | 1.94 || 10.31 | 0.17 | 3.82
+L31 | 9.79 | 0.17 | 1.94 || 10.76 | 0.17 | 3.81
+L32 | 9.82 | 0.16 | 1.94 || 10.85 | 0.17 | 3.83
+
+rank 6 totals over all layer instances (ms): a2a_1 276.7, a2a_2 166.8, TP-MoE 220.0, TP-attn 124.5, AR 1.7, DP 7.0, expert_GEMM 1474.9, MoE_other 206.5, dense_other 666.8, idle 2213.4, span 5332.7
+layer instances cover 90.8% of the step
+
+### rank 6: Kineto In-bytes vs. Chakra ET comm_size, per pg matched by call order
+pg 0: {'et': 4, 'kineto': 4, 'size_equal': 4, 'max_abs_dur_diff_us': 0.6160000000000139}
+pg 1: {'et': 8, 'kineto': 8, 'size_equal': 8, 'max_abs_dur_diff_us': 0.7599999999999998}
+pg 5: {'et': 36, 'kineto': 36, 'size_equal': 36, 'max_abs_dur_diff_us': 0.9840000000000089}
+pg 25: {'et': 2369, 'kineto': 2369, 'size_equal': 2369, 'max_abs_dur_diff_us': 0.9989999999999952}
+pg 55: {'et': 256, 'kineto': 256, 'size_equal': 256, 'max_abs_dur_diff_us': 0.9770000000000003}
+pg 57: {'et': 1024, 'kineto': 1024, 'size_equal': 1024, 'max_abs_dur_diff_us': 0.9990000000000236}
+
+## NCCL kernels: achieved bus bandwidth, per held SM, and time not explained by data movement at peak
+bus bytes: AG (n-1)/n*out, RS (n-1)/n*in, AR 2(n-1)/n*in, a2a (n-1)/n*in; t_peak = bus/peak; unexplained = 1 - sum(t_peak)/sum(dur)  (upper bound on wait/sync/latency share)
+rank | type | role | n | kernels | CTAs | median per-peer KiB | sum dur ms | median busBW GB/s | p95 busBW | max busBW | median GB/s per held SM | unexplained % (time-weighted)
+0 | ALL_TO_ALL | EP | 4 | 1024 | [(32, 1024)] | 8192.0 | 1723.2 | 22.2 | 306.1 | 314.2 | 0.70 | 96.7
+0 | ALL_GATHER | TP | 2 | 1304 | [(24, 1304)] | 16384.0 | 334.6 | 186.6 | 222.2 | 225.9 | 7.77 | 79.8
+0 | REDUCE_SCATTER | TP | 2 | 1040 | [(24, 1040)] | 16384.0 | 258.8 | 182.3 | 207.8 | 212.0 | 7.60 | 77.6
+0 | REDUCE_SCATTER | DP | 4 | 18 | [(24, 18)] | 20520.0 | 49.5 | 24.5 | 24.9 | 50.5 | 1.02 | 94.6
+0 | ALL_REDUCE | AR | 2 | 281 | [(1, 256), (2, 24)] | 0.0 | 19.2 | 0.0 | 1.3 | 28.8 | 0.00 | 100.0
+0 | ALL_GATHER | DP | 4 | 18 | [(24, 18)] | 20520.0 | 12.0 | 89.3 | 281.2 | 282.8 | 3.72 | 77.6
+0 | ALL_REDUCE | AR | 4 | 8 | [(1, 8)] | 0.0 | 10.5 | 0.0 | 0.0 | 0.0 | 0.00 | 100.0
+0 | ALL_REDUCE | AR | 8 | 2 | [(1, 2)] | 0.0 | 1.8 | 0.0 | 0.0 | 0.0 | 0.00 | 100.0
+2 | ALL_TO_ALL | EP | 4 | 1024 | [(32, 1024)] | 8192.0 | 2132.9 | 20.7 | 57.6 | 309.9 | 0.65 | 97.3
+2 | ALL_GATHER | TP | 2 | 1304 | [(24, 1304)] | 16384.0 | 232.5 | 187.9 | 223.1 | 226.5 | 7.83 | 70.9
+2 | REDUCE_SCATTER | TP | 2 | 1040 | [(24, 1040)] | 16384.0 | 182.7 | 182.7 | 205.4 | 210.7 | 7.61 | 68.3
+2 | REDUCE_SCATTER | DP | 4 | 18 | [(24, 18)] | 20520.0 | 48.8 | 24.3 | 26.0 | 50.9 | 1.01 | 94.5
+2 | ALL_REDUCE | AR | 2 | 281 | [(1, 256), (2, 24)] | 0.0 | 14.6 | 0.0 | 1.9 | 55.6 | 0.00 | 100.0
+2 | ALL_GATHER | DP | 4 | 18 | [(24, 18)] | 20520.0 | 11.3 | 91.5 | 282.9 | 284.4 | 3.81 | 76.2
+2 | ALL_REDUCE | AR | 4 | 8 | [(1, 8)] | 0.0 | 10.6 | 0.0 | 0.0 | 0.0 | 0.00 | 100.0
+2 | ALL_REDUCE | AR | 8 | 2 | [(1, 2)] | 0.0 | 3.4 | 0.0 | 0.0 | 0.0 | 0.00 | 100.0
+2 | BROADCAST | AR | 8 | 2 | [(1, 2)] | 0.0 | 1.7 | 0.0 | 0.0 | 0.0 | 0.00 | 100.0
+3 | ALL_TO_ALL | EP | 4 | 1024 | [(32, 1024)] | 8192.0 | 1900.2 | 21.7 | 251.1 | 312.0 | 0.68 | 97.0
+3 | ALL_GATHER | TP | 2 | 1304 | [(24, 1304)] | 16384.0 | 473.2 | 148.6 | 218.5 | 226.7 | 6.19 | 85.7
+3 | REDUCE_SCATTER | TP | 2 | 1040 | [(24, 1040)] | 16384.0 | 185.3 | 185.6 | 207.8 | 212.4 | 7.73 | 68.8
+3 | REDUCE_SCATTER | DP | 4 | 18 | [(24, 18)] | 20520.0 | 34.1 | 36.7 | 41.0 | 53.6 | 1.53 | 92.2
+3 | ALL_REDUCE | AR | 2 | 281 | [(1, 256), (2, 24)] | 0.0 | 28.1 | 0.0 | 1.2 | 83.9 | 0.00 | 100.0
+3 | ALL_REDUCE | AR | 4 | 8 | [(1, 8)] | 0.0 | 7.4 | 0.0 | 0.0 | 0.0 | 0.00 | 100.0
+3 | ALL_GATHER | DP | 4 | 18 | [(24, 18)] | 20520.0 | 5.7 | 231.9 | 287.5 | 288.5 | 9.66 | 53.0
+3 | BROADCAST | AR | 8 | 2 | [(1, 2)] | 0.0 | 2.4 | 0.0 | 0.0 | 0.0 | 0.00 | 100.0
+3 | ALL_REDUCE | AR | 8 | 2 | [(1, 2)] | 0.0 | 1.5 | 0.0 | 0.0 | 0.0 | 0.00 | 100.0
+6 | ALL_TO_ALL | EP | 4 | 1024 | [(32, 1024)] | 8192.0 | 443.5 | 303.6 | 311.6 | 315.7 | 9.49 | 87.1
+6 | ALL_GATHER | TP | 2 | 1304 | [(24, 1304)] | 16384.0 | 212.5 | 191.1 | 224.9 | 228.1 | 7.96 | 68.1
+6 | REDUCE_SCATTER | TP | 2 | 1040 | [(24, 1040)] | 16384.0 | 137.0 | 187.0 | 211.4 | 212.8 | 7.79 | 57.8
+6 | ALL_GATHER | DP | 4 | 18 | [(24, 18)] | 20520.0 | 4.4 | 283.1 | 286.6 | 287.6 | 11.79 | 39.3
+6 | REDUCE_SCATTER | DP | 4 | 18 | [(24, 18)] | 20520.0 | 4.4 | 275.2 | 278.0 | 288.6 | 11.47 | 38.8
+6 | ALL_REDUCE | AR | 4 | 8 | [(1, 8)] | 0.0 | 3.1 | 0.0 | 0.0 | 0.0 | 0.00 | 100.0
+6 | BROADCAST | AR | 8 | 2 | [(1, 2)] | 0.0 | 2.6 | 0.0 | 0.0 | 0.0 | 0.00 | 100.0
+6 | ALL_REDUCE | AR | 2 | 281 | [(1, 256), (2, 24)] | 0.0 | 2.0 | 0.0 | 1.9 | 83.5 | 0.00 | 99.7
+6 | ALL_REDUCE | AR | 8 | 2 | [(1, 2)] | 0.0 | 0.7 | 0.0 | 0.0 | 0.0 | 0.00 | 100.0
+
+### all 4 ranks pooled: excess over the fastest same-size kernel (empirical wait estimate)
+for each (type, role, group size, in-bytes) the minimum duration over all 4 ranks is taken as the 'moving' time;
+excess = sum(dur - min_dur) / sum(dur). This is a tighter, empirical estimate of time spent waiting/skewed.
+type | role | n | in MiB | kernels | min dur us | busBW at min GB/s | median dur us | sum dur ms | excess over min %
+ALL_TO_ALL | EP | 4 | 32.00 | 4096 | 79.7 | 315.7 | 1043.5 | 6199.8 | 94.7
+ALL_GATHER | TP | 2 | 32.00 | 2048 | 147.1 | 228.1 | 153.0 | 795.8 | 62.1
+ALL_GATHER | TP | 2 | 16.00 | 3168 | 85.1 | 197.1 | 91.3 | 457.0 | 41.0
+REDUCE_SCATTER | TP | 2 | 64.00 | 2048 | 157.7 | 212.8 | 163.6 | 424.7 | 24.0
+REDUCE_SCATTER | TP | 2 | 32.00 | 2112 | 88.4 | 189.9 | 93.1 | 339.0 | 45.0
+REDUCE_SCATTER | DP | 4 | 80.16 | 60 | 226.7 | 278.0 | 2208.2 | 107.8 | 87.4
+ALL_REDUCE | AR | 2 | 0.00 | 1024 | 6.0 | 0.0 | 7.1 | 62.3 | 90.1
+ALL_REDUCE | AR | 4 | 0.00 | 32 | 8.1 | 0.0 | 1207.9 | 31.6 | 99.2
+ALL_GATHER | DP | 4 | 20.04 | 60 | 218.5 | 288.5 | 297.9 | 26.0 | 49.6
+REDUCE_SCATTER | DP | 4 | 125.00 | 8 | 340.6 | 288.6 | 1940.1 | 21.9 | 87.5
+ALL_REDUCE | AR | 8 | 0.00 | 8 | 13.4 | 0.0 | 616.6 | 7.5 | 98.6
+REDUCE_SCATTER | DP | 4 | 80.16 | 4 | 230.0 | 274.2 | 2141.4 | 7.1 | 87.1
+BROADCAST | AR | 8 | 0.00 | 3 | 1605.4 | 0.0 | 2369.5 | 6.4 | 24.2
+ALL_GATHER | DP | 4 | 31.25 | 8 | 382.5 | 257.0 | 437.5 | 5.4 | 43.2
+(groups with < 5 ms total omitted from the table but included here) all NCCL: excess over min = 82.9% of 8496.3 ms
+rank 0: NCCL sum 2409.7 ms, of which 'moving' (sum of per-size minima) by role: AR 1.8, DP 8.6, EP 81.6, TP 270.1; comm wall 2365.3 ms; comm/compute overlap 77.2 ms; NCCL SM-time 70895 SM*ms
+rank 2: NCCL sum 2638.5 ms, of which 'moving' (sum of per-size minima) by role: AR 3.5, DP 8.6, EP 81.6, TP 270.1; comm wall 2592.7 ms; comm/compute overlap 70.1 ms; NCCL SM-time 79689 SM*ms
+rank 3: NCCL sum 2638.0 ms, of which 'moving' (sum of per-size minima) by role: AR 3.5, DP 8.6, EP 81.6, TP 270.1; comm wall 2608.6 ms; comm/compute overlap 67.1 ms; NCCL SM-time 77605 SM*ms
+rank 6: NCCL sum 810.1 ms, of which 'moving' (sum of per-size minima) by role: AR 3.5, DP 8.6, EP 81.6, TP 270.1; comm wall 810.1 ms; comm/compute overlap 12.4 ms; NCCL SM-time 22800 SM*ms
+
+### all 4 ranks pooled, by type and per-peer size regime
+type | role | n | regime | kernels | sum dur ms | median busBW GB/s | median GB/s per held SM | unexplained %
+ALL_TO_ALL | EP | 4 | all | 4096 | 6199.8 | 24.1 | 0.75 | 96.3
+ALL_TO_ALL | EP | 4 | >=64KiB/peer | 4096 | 6199.8 | 24.1 | 0.75 | 96.3
+ALL_GATHER | TP | 2 | all | 5216 | 1252.8 | 186.7 | 7.78 | 78.4
+ALL_GATHER | TP | 2 | >=64KiB/peer | 5216 | 1252.8 | 186.7 | 7.78 | 78.4
+REDUCE_SCATTER | TP | 2 | all | 4160 | 763.8 | 185.0 | 7.71 | 69.7
+REDUCE_SCATTER | TP | 2 | >=64KiB/peer | 4160 | 763.8 | 185.0 | 7.71 | 69.7
+REDUCE_SCATTER | DP | 4 | all | 72 | 136.8 | 32.4 | 1.35 | 92.2
+REDUCE_SCATTER | DP | 4 | >=64KiB/peer | 72 | 136.8 | 32.4 | 1.35 | 92.2
+ALL_REDUCE | AR | 2 | all | 1124 | 63.9 | 0.0 | 0.00 | 100.0
+ALL_REDUCE | AR | 2 | <64KiB/peer | 1120 | 63.7 | 0.0 | 0.00 | 100.0
+ALL_REDUCE | AR | 2 | >=64KiB/peer | 4 | 0.2 | 69.6 | 2.90 | 88.4
+ALL_GATHER | DP | 4 | all | 72 | 33.3 | 217.4 | 9.06 | 67.9
+ALL_GATHER | DP | 4 | >=64KiB/peer | 72 | 33.3 | 217.4 | 9.06 | 67.9
+ALL_REDUCE | AR | 4 | all | 32 | 31.6 | 0.0 | 0.00 | 100.0
+ALL_REDUCE | AR | 4 | <64KiB/peer | 32 | 31.6 | 0.0 | 0.00 | 100.0
+ALL_REDUCE | AR | 8 | all | 8 | 7.5 | 0.0 | 0.00 | 100.0
+ALL_REDUCE | AR | 8 | <64KiB/peer | 8 | 7.5 | 0.0 | 0.00 | 100.0
+BROADCAST | AR | 8 | all | 6 | 6.8 | 0.0 | 0.00 | 100.0
+BROADCAST | AR | 8 | <64KiB/peer | 6 | 6.8 | 0.0 | 0.00 | 100.0
+
+all NCCL kernels, 4 ranks pooled: 14786 kernels, 8496.3 ms; time explained by data movement at 450.0 GB/s = 8.9%, unexplained = 91.1%
+per-SM rate needed to reach the NVLink peak: 32 CTAs -> 14.1 GB/s/SM, 24 CTAs -> 18.8 GB/s/SM
+
+(summary written to /scratch/harshanavkis/loom-proj/motivation-experiments/m3-sm-share/chakra/moe_summary_Mixtral-8x7B.json)
