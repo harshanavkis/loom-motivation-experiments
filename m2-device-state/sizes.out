@@ -1,0 +1,37 @@
+== NVSHMEM IBGDA device structs (nvshmem_common_ibgda.h) ==
+nvshmemi_ibgda_device_qp_t                              184
+nvshmemi_ibgda_device_qp_management_t                    96
+nvshmemi_ibgda_device_cq_t                               72
+nvshmemi_ibgda_device_dct_t                              48
+nvshmemi_ibgda_device_key_t                              16
+nvshmemi_ibgda_device_local_only_mhandle_t               96
+nvshmemi_ibgda_device_state_t                          8384
+  offsetof(nvshmemi_ibgda_device_state_t, constmem) = 56
+  offsetof(nvshmemi_ibgda_device_state_t, globalmem) = 8248
+  sizeof(state.constmem) = 8192
+  offsetof(nvshmemi_ibgda_device_qp_t, tx_wq) = 40
+  offsetof(nvshmemi_ibgda_device_qp_t, mvars) = 88
+== mlx5 WQE / CQE building blocks (rdma-core mlx5dv.h) ==
+struct mlx5_wqe_ctrl_seg                                 16
+struct mlx5_wqe_raddr_seg                                16
+struct mlx5_wqe_data_seg                                 16
+struct mlx5_wqe_atomic_seg                               16
+struct mlx5_wqe_inl_data_seg                              4
+struct mlx5_wqe_av                                       48
+struct mlx5_cqe64                                        64
+  MLX5_SEND_WQE_BB = 64
+== NVSHMEM 3.8 batch-RMA pending-QP bitmap: bytes for qp_count, 4096 slots ==
+  qp_count=    5 -> 32768 B
+  qp_count=   49 -> 49152 B
+  qp_count=  385 -> 229376 B
+  qp_count=  769 -> 425984 B
+  qp_count=  257 -> 163840 B
+  qp_count=  257 -> 163840 B
+  qp_count=  257 -> 163840 B
+struct doca_gpu_dev_verbs_qp                    296
+struct doca_gpu_dev_verbs_cq                     64
+struct doca_gpu_dev_verbs_wqe                    64
+struct doca_gpunetio_ib_mlx5_cqe64               64
+struct ncclGinGdakiGPUContext                    88
+struct ncclGinGdakiMemHandle                     16
+  offsetof(qp, cq_sq) = 160
