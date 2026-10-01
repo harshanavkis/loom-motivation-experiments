@@ -2,7 +2,7 @@
 """Loom motivation figures, in the style of jigsaw-plotting-scripts/plot_hw_exp.py.
 
 Figure 1 (intro, 1x3): (a) Mixtral-8x22B bytes per MoE layer by fabric (Chakra ET),
-(b) MoE dispatch latency, GPU-initiated vs CPU proxy (steve H200 + CX-7),
+(b) MoE dispatch latency, GPU-initiated vs CPU proxy, both packed (steve H200 + CX-7),
 (c) kernel -> data delivered for one 8 B remote transfer, per initiation path, plus the
 the unified-contract bound as a band (kernel store + fence, the NIC's own work, one load).
 Figure 2 (Section 2, single column): compute left vs SMs held for communication.
@@ -90,14 +90,17 @@ def mixtral_8x22b_layer_bytes():
 
 
 def dispatch_sweep(ctas=20):
-    """Median dispatch latency (us), idle, from dispatch_sweep_all.csv."""
+    """Median dispatch latency (us), idle, both paths packed per destination (like for like):
+    GPU-initiated from dispatch_ibgda --block, CPU proxy "block" from dispatch_sweep_all.csv."""
     rows = []
+    for H in (1024, 7168):
+        for line in open(os.path.join(CX7, f'dispatch_ibgda_block_H{H}_load0.csv')):
+            f = line.strip().split(',')
+            if f[0] == 'ibgda_block':
+                rows.append(('gpu-initiated', int(f[1]), int(f[2]), int(f[3]), int(f[4]), float(f[7])))
     for line in open(os.path.join(CX7, 'dispatch_sweep_all.csv')):
         f = line.strip().split(',')
-        if f[0] == 'ibgda' and len(f) >= 8:
-            H, load, T, c, med = int(f[1]), int(f[2]), int(f[3]), int(f[4]), float(f[7])
-            rows.append(('gpu-initiated', H, load, T, c, med))
-        elif f[0] == 'proxy' and len(f) >= 9 and f[3] == 'block':
+        if f[0] == 'proxy' and len(f) >= 9 and f[3] == 'block':
             H, load, T, c, med = int(f[1]), int(f[2]), int(f[4]), int(f[5]), float(f[7])
             rows.append(('cpu-proxy', H, load, T, c, med))
     df = pd.DataFrame(rows, columns=['variant', 'H', 'load', 'tokens', 'ctas', 'us'])

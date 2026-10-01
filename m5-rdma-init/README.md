@@ -166,6 +166,21 @@ Three regimes:
 - Everything shares one NIC and one GPU (loopback).
 - The IBGDA per-put SM cost (6–8 µs) is hidden here because many warps post in parallel and the NIC is the bottleneck. It shows up in held SMs (M3c), not in dispatch time.
 
+**Like for like: GPU-initiated with the same packing** (`dispatch_ibgda --block`, `dispatch_ibgda_block_H{1024,7168}_load{0,1}.csv`, 2026-10-01). Regime 2 above compared a *packed* proxy with *per-token* GPU puts. With `--block` the kernel routes and packs per destination exactly like `dispatch_pack`, and the last CTA puts one block per destination (8 warp puts) + quiet. 20 CTAs, idle, µs:
+
+| H | tokens | B1 packed | B2 packed | B2 / B1 | B1 per token | B2 per token | B2 / B1 |
+|---|---|---|---|---|---|---|---|
+| 1 KiB | 16 | 43.1 | 189.8 | 4.4 | 77.2 | 196.1 | 2.5 |
+| 1 KiB | 32 | 44.2 | 203.1 | 4.6 | 78.4 | 268.9 | 3.4 |
+| 1 KiB | 128 | 80.1 | 172.4 | 2.2 | 180.9 | 468.8 | 2.6 |
+| 1 KiB | 1024 | 413.5 | 488.2 | 1.2 | 1,100.4 | 2,413.7 | 2.2 |
+| 1 KiB | 4096 | 1,597.4 | 1,575.7 | 0.99 | 4,637.8 | 9,265.2 | 2.0 |
+| 7 KiB | 16 | 86.3 | 212.4 | 2.5 | 92.1 | 214.9 | 2.3 |
+| 7 KiB | 128 | 367.1 | 464.4 | 1.3 | 367.7 | 499.7 | 1.4 |
+| 7 KiB | 4096 | 10,947 | 10,662 | 0.97 | 10,705 | 10,793 | 1.0 |
+
+With the same packing, GPU initiation is never slower beyond 3% (the NIC-bandwidth-bound points) and 1.6–4.6× faster at 16–32 tokens. The "proxy wins by 2.1–2.9×" of regime 2 was packing, not the poster. Figure 1b plots both paths packed.
+
 ### Copy engine triggered from a kernel (`ce_triggered.cu`)
 
 A copy engine cannot be *created* from device code, but a pre-enqueued copy can be *triggered* by a kernel.
@@ -249,6 +264,7 @@ cd ~/loom-experiments/latency && $NUMA -N 0 -m 0 ./ce_triggered < /dev/null > ce
 ~/loom-experiments/latency/run_nic_post.sh                                           # nic_post_numa0.csv, about 1 min
 ~/loom-experiments/latency/run_dispatch_ce.sh                                        # dispatch_ce_H*_load*.csv, about 15 min
 sudo ~/loom-experiments/gpu-posted/run_dispatch.sh < /dev/null                       # B1 sweep: dispatch_ibgda_H{1024,7168}_load{0,1}.csv
+sudo ~/loom-experiments/gpu-posted/run_dispatch_block.sh < /dev/null                 # B1 packed: dispatch_ibgda_block_H*_load*.csv
 ~/loom-experiments/latency/run_dispatch_proxy.sh                                      # B2 sweep: dispatch_proxy_H*_load*.csv
 cd ~/loom-experiments/latency && $NUMA -N 0 -m 0 ./dispatch_proxy < /dev/null > dispatch_proxy.csv
 sudo ~/loom-experiments/nvshmem-loopback/run_put_lat.sh        # put_lat_steve.txt
@@ -277,6 +293,7 @@ sudo ~/loom-experiments/nvshmem-loopback/run_put_lat.sh load   # put_lat_steve_l
 - `dispatch_ce_H{1024,7168}_load{0,1}.csv`: its outputs.
 - `dispatch_ibgda.cu`, `run_dispatch.sh`, `build_gpu_posted.sh`: the B1 dispatch benchmark (NVSHMEM; root for memlock). The runnable copy is in `~/loom-experiments/gpu-posted`.
 - `dispatch_ibgda.csv`: its outputs.
+- `run_dispatch_block.sh`, `dispatch_ibgda_block_H{1024,7168}_load{0,1}.csv`: B1 with `--block` (packed per destination, like B2 block).
 - `dispatch_proxy.cu`: the B2 dispatch benchmark (verbs + CPU proxy).
 - `dispatch_proxy.csv`: its outputs.
 - `run_dispatch_proxy.sh`: the B2 sweep (H × load).

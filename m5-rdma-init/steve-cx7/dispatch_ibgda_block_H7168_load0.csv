@@ -1,0 +1,12 @@
+# B1 GPU-initiated dispatch (IBGDA, packed per destination, one warp nbi put per block), H=7168 E=256 R=8 topk=8 load=0, 24 QPs/peer
+test,H,load,tokens,ctas,warps_per_cta,messages,median_us,p10_us,p90_us,GBps
+ibgda_block,7168,0,16,8,8,90,89.5,82.9,104.7,7.21
+ibgda_block,7168,0,16,20,8,90,86.3,81.5,96.1,7.47
+ibgda_block,7168,0,32,8,8,170,124.4,117.2,141.2,9.80
+ibgda_block,7168,0,32,20,8,170,123.5,117.3,139.9,9.87
+ibgda_block,7168,0,128,8,8,683,376.0,358.2,384.8,13.02
+ibgda_block,7168,0,128,20,8,683,367.1,345.4,377.6,13.34
+ibgda_block,7168,0,1024,8,8,5446,2784.9,2749.9,2795.2,14.02
+ibgda_block,7168,0,1024,20,8,5446,2666.9,2657.2,2695.2,14.64
+ibgda_block,7168,0,4096,8,8,21711,11454.1,11430.7,11487.8,13.59
+ibgda_block,7168,0,4096,20,8,21711,10947.2,10922.7,10981.5,14.22

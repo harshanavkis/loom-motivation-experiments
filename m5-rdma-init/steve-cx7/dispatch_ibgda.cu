@@ -3,6 +3,9 @@
 // 2 NVSHMEM PEs on steve's H200 over the CX-7 loopback; the R "destination ranks" are R
 // regions of PE 1's receive buffer (EP-shaped traffic over one peer). Timed with CUDA events
 // around the kernel: routing -> all puts complete. Tokens: H bytes (7168 = FP8 DeepSeek-V3).
+// --block: the kernel instead routes and packs each token into a per-destination block (SM
+// copies, as dispatch_pack in dispatch_proxy.cu) and the last CTA puts one block per
+// destination: the GPU-initiated counterpart of the proxy's packed ("block") mode.
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -53,6 +56,37 @@ __global__ void dispatch(const char* tok, char* recv, int T, int H, int E, int R
   nvshmem_quiet();
 }
 
+__global__ void dispatch_block(const int4* tok, int4* send, char* recv, int T, int H, int E, int R, int topk,
+                               int* counters, int* blocks_done) {
+  const int lane = threadIdx.x & 31, warp = (blockIdx.x * blockDim.x + threadIdx.x) >> 5;
+  const int nwarps = (gridDim.x * blockDim.x) >> 5, h16 = H / 16;
+  for (int t = warp; t < T; t += nwarps) {
+    unsigned mask = 0;
+    if (lane == 0) mask = rank_mask(t, E, R, topk);
+    mask = __shfl_sync(0xffffffff, mask, 0);
+    while (mask) {
+      int r = __ffs(mask) - 1; mask &= mask - 1;
+      int slot = 0;
+      if (lane == 0) slot = atomicAdd(&counters[r], 1);
+      slot = __shfl_sync(0xffffffff, slot, 0);
+      int4* d = send + ((size_t)r * T + slot) * h16; const int4* s = tok + (size_t)t * h16;
+      for (int i = lane; i < h16; i += 32) d[i] = s[i];
+    }
+  }
+  __shared__ int last;
+  __threadfence(); __syncthreads();
+  if (threadIdx.x == 0) last = atomicAdd(blocks_done, 1) == gridDim.x - 1;
+  __syncthreads();
+  if (!last) return;
+  __threadfence();
+  const int w = threadIdx.x >> 5;                   // the last CTA: warp r puts destination r's block
+  if (w < R) {
+    size_t n = (size_t)atomicAdd(&counters[w], 0) * H;
+    if (n) nvshmemx_putmem_nbi_warp(recv + (size_t)w * T * H, (const char*)send + (size_t)w * T * H, n, 1);
+  }
+  nvshmem_quiet();
+}
+
 // background GEMM on another stream (same process), planned for 132 - reserve SMs
 struct Load {
   std::atomic<bool> stop{false}; std::atomic<int> reserve{0}; std::thread th;
@@ -76,14 +110,18 @@ struct Load {
 };
 
 int main(int argc, char** argv) {
-  int iters = 20; int H = 7168; bool load = false;
-  for (int i = 1; i < argc; i++) { if (!strcmp(argv[i], "--H")) H = atoi(argv[++i]); else if (!strcmp(argv[i], "--load")) load = true; }
+  int iters = 20; int H = 7168; bool load = false, block = false;
+  for (int i = 1; i < argc; i++) {
+    if (!strcmp(argv[i], "--H")) H = atoi(argv[++i]); else if (!strcmp(argv[i], "--load")) load = true;
+    else if (!strcmp(argv[i], "--block")) block = true;
+  }
   nvshmem_init();
   int me = nvshmem_my_pe();
   CK(cudaSetDevice(0));
   const int HMAX = 7168, E = 256, R = 8, TOPK = 8, TMAX = 4096;
   char* tok = (char*)nvshmem_malloc((size_t)TMAX * HMAX);
   char* recv = (char*)nvshmem_malloc((size_t)R * TMAX * HMAX);
+  char* send = (char*)nvshmem_malloc((size_t)R * TMAX * HMAX);   // --block: packed per destination
   const char* done_file = "/tmp/loom_dispatch_ibgda.done";
   if (me == 0) unlink(done_file);
   nvshmem_barrier_all();
@@ -92,11 +130,13 @@ int main(int argc, char** argv) {
     nvshmem_barrier_all(); nvshmem_finalize(); return 0;
   }
   int* counters; CK(cudaMalloc(&counters, R * sizeof(int)));
+  int* blocks_done; CK(cudaMalloc(&blocks_done, sizeof(int)));
   CK(cudaMemset(tok, 1, (size_t)TMAX * HMAX));
   CK(cudaDeviceSynchronize());
   Load L; if (load) { L.start(); usleep(500000); }
   cudaEvent_t a, b; CK(cudaEventCreate(&a)); CK(cudaEventCreate(&b));
-  printf("# B1 GPU-initiated dispatch (IBGDA, warp nbi puts), H=%d E=%d R=%d topk=%d load=%d, %s QPs/peer\n", H, E, R, TOPK, (int)load,
+  printf("# B1 GPU-initiated dispatch (IBGDA, %s), H=%d E=%d R=%d topk=%d load=%d, %s QPs/peer\n",
+         block ? "packed per destination, one warp nbi put per block" : "warp nbi puts", H, E, R, TOPK, (int)load,
          getenv("NVSHMEM_IBGDA_NUM_RC_PER_PE") ? getenv("NVSHMEM_IBGDA_NUM_RC_PER_PE") : "default");
   printf("test,H,load,tokens,ctas,warps_per_cta,messages,median_us,p10_us,p90_us,GBps\n");
   for (int T : {16, 32, 128, 1024, 4096})
@@ -104,8 +144,11 @@ int main(int argc, char** argv) {
       L.reserve = ctas;
       std::vector<float> v; int msgs = 0;
       for (int it = 0; it < iters + 3; it++) {
-        CK(cudaMemset(counters, 0, R * sizeof(int))); CK(cudaDeviceSynchronize());
-        CK(cudaEventRecord(a)); dispatch<<<ctas, 256>>>(tok, recv, T, H, E, R, TOPK, counters); CK(cudaEventRecord(b));
+        CK(cudaMemset(counters, 0, R * sizeof(int))); CK(cudaMemset(blocks_done, 0, sizeof(int))); CK(cudaDeviceSynchronize());
+        CK(cudaEventRecord(a));
+        if (block) dispatch_block<<<ctas, 256>>>((const int4*)tok, (int4*)send, recv, T, H, E, R, TOPK, counters, blocks_done);
+        else dispatch<<<ctas, 256>>>(tok, recv, T, H, E, R, TOPK, counters);
+        CK(cudaEventRecord(b));
         CK(cudaEventSynchronize(b)); CK(cudaGetLastError());
         float ms; CK(cudaEventElapsedTime(&ms, a, b)); if (it >= 3) v.push_back(ms * 1e3f);
         std::vector<int> c(R); CK(cudaMemcpy(c.data(), counters, R * 4, cudaMemcpyDeviceToHost));
@@ -113,7 +156,8 @@ int main(int argc, char** argv) {
       }
       std::sort(v.begin(), v.end());
       double med = v[v.size() / 2];
-      printf("ibgda,%d,%d,%d,%d,8,%d,%.1f,%.1f,%.1f,%.2f\n", H, (int)load, T, ctas, msgs, med, v[v.size() / 10], v[v.size() * 9 / 10],
+      printf("%s,%d,%d,%d,%d,8,%d,%.1f,%.1f,%.1f,%.2f\n", block ? "ibgda_block" : "ibgda", H, (int)load, T, ctas, msgs, med,
+             v[v.size() / 10], v[v.size() * 9 / 10],
              (double)msgs * H / (med * 1e-6) / 1e9);
       fflush(stdout);
     }
