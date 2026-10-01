@@ -78,6 +78,8 @@ That is the same bracket as IBGDA put + `quiet` from a kernel.
 | **CPU proxy posts (B2)** | **5.44 µs** (p99 6.40) | 5.82 µs (p99 7.36) |
 | **GPU posts (B1, IBGDA put + quiet, 1 thread)** | **12.60 µs** | — |
 | CPU time inside `ibv_post_send` | 0.075 µs | 0.33 µs |
+
+Placement, 5 runs each (`proxy_b2_placement.csv`, 2026-10-01): medians 6.27 µs (CPU + memory on the GPU's socket), 5.70 (both on the NIC's socket), 5.70 (CPU on the NIC's, memory on the GPU's), 5.86 (CPU on the GPU's, memory on the NIC's). Runs of one placement spread by up to 1.1 µs, so placement moves the proxy by at most ~0.5 µs; the single-run 5.44 vs 5.82 above is within that noise.
 | GPU time inside `nvshmem_putmem_nbi` (from `../m3-sm-share/gpu-posted`) | 6.0–7.8 µs | — |
 
 Larger messages (proxy, socket 0): 64 KiB 8.93 µs, 1 MiB 69.2 µs, 4 MiB 262 µs, i.e. converging to the ~15–16 GB/s cap for NIC writes into HBM.
