@@ -10,6 +10,9 @@
 // token buffer. The copy sizes and slots are computed on the host from the same
 // deterministic routing: they stand in for an engine that takes them from the kernel's
 // trigger. Timed with CUDA events around the kernel: routing -> all bytes delivered.
+// --sm: the other local mechanism, the one DeepEP and NCCL use for NVLink/PCIe peers: the
+// kernel routes and a warp copies each token straight into its slot of the receive buffer
+// with SM loads and stores (DeepEP LL's UNROLLED_WARP_COPY to the peer pointer). No engine.
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -70,6 +73,24 @@ __global__ void dispatch_trigger(const int4* tok, int4* send, unsigned* masks, i
   }
 }
 
+__global__ void dispatch_sm(const int4* tok, int4* recv, int T, int H, int* counters) {
+  const int lane = threadIdx.x & 31, warp = (blockIdx.x * blockDim.x + threadIdx.x) >> 5;
+  const int nwarps = (gridDim.x * blockDim.x) >> 5, h16 = H / 16;
+  for (int t = warp; t < T; t += nwarps) {
+    unsigned mask = 0;
+    if (lane == 0) mask = rank_mask(t, E, R, TOPK);
+    mask = __shfl_sync(0xffffffff, mask, 0);
+    while (mask) {
+      int r = __ffs(mask) - 1; mask &= mask - 1;
+      int slot = 0;
+      if (lane == 0) slot = atomicAdd(&counters[r], 1);
+      slot = __shfl_sync(0xffffffff, slot, 0);
+      int4* d = recv + ((size_t)r * T + slot) * h16; const int4* s = tok + (size_t)t * h16;
+      for (int i = lane; i < h16; i += 32) d[i] = s[i];
+    }
+  }
+}
+
 struct Load {  // background GEMM on another stream (same process), planned for 132 - reserve SMs
   std::atomic<bool> stop{false}, ready{false}; std::atomic<int> reserve{0}; std::thread th;
   void start() {
@@ -103,8 +124,11 @@ int main(int argc, char** argv) {
   // kernels load lazily at first launch, and that load waits for the device: it would
   // deadlock against the pre-enqueued stream wait (see ce_triggered.cu)
   setenv("CUDA_MODULE_LOADING", "EAGER", 1);
-  const int iters = 20; int H = 7168; bool load = false;
-  for (int i = 1; i < argc; i++) { if (!strcmp(argv[i], "--H")) H = atoi(argv[++i]); else if (!strcmp(argv[i], "--load")) load = true; }
+  const int iters = 20; int H = 7168; bool load = false, sm = false;
+  for (int i = 1; i < argc; i++) {
+    if (!strcmp(argv[i], "--H")) H = atoi(argv[++i]); else if (!strcmp(argv[i], "--load")) load = true;
+    else if (!strcmp(argv[i], "--sm")) sm = true;
+  }
   CK(cudaSetDevice(0)); CK(cudaFree(0));
   char *tok, *send, *recv; size_t blk = (size_t)R * TMAX * HMAX;
   CK(cudaMalloc(&tok, (size_t)TMAX * HMAX)); CK(cudaMalloc(&send, blk)); CK(cudaMalloc(&recv, blk));
@@ -119,8 +143,32 @@ int main(int argc, char** argv) {
   attr.srcLocHint.type = cudaMemLocationTypeDevice; attr.dstLocHint.type = cudaMemLocationTypeDevice;
   attr.flags = cudaMemcpyFlagPreferOverlapWithCompute;   // copy engine, not an SM kernel
   Load L; if (load) { L.start(); while (!L.ready) usleep(1000); usleep(500000); }
-  printf("# GPU-triggered copy-engine dispatch (local HBM peer), H=%d E=%d R=%d topk=%d load=%d\n", H, E, R, TOPK, (int)load);
+  printf("# %s dispatch (local HBM peer), H=%d E=%d R=%d topk=%d load=%d\n",
+         sm ? "SM-store" : "GPU-triggered copy-engine", H, E, R, TOPK, (int)load);
   printf("test,H,load,mode,tokens,ctas,messages,median_us,p10_us,p90_us,GBps\n");
+  if (sm) {
+    for (int T : {16, 32, 128, 1024, 4096})
+      for (int ctas : {8, 20}) {
+        L.reserve = ctas;
+        std::vector<float> v; int msgs = 0;
+        for (int it = 0; it < iters + 3; it++) {
+          CK(cudaMemset(counters, 0, R * 4)); CK(cudaDeviceSynchronize());
+          CK(cudaEventRecord(ea, ks));
+          dispatch_sm<<<ctas, 256, 0, ks>>>((const int4*)tok, (int4*)recv, T, H, counters);
+          CK(cudaEventRecord(eb, ks)); CK(cudaEventSynchronize(eb)); CK(cudaGetLastError());
+          float ms; CK(cudaEventElapsedTime(&ms, ea, eb)); if (it >= 3) v.push_back(ms * 1e3f);
+          std::vector<int> c(R); CK(cudaMemcpy(c.data(), counters, R * 4, cudaMemcpyDeviceToHost));
+          msgs = 0; for (int x : c) msgs += x;
+        }
+        std::sort(v.begin(), v.end());
+        double med = v[v.size() / 2];
+        printf("sm,%d,%d,store,%d,%d,%d,%.1f,%.1f,%.1f,%.2f\n", H, (int)load, T, ctas, msgs, med,
+               v[v.size() / 10], v[v.size() * 9 / 10], (double)msgs * H / (med * 1e-6) / 1e9);
+        fflush(stdout);
+      }
+    if (load) { L.stop = true; L.th.join(); }
+    return 0;
+  }
   unsigned iter = 0;
   for (int per_token = 0; per_token < 2; per_token++)
     for (int T : {16, 32, 128, 1024, 4096}) {

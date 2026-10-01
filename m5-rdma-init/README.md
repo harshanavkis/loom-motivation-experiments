@@ -270,6 +270,7 @@ The same dispatch (routing, token sizes, batches, 8/20 CTAs, GEMM load) started 
 - Token mode beats block mode: the engine runs 21,711 pre-built token copies at 64 GB/s (1 KiB) and 84 GB/s (7 KiB). The ~1.5 M copies/s in `../m3-sm-share/gpu-interference` is the driver building the copies on the host (its timer includes the enqueue), not the engine.
 - The local copy engine is not held to a NIC. Figure 1b's bound is therefore `max(CE token time, bytes / 14.8 GB/s) + 2.67 µs`: the best NIC → HBM rate in the RDMA sweeps and the NIC floor from `nic_post`. Against the best of B1/B2 it is 4.2× (1 KiB) and 2.0× (7 KiB) faster at 16 tokens, 3.5× / 1.1× at 128, and equal in prefill, where the NIC's bandwidth binds every path.
 - Under GEMM load the CE path slows by up to 6 µs at small batches (the routing kernel and the copies share the GPU with the GEMM) and stays at least 3× ahead of B1 (B1 under load: 80.8 vs 21.1 µs at 16 × 1 KiB).
+- SM stores to the local peer (`dispatch_ce --sm`, `dispatch_sm_H{1024,7168}_load{0,1}.csv`), the path DeepEP and NCCL use for NVLink peers (a warp copies each token into the peer's slot): 9.5 / 16.4 µs at 16 × 1 KiB / 7 KiB tokens, 105 / 373 µs at 4096 tokens (418 GB/s from 20 CTAs). Figure 1b (2026-10-01) plots the two local curves as measured, SM stores and copy engine, with no NIC cap. At 16 tokens they are 2.3–3.7× below the best GPU-initiated RDMA variant. The earlier capped "bound" curve is dropped.
 - TRAP: under `--load`, cuBLAS loads a new GEMM kernel the first time an SM target is used. That load waits for an idle device while the copy stream waits on the kernel's flag, and the process deadlocks at 0% GPU utilisation. The load thread now runs every SM target once before the sweep.
 
 ## Caveats / fairness
@@ -300,7 +301,7 @@ cd ~/loom-experiments/latency && $NUMA -N 0 -m 0 ./proxy_b2 20000 > proxy_b2_num
 cd ~/loom-experiments/latency && $NUMA -N 0 -m 0 ./fence_cost > fence_cost_numa0.csv
 cd ~/loom-experiments/latency && $NUMA -N 0 -m 0 ./ce_triggered < /dev/null > ce_triggered_idle.csv
 ~/loom-experiments/latency/run_nic_post.sh                                           # nic_post_numa0.csv, about 1 min
-~/loom-experiments/latency/run_dispatch_ce.sh                                        # dispatch_ce_H*_load*.csv, about 15 min
+~/loom-experiments/latency/run_dispatch_ce.sh                                        # dispatch_ce_H*_load*.csv + dispatch_sm_H*_load*.csv, about 20 min
 sudo ~/loom-experiments/gpu-posted/run_dispatch.sh < /dev/null                       # B1 sweep: dispatch_ibgda_H{1024,7168}_load{0,1}.csv
 sudo ~/loom-experiments/gpu-posted/run_dispatch_block.sh < /dev/null                 # B1 packed: dispatch_ibgda_block_H*_load*.csv
 ~/loom-experiments/gpu-posted/build_deepep_post.sh && sudo ~/loom-experiments/gpu-posted/run_deepep_post.sh   # deepep_post_*.csv
@@ -330,7 +331,7 @@ sudo ~/loom-experiments/nvshmem-loopback/run_put_lat.sh load   # put_lat_steve_l
 - `nic_post.cu`, `run_nic_post.sh`: the NIC's post → completion with its PCIe reads removed one at a time.
 - `nic_post_numa0.csv`: its outputs.
 - `dispatch_ce.cu`, `run_dispatch_ce.sh`: the GPU-triggered copy-engine dispatch (the unified-contract bound).
-- `dispatch_ce_H{1024,7168}_load{0,1}.csv`: its outputs.
+- `dispatch_ce_H{1024,7168}_load{0,1}.csv`, `dispatch_sm_H{1024,7168}_load{0,1}.csv`: its outputs (copy engine; `--sm` SM stores).
 - `dispatch_ibgda.cu`, `run_dispatch.sh`, `build_gpu_posted.sh`: the B1 dispatch benchmark (NVSHMEM; root for memlock). The runnable copy is in `~/loom-experiments/gpu-posted`.
 - `dispatch_ibgda.csv`: its outputs.
 - `run_dispatch_block.sh`, `dispatch_ibgda_block_H{1024,7168}_load{0,1}.csv`: B1 with `--block` (packed per destination, like B2 block).
