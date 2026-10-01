@@ -108,7 +108,7 @@ Offloading does not remove HBM traffic: a CE moving 50–67 GB/s costs triad 2.4
 | batch d2d GB/s | 0.6 | 5.3 | 10.6 | 18.4 | 46.5 | 70.9 | 81.6 | 85.6 |
 | batch d2h GB/s | 0.8 | 5.6 | 10.0 | 14.8 | 22.8 | 27.2 | 28.6 | 29.0 |
 
-At token granularity the CE manages about 1.5 M copies/s, i.e. 10–18 GB/s, well below a 400G line rate. `cudaMemcpyAsync` in a loop is 3–4× worse still. An engine that replaces the SMs' scatter/gather needs scatter-gather descriptors, as a NIC's multi-SGE WQEs have (DeepEP PR #453 uses them). One copy per token will not do.
+At token granularity this measures about 1.5 M copies/s, i.e. 10–18 GB/s. CORRECTION (2026-10-01): the timer starts before the host enqueues the batch, so this is the driver building copies on the CPU, not the engine. With the batch built before a kernel triggers it, the engine runs 21,711 token copies at 64 GB/s (1 KiB) and 84 GB/s (7 KiB) (`../../m5-rdma-init`, `dispatch_ce.cu`). The limit is descriptor generation on the host. `cudaMemcpyAsync` in a loop is 3–4× worse still. An engine that replaces the SMs' scatter/gather needs scatter-gather descriptors, as a NIC's multi-SGE WQEs have (DeepEP PR #453 uses them). One copy per token will not do.
 - **Caveat on plain `cudaMemcpyAsync` D2D:** it reaches 1431 GB/s at 16 MB (`ce_size` rows), which is SM-kernel speed. When SMs are free, the driver apparently runs large D2D copies on SMs, even though the same call completes on a CE when all SMs are held (`ce_check`). Only `cudaMemcpyBatchAsync` with `PreferOverlapWithCompute` was used as "CE" in the tables above.
 
 ### 5. CPU-posted RDMA next to compute (real NIC, steve CX-7 loopback)
@@ -127,7 +127,7 @@ The posting thread used 1.00 CPU core in both directions: perftest busy-polls it
 
 1. "On an H200, a DeepEP-style kernel that holds 8–20 SMs to move 50 GB/s (a 400G NIC's line rate) costs a concurrent BF16 expert GEMM 9.5–51% of its throughput; the copy engine moving the same bytes costs 0.1%." (gemm: `smcopy d2d 50` 90.5 / 72.7 / 48.9% at k = 8 / 16 / 20; `ce d2d 50` 99.9%.)
 2. "Even with perfect partitioning (the GEMM planned for 132−k SMs, nothing co-running), dedicating 8–20 SMs costs 8–21%." (`target` 90.3 / 88.8 / 79.1% for gemm; 91.9 / 87.1 / 87.1% for gemm_down.)
-3. "Copy engines are no drop-in replacement: at token granularity (7–14 KB) they move only 10–18 GB/s, and a single GPU's local copy engines top out at 86 GB/s. The offload engine needs scatter-gather descriptors and NIC-class bandwidth, which is Loom's engine, not the GPU's CE."
+3. "Copy engines are no drop-in replacement: the host builds their work at token granularity (7–14 KB) at only 10–18 GB/s (the engine itself runs pre-built token copies at 64–84 GB/s), and a single GPU's local copy engines top out at 86 GB/s. The offload engine needs scatter-gather descriptors and NIC-class bandwidth, which is Loom's engine, not the GPU's CE."
 4. "Pushing payload to a PCIe device with SM stores stalls the whole GPU (GEMM keeps 2–34%), while DMA of the same bytes costs 0.2%: the GPU should hand descriptors to an engine."
 
 ## Caveats / fairness

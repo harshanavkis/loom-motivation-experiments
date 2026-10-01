@@ -104,6 +104,27 @@ def dispatch_sweep(ctas=20):
     return df[(df.load == 0) & (df.ctas == ctas)]
 
 
+def dispatch_bound(ctas=20):
+    """Unified-contract bound for the same dispatches (us), idle: the GPU-triggered copy
+    engine (dispatch_ce token mode: the kernel only routes, the engine copies each token, no
+    SM copies), but no faster than the NIC can deliver the bytes (the best NIC -> HBM rate in
+    the RDMA sweeps), plus the NIC's own floor (nic_post inline + BlueFlame). Returns the
+    measured copy-engine rows and the bound."""
+    rows = []
+    for H in (1024, 7168):
+        for line in open(os.path.join(CX7, f'dispatch_ce_H{H}_load0.csv')):
+            f = line.strip().split(',')
+            if f[0] == 'ce' and f[3] == 'token' and int(f[5]) == ctas:
+                rows.append((H, int(f[4]), int(f[6]), float(f[7])))
+    ce = pd.DataFrame(rows, columns=['H', 'tokens', 'messages', 'us'])
+    rate = max(float(line.split(',')[10]) for line in open(os.path.join(CX7, 'dispatch_sweep_all.csv'))
+               if line.split(',')[0] in ('ibgda', 'proxy') and len(line.split(',')) >= 11) * 1e3   # bytes/us
+    nic = pd.read_csv(os.path.join(CX7, 'nic_post_numa0.csv'))
+    floor = nic[(nic['size'] == 8) & (nic.bf == 'on') & (nic.src == 'inline')].cqe_med_us.median()
+    ce['bound'] = np.maximum(ce.us, ce.messages * ce.H / rate) + floor
+    return ce, rate, floor
+
+
 def initiator_latency():
     """Kernel -> data delivered for an 8 B transfer (us), idle, steve."""
     out = {}
@@ -201,29 +222,46 @@ def panel_layer_bytes(ax, fs):
 
 def panel_dispatch(ax, fs):
     df = dispatch_sweep()
+    ce, _, _ = dispatch_bound()
     toks = sorted(df.tokens.unique())
     x = {t: i for i, t in enumerate(toks)}
     markers = {7168: 'o', 1024: 's'}
+    # operating windows, as shaded x ranges
+    for lo, hi, name in ((-0.3, x[128] + 0.3, 'decode'), (x[1024] - 0.3, len(toks) - 0.7, 'prefill')):
+        ax.axvspan(lo, hi, color='gray', alpha=0.12, zorder=0)
+        ax.text((lo + hi) / 2, 3.5, name, ha='center', va='bottom', fontsize=fs['legend'], color='dimgray')
     for v in ('gpu-initiated', 'cpu-proxy'):
         label, color = VARIANTS[v]
         for H, mk in markers.items():
             s = df[(df.variant == v) & (df.H == H)].sort_values('tokens')
             ax.plot([x[t] for t in s.tokens], s.us, color=color, marker=mk, markersize=12,
                     linewidth=2, markeredgecolor='k', alpha=0.9)
+    for H, mk in markers.items():
+        s = ce[ce.H == H].sort_values('tokens')
+        ax.plot([x[t] for t in s.tokens], s.us, color=VARIANTS['loom'][1], linewidth=1.5,
+                linestyle=':', marker=mk, markersize=8, markerfacecolor='none', alpha=0.8)
+        ax.plot([x[t] for t in s.tokens], s.bound, color=VARIANTS['loom'][1], marker=mk, markersize=12,
+                linewidth=4, markeredgecolor='k', alpha=0.9)
     ax.set_yscale('log')
-    ax.set_ylim(40, 2e5)          # headroom so the legend sits above the curves
+    ax.set_ylim(3, 1e6)           # room below for the window labels, above for the legend
+    ax.set_xlim(-0.5, len(toks) - 0.5)
     ax.set_xticks(range(len(toks)))
     ax.set_xticklabels([str(t) for t in toks], fontsize=fs['tick'])
     ax.tick_params(axis='y', labelsize=fs['tick'])
-    ax.yaxis.set_major_formatter(mticker.FuncFormatter(lambda v, _: f'{v:g}'))
+    ax.yaxis.set_major_locator(mticker.LogLocator(base=10, numticks=10))
+    ax.yaxis.set_major_formatter(mticker.LogFormatterMathtext())
     ax.set_xlabel('Tokens dispatched (top-8, 8 destinations)', fontsize=fs['label'])
     ax.set_ylabel('Dispatch latency [us]', fontsize=fs['label'])
     ax.grid(True, alpha=0.3)
     handles = [Line2D([0], [0], color=VARIANTS[v][1], linewidth=2) for v in ('gpu-initiated', 'cpu-proxy')]
     labels = [VARIANTS[v][0] for v in ('gpu-initiated', 'cpu-proxy')]
+    handles += [Line2D([0], [0], color=VARIANTS['loom'][1], linewidth=4),
+                Line2D([0], [0], color=VARIANTS['loom'][1], linewidth=1.5, linestyle=':')]
+    labels += ['unified (bound)', 'copy engine']
     handles += [Line2D([0], [0], color='gray', linestyle='', marker=m, markersize=12, markeredgecolor='k') for m in markers.values()]
     labels += ['7 KiB tokens', '1 KiB tokens']
-    ax.legend(handles, labels, loc='upper left', ncol=2, frameon=True, fontsize=fs['legend'])
+    ax.legend(handles, labels, loc='upper left', ncol=3, frameon=True, fontsize=fs['legend'],
+              columnspacing=0.8, handlelength=1.5)
     top_label(ax, '(b) MoE dispatch (lower is better ↓)', fs['annotation'])
 
 
@@ -242,7 +280,7 @@ def panel_initiator(ax, fs):
     # unified-contract bound as a band behind the bars: composed from measured parts
     lo, hi = unified_bound()
     ax.axhspan(lo, hi, facecolor=PASTEL[2], alpha=0.5, zorder=0, linestyle='--', edgecolor='black',
-               linewidth=1, label='unified contract (bound)')
+               linewidth=1, label='unified (bound)')
     ax.set_xlim(-0.5, len(order) - 0.1)   # room right of the bars for the band's edge values
     ax.text(len(order) - 0.15, hi, f'{hi:.1f}', ha='right', va='bottom', fontsize=fs['annotation'])
     ax.text(len(order) - 0.15, lo, f'{lo:.1f}', ha='right', va='top', fontsize=fs['annotation'])
@@ -277,9 +315,16 @@ def figure2(out_dir):
         label, color = VARIANTS[v]
         ax.plot(x, c[v], color=color, marker=mk, markersize=ms, linewidth=lw, linestyle=ls,
                 markeredgecolor='k', alpha=0.9, label=label)
-    for v, ls in (('copy-engine', '-.'), ('cpu-proxy', ':')):
-        label, color = VARIANTS[v]
-        ax.axhline(c[v], color=color, linewidth=2, linestyle=ls, label=f'{label} (holds no SMs)')
+    label, color = VARIANTS['cpu-proxy']
+    ax.axhline(c['cpu-proxy'], color=color, linewidth=2, linestyle=':', label=f'{label} (holds a CPU core)')
+    # unified-contract bound: the kernel starts the transfer like a local copy-engine copy
+    ax.axhline(c['copy-engine'], color=VARIANTS['loom'][1], linewidth=3, linestyle='-.',
+               label='unified contract (bound): copy engine')
+    ax.fill_between(x, c['gpu-initiated'], c['copy-engine'], color=PASTEL[2], alpha=0.5,
+                    label='reclaimed vs gpu-initiated')
+    gain = c['copy-engine'] - c['gpu-initiated'][-1]
+    ax.annotate(f'+{gain:.0f} pts', xy=(x[-1], c['gpu-initiated'][-1] + gain / 2), xytext=(-12, 0),
+                textcoords='offset points', ha='right', va='center', fontsize=fs['annotation'])
     ax.set_xticks(list(x))
     ax.set_xticklabels([str(k) for k in ks], fontsize=fs['tick'])
     ax.tick_params(axis='y', labelsize=fs['tick'])
@@ -303,6 +348,9 @@ def main():
     print('layer bytes MiB:', {k: round(v, 1) for k, v in mixtral_8x22b_layer_bytes().items()})
     print('initiator us:', initiator_latency())
     print('unified bound us (store carries data, NIC reads payload):', unified_bound())
+    ce, rate, floor = dispatch_bound()
+    print(f'dispatch bound: NIC rate {rate / 1e3:.2f} GB/s, floor {floor:.2f} us')
+    print(ce.to_string(index=False))
     ks, c = held_sm_curves()
     print('held SMs', ks, {k: (np.round(v, 1).tolist() if isinstance(v, list) else round(v, 1)) for k, v in c.items()})
     d = dispatch_sweep()

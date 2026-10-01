@@ -199,6 +199,26 @@ A work-request fetch costs the NIC 1.0 µs, a payload read from GPU memory 1.45 
 
 **Unified-contract bound** (Figure 1c band): if a kernel started a remote transfer like a local one, it would pay a store + system fence (0.58 µs, `fence_cost`), the NIC's own time, and one load of a completion word in host memory (0.70 µs). That gives 3.9 µs when the store carries the data (NIC floor) and 5.4 µs when the NIC reads the payload from GPU memory, against 5.44 µs for the proxy (which also needs a core) and 12.6 µs for IBGDA. Not counted: the flight of a GPU store to the NIC (the CPU's MMIO flight is inside the NIC's time here) and any engine work beyond what the CX-7 does.
 
+### Unified-contract bound for dispatch: the GPU-triggered copy engine (`dispatch_ce.cu`)
+
+The same dispatch (routing, token sizes, batches, 8/20 CTAs, GEMM load) started the way a kernel starts a local transfer: the kernel's last CTA writes a flag in HBM that releases copies pre-enqueued on a copy-engine stream (`cuStreamWaitValue32` → `cudaMemcpyBatchAsync`, PreferOverlapWithCompute → `cuStreamWriteValue32` done), then spins on done. The destination is a buffer in the same GPU's HBM (a local peer). "token" = the kernel only routes and the engine copies each token message from the token buffer (no SM copies); "block" = the kernel packs per destination on SMs and the engine runs 8 copies. The copy list is built on the host from the same deterministic routing before the trigger; it stands in for an engine that takes descriptors from the kernel. Timed like B1/B2: CUDA events around the kernel, median of 20.
+
+| H | tokens | CE token, idle | CE token, GEMM | CE block, idle | B1 idle | B2 packed idle |
+|---|---|---|---|---|---|---|
+| 1 KiB | 16 | **15.5** | 21.1 | 20.0 | 77.2 | 189.8 |
+| 1 KiB | 128 | **26.1** | 28.8 | 27.5 | 180.9 | 172.4 |
+| 1 KiB | 4096 | **347** | 352 | 375 | 4,638 | 1,576 |
+| 7 KiB | 16 | **22.4** | 28.3 | 40.4 | 92.1 | 212.4 |
+| 7 KiB | 128 | **73.9** | 77.1 | 92.3 | 367.7 | 464.4 |
+| 7 KiB | 4096 | **1,847** | 1,857 | 2,197 | 10,705 | 10,662 |
+
+(20 CTAs, µs; all rows in `dispatch_ce_H{1024,7168}_load{0,1}.csv`.)
+
+- Token mode beats block mode: the engine runs 21,711 pre-built token copies at 64 GB/s (1 KiB) and 84 GB/s (7 KiB). The ~1.5 M copies/s in `../m3-sm-share/gpu-interference` is the driver building the copies on the host (its timer includes the enqueue), not the engine.
+- The local copy engine is not held to a NIC. Figure 1b's bound is therefore `max(CE token time, bytes / 14.8 GB/s) + 2.67 µs`: the best NIC → HBM rate in the RDMA sweeps and the NIC floor from `nic_post`. Against the best of B1/B2 it is 4.2× (1 KiB) and 2.0× (7 KiB) faster at 16 tokens, 3.5× / 1.1× at 128, and equal in prefill, where the NIC's bandwidth binds every path.
+- Under GEMM load the CE path slows by up to 6 µs at small batches (the routing kernel and the copies share the GPU with the GEMM) and stays at least 3× ahead of B1 (B1 under load: 80.8 vs 21.1 µs at 16 × 1 KiB).
+- TRAP: under `--load`, cuBLAS loads a new GEMM kernel the first time an SM target is used. That load waits for an idle device while the copy stream waits on the kernel's flag, and the process deadlocks at 0% GPU utilisation. The load thread now runs every SM target once before the sweep.
+
 ## Caveats / fairness
 
 - **The cross-socket topology on steve inflates GPU-posted latency more than CPU-posted.** The GPU-posted path crosses the socket interconnect several extra times per operation: doorbell write, work-request fetch from HBM, completion write to HBM. Each GPU↔NIC access across sockets costs about 1 µs here (GPU vs. host memory at an otherwise equal method: 2.64 vs. 1.48 µs one-way). So treat 10.7 µs as an upper bound for well-placed GPUs and NICs, not a typical value. The published NVSHMEM IBGDA inter-node put figure (7.5 µs one-way, 256 B, including the wire; arXiv 2606.05951) is the other end of the bracket.
@@ -227,6 +247,7 @@ cd ~/loom-experiments/latency && $NUMA -N 0 -m 0 ./proxy_b2 20000 > proxy_b2_num
 cd ~/loom-experiments/latency && $NUMA -N 0 -m 0 ./fence_cost > fence_cost_numa0.csv
 cd ~/loom-experiments/latency && $NUMA -N 0 -m 0 ./ce_triggered < /dev/null > ce_triggered_idle.csv
 ~/loom-experiments/latency/run_nic_post.sh                                           # nic_post_numa0.csv, about 1 min
+~/loom-experiments/latency/run_dispatch_ce.sh                                        # dispatch_ce_H*_load*.csv, about 15 min
 sudo ~/loom-experiments/gpu-posted/run_dispatch.sh < /dev/null                       # B1 sweep: dispatch_ibgda_H{1024,7168}_load{0,1}.csv
 ~/loom-experiments/latency/run_dispatch_proxy.sh                                      # B2 sweep: dispatch_proxy_H*_load*.csv
 cd ~/loom-experiments/latency && $NUMA -N 0 -m 0 ./dispatch_proxy < /dev/null > dispatch_proxy.csv
@@ -249,9 +270,11 @@ sudo ~/loom-experiments/nvshmem-loopback/run_put_lat.sh load   # put_lat_steve_l
 - `ce_triggered.cu`: the kernel-triggered copy engine.
 - `ce_triggered_idle.csv`: its outputs.
 - `fence_cost_numa{0,1}.csv`: its outputs with the host page on each socket.
-- `build.sh`: builds `ce_latency`, `ce_triggered`, `proxy_b2`, `fence_cost`, `dispatch_proxy` and `nic_post` (the verbs programs link nixpkgs rdma-core and libcuda).
+- `build.sh`: builds `ce_latency`, `ce_triggered`, `proxy_b2`, `fence_cost`, `dispatch_proxy`, `nic_post` and `dispatch_ce` (the verbs programs link nixpkgs rdma-core and libcuda).
 - `nic_post.cu`, `run_nic_post.sh`: the NIC's post → completion with its PCIe reads removed one at a time.
 - `nic_post_numa0.csv`: its outputs.
+- `dispatch_ce.cu`, `run_dispatch_ce.sh`: the GPU-triggered copy-engine dispatch (the unified-contract bound).
+- `dispatch_ce_H{1024,7168}_load{0,1}.csv`: its outputs.
 - `dispatch_ibgda.cu`, `run_dispatch.sh`, `build_gpu_posted.sh`: the B1 dispatch benchmark (NVSHMEM; root for memlock). The runnable copy is in `~/loom-experiments/gpu-posted`.
 - `dispatch_ibgda.csv`: its outputs.
 - `dispatch_proxy.cu`: the B2 dispatch benchmark (verbs + CPU proxy).
