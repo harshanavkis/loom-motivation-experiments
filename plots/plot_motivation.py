@@ -3,7 +3,8 @@
 
 Figure 1 (intro, 1x3): (a) Mixtral-8x22B bytes per MoE layer by fabric (Chakra ET),
 (b) MoE dispatch latency, GPU-initiated vs CPU proxy, both packed (steve H200 + CX-7),
-(c) kernel -> data delivered for one 8 B remote transfer, per initiation path, plus the
+(c) message rate of 4 B puts vs CTAs issuing, GPU-initiated vs CPU proxy, with the NIC's rated
+limit (the old (c), kernel -> 8 B delivered, panel_initiator, is no longer plotted); was: the
 the unified-contract bound as a band (kernel store + fence, the NIC's own work, one load).
 Figure 2 (Section 2, single column): compute left vs SMs held for communication.
 
@@ -167,6 +168,20 @@ def unified_bound():
     return kernel + nic['inline'], kernel + nic['gpu']
 
 
+# ConnectX-7 rated RDMA message rate (NVIDIA ConnectX-7 datasheet: 330-370 M msgs/s), the
+# hardware ceiling, drawn the way NVIDIA's IBGDA blog draws the ConnectX-6's 215 M/s
+CX7_RATED_MPPS = 330
+
+
+def message_rate():
+    """Scalar 4 B nvshmem_p rate (M ops/s) vs CTAs issuing (1024 threads each, one QP per CTA):
+    GPU-initiated (IBGDA) and CPU proxy (IBRC), NVSHMEM's shmem_p_bw on steve."""
+    m = pd.read_csv(os.path.join(CX7, 'msgrate_steve.csv'))
+    m = m[m.test == 'p_bw'].copy()
+    m['mops'] = m.GBps * 1e3 / 4
+    return m
+
+
 def held_sm_curves(ks=(4, 8, 16, 20)):
     """GEMM (up-projection) throughput as % of its baseline vs SMs held."""
     def med_runs(path, cols):
@@ -270,33 +285,27 @@ def panel_dispatch(ax, fs):
     top_label(ax, '(b) MoE dispatch (lower is better ↓)', fs['annotation'])
 
 
-def panel_initiator(ax, fs):
-    lat = initiator_latency()
-    order = ['cpu-proxy', 'gpu-initiated', 'copy-engine']
-    notes = {'cpu-proxy': '0.075 us post\n+ 1 core',
-             'gpu-initiated': f"{lat['gpu-initiated-post']:.1f} us SM\nper post",
-             'copy-engine': 'local peers\nonly'}
-    colors = {'cpu-proxy': PASTEL[3], 'gpu-initiated': PASTEL[0], 'copy-engine': PASTEL[1]}
-    hatches = {'cpu-proxy': '', 'gpu-initiated': '///', 'copy-engine': '\\\\'}
-    xs = np.arange(len(order))
-    for i, v in enumerate(order):
-        ax.bar(xs[i], lat[v], 0.6, color=colors[v], hatch=hatches[v], edgecolor='black', linewidth=1)
-        ax.text(xs[i], lat[v] + 0.3, f'{lat[v]:.1f}', ha='center', va='bottom', fontsize=fs['annotation'])
-    # unified-contract bound as a band behind the bars: composed from measured parts
-    lo, hi = unified_bound()
-    ax.axhspan(lo, hi, facecolor=PASTEL[2], alpha=0.5, zorder=0, linestyle='--', edgecolor='black',
-               linewidth=1, label='unified (bound)')
-    ax.set_xlim(-0.5, len(order) - 0.1)   # room right of the bars for the band's edge values
-    ax.text(len(order) - 0.15, hi, f'{hi:.1f}', ha='right', va='bottom', fontsize=fs['annotation'])
-    ax.text(len(order) - 0.15, lo, f'{lo:.1f}', ha='right', va='top', fontsize=fs['annotation'])
-    ax.set_xticks(xs)
-    ax.set_xticklabels([f'{VARIANTS[v][0]}\n{notes[v]}' for v in order], fontsize=fs['legend'])
-    ax.legend(loc='upper right', frameon=True, fontsize=fs['legend'])
+def panel_msgrate(ax, fs):
+    m = message_rate()
+    ctas = sorted(m.ctas.unique())
+    x = {c: i for i, c in enumerate(ctas)}
+    for tr, v, mk in (('ibgda', 'gpu-initiated', 'o'), ('ibrc', 'cpu-proxy', 's')):
+        s = m[m.transport == tr].sort_values('ctas')
+        ax.plot([x[c] for c in s.ctas], s.mops, color=VARIANTS[v][1], marker=mk, markersize=12, linewidth=2,
+                markeredgecolor='k', alpha=0.9, label=VARIANTS[v][0])
+    ax.axhline(CX7_RATED_MPPS, color=VARIANTS['loom'][1], linewidth=3, linestyle='--',
+               label='NIC rated limit (unified: no SMs)')
+    ax.set_yscale('log')
+    ax.set_ylim(1, 1e5)           # headroom so the legend sits above the curves
+    ax.set_xticks(range(len(ctas)))
+    ax.set_xticklabels([str(c) for c in ctas], fontsize=fs['tick'])
     ax.tick_params(axis='y', labelsize=fs['tick'])
-    ax.set_ylim(0, max(lat.values()) * 1.5)
-    ax.set_ylabel('Latency [us]', fontsize=fs['label'])
-    ax.grid(True, alpha=0.3, axis='y', color='gray', linestyle='-')
-    top_label(ax, '(c) Kernel → 8 B delivered (lower is better ↓)', fs['annotation'])
+    ax.yaxis.set_major_formatter(mticker.LogFormatterMathtext())
+    ax.set_xlabel('CTAs issuing 4 B puts (one SM each)', fontsize=fs['label'])
+    ax.set_ylabel('Rate [M ops/s]', fontsize=fs['label'])
+    ax.grid(True, alpha=0.3)
+    ax.legend(loc='upper left', ncol=2, frameon=True, fontsize=fs['legend'], columnspacing=0.8, handlelength=1.5)
+    top_label(ax, '(c) Message rate (higher is better ↑)', fs['annotation'])
 
 
 def figure1(out_dir):
@@ -304,7 +313,7 @@ def figure1(out_dir):
     fig, axes = plt.subplots(1, 3, figsize=E2E_COMBINED_FIGURE_SIZE)
     panel_layer_bytes(axes[0], fs)
     panel_dispatch(axes[1], fs)
-    panel_initiator(axes[2], fs)
+    panel_msgrate(axes[2], fs)
     fig.subplots_adjust(left=0.06, right=0.99, top=0.88, bottom=0.18, wspace=0.25)
     save(fig, out_dir, 'loom-motivation')
     plt.close(fig)
