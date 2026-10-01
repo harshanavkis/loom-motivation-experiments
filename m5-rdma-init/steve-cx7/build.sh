@@ -27,4 +27,8 @@ nix shell --impure nixpkgs#cudaPackages.cuda_nvcc -c nvcc -O3 -std=c++17 -arch=s
   -I"$CUDART/include" -I"$CCCL/include" -I"$RC_DEV/include" -L"$CUDART/lib" -L"$RC/lib" -L/run/opengl-driver/lib \
   -Xlinker -rpath -Xlinker "$CUDART/lib:$RC/lib:/run/opengl-driver/lib" \
   -I"$CUBLAS_INC/include" -L"$CUBLAS_LIB/lib" -Xlinker -rpath -Xlinker "$CUBLAS_LIB/lib" dispatch_proxy.cu -o dispatch_proxy -libverbs -lcublas -lcudart -lcuda
-echo built ./ce_latency ./ce_triggered ./proxy_b2 ./fence_cost ./dispatch_proxy
+nix shell --impure nixpkgs#cudaPackages.cuda_nvcc -c nvcc -O3 -std=c++17 -arch=sm_90 \
+  -I"$CUDART/include" -I"$CCCL/include" -I"$RC_DEV/include" -L"$CUDART/lib" -L"$RC/lib" -L/run/opengl-driver/lib \
+  -Xlinker -rpath -Xlinker "$CUDART/lib:$RC/lib:/run/opengl-driver/lib" \
+  nic_post.cu -o nic_post -libverbs -lcudart -lcuda
+echo built ./ce_latency ./ce_triggered ./proxy_b2 ./fence_cost ./dispatch_proxy ./nic_post

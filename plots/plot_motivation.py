@@ -4,7 +4,7 @@
 Figure 1 (intro, 1x3): (a) Mixtral-8x22B bytes per MoE layer by fabric (Chakra ET),
 (b) MoE dispatch latency, GPU-initiated vs CPU proxy (steve H200 + CX-7),
 (c) kernel -> data delivered for one 8 B remote transfer, per initiation path, plus the
-bound for a unified contract (kernel store + fence, the NIC's own work, one kernel load).
+the unified-contract bound as a band (kernel store + fence, the NIC's own work, one load).
 Figure 2 (Section 2, single column): compute left vs SMs held for communication.
 
 Every number is read from the committed result files of this repository.
@@ -123,20 +123,21 @@ def initiator_latency():
 
 def unified_bound():
     """Unified-contract bound for the same 8 B transfer (us), from measured parts only and
-    timed like the other bars (until the kernel knows the data landed): the kernel's store +
-    system fence, the NIC's own post -> completion time for the same GPU -> GPU write (the
-    time the proxy in proxy_b2 polls the CQ), and one kernel load of a completion word in
-    pinned host memory. It drops the host handoff and the SM post chain, nothing else."""
+    timed like the bars (until the kernel knows the data landed): the kernel's store +
+    system fence, the NIC's own post -> completion time (nic_post, median of the runs), and
+    one kernel load of a completion word in pinned host memory. Low edge: the store carries
+    the data (NIC floor: inline + BlueFlame, no PCIe read). High edge: the NIC reads the
+    payload from GPU memory (BlueFlame, as proxy_b2). Drops the host handoff and the SM post
+    chain, nothing else."""
     cost = {}
     for line in open(os.path.join(CX7, 'fence_cost_numa0.csv')):
         f = line.strip().split(',')
         if f[0] in ('hbm_store+fence_sys', 'sys_load'):
             cost[f[0]] = float(f[1]) / 1000
-    for line in open(os.path.join(CX7, 'proxy_b2_numa0.csv')):
-        f = line.strip().split(',')
-        if f[0] == 'proxy' and f[1] == '8':
-            nic = float(f[5])
-    return cost['hbm_store+fence_sys'], nic, cost['sys_load']
+    nic = pd.read_csv(os.path.join(CX7, 'nic_post_numa0.csv'))
+    nic = nic[(nic['size'] == 8) & (nic.bf == 'on')].groupby('src').cqe_med_us.median()
+    kernel = cost['hbm_store+fence_sys'] + cost['sys_load']
+    return kernel + nic['inline'], kernel + nic['gpu']
 
 
 def held_sm_curves(ks=(4, 8, 16, 20)):
@@ -238,20 +239,18 @@ def panel_initiator(ax, fs):
     for i, v in enumerate(order):
         ax.bar(xs[i], lat[v], 0.6, color=colors[v], hatch=hatches[v], edgecolor='black', linewidth=1)
         ax.text(xs[i], lat[v] + 0.3, f'{lat[v]:.1f}', ha='center', va='bottom', fontsize=fs['annotation'])
-    # unified-contract bound: a dashed outline marks it as composed, not measured end to end
-    trigger, nic, observe = unified_bound()
-    xb, bottom = len(order), 0
-    for h, hatch in ((trigger, ''), (nic, '..'), (observe, '')):
-        ax.bar(xb, h, 0.6, bottom=bottom, color=PASTEL[2], hatch=hatch, edgecolor='black',
-               linewidth=1, linestyle='--')
-        bottom += h
-    ax.text(xb, trigger + nic / 2, 'NIC', ha='center', va='center', fontsize=fs['annotation'])
-    ax.text(xb, bottom + 0.3, f'{bottom:.1f}', ha='center', va='bottom', fontsize=fs['annotation'])
-    ax.set_xticks(np.arange(len(order) + 1))
-    ax.set_xticklabels([f'{VARIANTS[v][0]}\n{notes[v]}' for v in order]
-                       + ['unified\n(bound)'], fontsize=fs['legend'])
+    # unified-contract bound as a band behind the bars: composed from measured parts
+    lo, hi = unified_bound()
+    ax.axhspan(lo, hi, facecolor=PASTEL[2], alpha=0.5, zorder=0, linestyle='--', edgecolor='black',
+               linewidth=1, label='unified contract (bound)')
+    ax.set_xlim(-0.5, len(order) - 0.1)   # room right of the bars for the band's edge values
+    ax.text(len(order) - 0.15, hi, f'{hi:.1f}', ha='right', va='bottom', fontsize=fs['annotation'])
+    ax.text(len(order) - 0.15, lo, f'{lo:.1f}', ha='right', va='top', fontsize=fs['annotation'])
+    ax.set_xticks(xs)
+    ax.set_xticklabels([f'{VARIANTS[v][0]}\n{notes[v]}' for v in order], fontsize=fs['legend'])
+    ax.legend(loc='upper right', frameon=True, fontsize=fs['legend'])
     ax.tick_params(axis='y', labelsize=fs['tick'])
-    ax.set_ylim(0, max(lat.values()) * 1.25)
+    ax.set_ylim(0, max(lat.values()) * 1.5)
     ax.set_ylabel('Latency [us]', fontsize=fs['label'])
     ax.grid(True, alpha=0.3, axis='y', color='gray', linestyle='-')
     top_label(ax, '(c) Kernel → 8 B delivered (lower is better ↓)', fs['annotation'])
@@ -303,7 +302,7 @@ def main():
     # print the plotted numbers so the paper text can be checked against them
     print('layer bytes MiB:', {k: round(v, 1) for k, v in mixtral_8x22b_layer_bytes().items()})
     print('initiator us:', initiator_latency())
-    print('unified bound us (store+fence, NIC post->completion, kernel load):', unified_bound())
+    print('unified bound us (store carries data, NIC reads payload):', unified_bound())
     ks, c = held_sm_curves()
     print('held SMs', ks, {k: (np.round(v, 1).tolist() if isinstance(v, list) else round(v, 1)) for k, v in c.items()})
     d = dispatch_sweep()

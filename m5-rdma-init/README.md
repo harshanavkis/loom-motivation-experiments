@@ -185,6 +185,20 @@ Everything is timed on one GPU clock: trigger → the GPU front end releases the
 - **The device → host figures are probably inflated** by the measurement: the kernel detects arrival by continuously reading pinned host memory over PCIe (about 0.7–0.8 µs per read), which likely slows the copy engine's writes. Do not quote them as copy-engine latency.
 - **Trap (the earlier hang):** with CUDA 12's default lazy module loading, the trigger kernel's *first* launch loads its module, and that load synchronises with the device, which is waiting on the kernel. Deadlock. The program sets `CUDA_MODULE_LOADING=EAGER`. The debug programs `trig_dbg*.cu` in `~/loom-experiments/latency` showed that enqueuing waits+copies alone never blocks.
 
+### The NIC's own share and the unified-contract bound (`nic_post.cu`)
+
+Of the proxy's 5.44 µs, the NIC's post → completion is the largest part. `nic_post.cu` times it for the same 8 B GPU → GPU write (one CPU thread posts and polls; ops 2 µs apart; proxy on NUMA 0) while removing the NIC's PCIe reads one at a time. The data is either in GPU memory, in host memory, or inline (inside the work request). The work request is either pushed by BlueFlame (the CPU writes it into the NIC's BAR) or fetched by the NIC (`MLX5_SHUT_UP_BF=1`). rdma-core's `MLX5_POST_SEND_PREFER_BF` defaults to on, so `proxy_b2` already used BlueFlame. Medians of 3 runs (`nic_post_numa0.csv`, each run 20,000 ops; the runs agree within 0.15 µs):
+
+| 8 B, post return → CQE seen | BlueFlame | NIC fetches the work request |
+|---|---|---|
+| data in GPU memory (as `proxy_b2`) | 4.12 µs | 5.13 µs |
+| data in host memory | 3.60 µs | 4.58 µs |
+| inline (no payload read) | **2.67 µs** | 3.71 µs |
+
+A work-request fetch costs the NIC 1.0 µs, a payload read from GPU memory 1.45 µs (host memory 0.9 µs). Inline + BlueFlame (the request and its data in one MMIO write) is the NIC's floor: 2.67 µs.
+
+**Unified-contract bound** (Figure 1c band): if a kernel started a remote transfer like a local one, it would pay a store + system fence (0.58 µs, `fence_cost`), the NIC's own time, and one load of a completion word in host memory (0.70 µs). That gives 3.9 µs when the store carries the data (NIC floor) and 5.4 µs when the NIC reads the payload from GPU memory, against 5.44 µs for the proxy (which also needs a core) and 12.6 µs for IBGDA. Not counted: the flight of a GPU store to the NIC (the CPU's MMIO flight is inside the NIC's time here) and any engine work beyond what the CX-7 does.
+
 ## Caveats / fairness
 
 - **The cross-socket topology on steve inflates GPU-posted latency more than CPU-posted.** The GPU-posted path crosses the socket interconnect several extra times per operation: doorbell write, work-request fetch from HBM, completion write to HBM. Each GPU↔NIC access across sockets costs about 1 µs here (GPU vs. host memory at an otherwise equal method: 2.64 vs. 1.48 µs one-way). So treat 10.7 µs as an upper bound for well-placed GPUs and NICs, not a typical value. The published NVSHMEM IBGDA inter-node put figure (7.5 µs one-way, 256 B, including the wire; arXiv 2606.05951) is the other end of the bracket.
@@ -212,6 +226,7 @@ NUMA=$(nix build --no-link --print-out-paths nixpkgs#numactl | grep -v -- -man |
 cd ~/loom-experiments/latency && $NUMA -N 0 -m 0 ./proxy_b2 20000 > proxy_b2_numa0.csv
 cd ~/loom-experiments/latency && $NUMA -N 0 -m 0 ./fence_cost > fence_cost_numa0.csv
 cd ~/loom-experiments/latency && $NUMA -N 0 -m 0 ./ce_triggered < /dev/null > ce_triggered_idle.csv
+~/loom-experiments/latency/run_nic_post.sh                                           # nic_post_numa0.csv, about 1 min
 sudo ~/loom-experiments/gpu-posted/run_dispatch.sh < /dev/null                       # B1 sweep: dispatch_ibgda_H{1024,7168}_load{0,1}.csv
 ~/loom-experiments/latency/run_dispatch_proxy.sh                                      # B2 sweep: dispatch_proxy_H*_load*.csv
 cd ~/loom-experiments/latency && $NUMA -N 0 -m 0 ./dispatch_proxy < /dev/null > dispatch_proxy.csv
@@ -234,7 +249,9 @@ sudo ~/loom-experiments/nvshmem-loopback/run_put_lat.sh load   # put_lat_steve_l
 - `ce_triggered.cu`: the kernel-triggered copy engine.
 - `ce_triggered_idle.csv`: its outputs.
 - `fence_cost_numa{0,1}.csv`: its outputs with the host page on each socket.
-- `build.sh`: builds `ce_latency`, `ce_triggered`, `proxy_b2`, `fence_cost` and `dispatch_proxy` (the verbs programs link nixpkgs rdma-core and libcuda).
+- `build.sh`: builds `ce_latency`, `ce_triggered`, `proxy_b2`, `fence_cost`, `dispatch_proxy` and `nic_post` (the verbs programs link nixpkgs rdma-core and libcuda).
+- `nic_post.cu`, `run_nic_post.sh`: the NIC's post → completion with its PCIe reads removed one at a time.
+- `nic_post_numa0.csv`: its outputs.
 - `dispatch_ibgda.cu`, `run_dispatch.sh`, `build_gpu_posted.sh`: the B1 dispatch benchmark (NVSHMEM; root for memlock). The runnable copy is in `~/loom-experiments/gpu-posted`.
 - `dispatch_ibgda.csv`: its outputs.
 - `dispatch_proxy.cu`: the B2 dispatch benchmark (verbs + CPU proxy).
