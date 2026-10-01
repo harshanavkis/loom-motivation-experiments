@@ -216,6 +216,17 @@ A work-request fetch costs the NIC 1.0 µs, a payload read from GPU memory 1.45 
 
 **Unified-contract bound** (Figure 1c band): if a kernel started a remote transfer like a local one, it would pay a store + system fence (0.58 µs, `fence_cost`), the NIC's own time, and one load of a completion word in host memory (0.70 µs). That gives 3.9 µs when the store carries the data (NIC floor) and 5.4 µs when the NIC reads the payload from GPU memory, against 5.44 µs for the proxy (which also needs a core) and 12.6 µs for IBGDA. Not counted: the flight of a GPU store to the NIC (the CPU's MMIO flight is inside the NIC's time here) and any engine work beyond what the CX-7 does.
 
+### Message rate: GPU-initiated vs CPU proxy, as NVIDIA's IBGDA blog compares them (`run_msgrate.sh`, 2026-10-01)
+
+The published comparisons do not show GPU initiation winning on single-message latency (the GIN paper: NVSHMEM IBRC proxy 16.0 µs round trip vs IBGDA 24.3 µs). They show it on message rate as more GPU threads issue (NVIDIA's IBGDA blog: IBRC caps at ~1.7 MOPS, IBGDA 180 MOPS at 8 CTAs). The same NVSHMEM perftests on steve (`msgrate_steve.csv`), scalar 4 B `nvshmem_p` from 1024 threads per CTA, one QP per CTA, 1 MiB per iteration:
+
+| CTAs | 1 | 2 | 4 | 8 | 16 | 32 | 64 |
+|---|---|---|---|---|---|---|---|
+| CPU proxy (IBRC), M ops/s | 2.6 | 3.2 | 3.2 | 2.5 | 3.2 | 3.2 | 3.0 |
+| GPU-initiated (IBGDA), M ops/s | 12.7 | 25.5 | 42.8 | 64.2 | **87.2** | 72.4 | 68.0 |
+
+One proxy thread is flat at ~3 M ops/s; IBGDA scales to 27× that at 16 CTAs. `shmem_put_bw` (block puts, 1 thread/CTA) does NOT reproduce the blog's 9.5× on this loopback: 8 B puts run at ~16 µs each per CTA and 64 CTAs get less bandwidth than 4, i.e. it is completion-latency bound here. It is recorded but not used.
+
 ### GPU-initiated with DeepEP's own post path (`deepep_post.cu`, 2026-10-01)
 
 Everything GPU-initiated above uses NVSHMEM's generic put. DeepEP ships a leaner post path (V1 a56d615, `csrc/kernels/legacy/ibgda_device.cuh`): warp-parallel WQE writes, a gpu-scope `__threadfence()`, gpu-scope release stores for the doorbell record and the doorbell (no system-scope fence), and one doorbell per 4 messages per QP. `deepep_post.cu` runs it, unmodified except one line, on the same IBGDA QPs as NVSHMEM's put. The one line: DeepEP indexes RC QPs PE-major (older NVSHMEM), and 3.6.5 lays them out QP-major (`rcs[id * npes + pe]`). `build_deepep_post.sh` patches that index into a copy. Unpatched, it picks the never-created QP to itself and faults.
@@ -293,6 +304,7 @@ cd ~/loom-experiments/latency && $NUMA -N 0 -m 0 ./ce_triggered < /dev/null > ce
 sudo ~/loom-experiments/gpu-posted/run_dispatch.sh < /dev/null                       # B1 sweep: dispatch_ibgda_H{1024,7168}_load{0,1}.csv
 sudo ~/loom-experiments/gpu-posted/run_dispatch_block.sh < /dev/null                 # B1 packed: dispatch_ibgda_block_H*_load*.csv
 ~/loom-experiments/gpu-posted/build_deepep_post.sh && sudo ~/loom-experiments/gpu-posted/run_deepep_post.sh   # deepep_post_*.csv
+sudo ~/loom-experiments/nvshmem-loopback/run_msgrate.sh                              # msgrate_steve.csv
 ~/loom-experiments/latency/run_dispatch_proxy.sh                                      # B2 sweep: dispatch_proxy_H*_load*.csv
 cd ~/loom-experiments/latency && $NUMA -N 0 -m 0 ./dispatch_proxy < /dev/null > dispatch_proxy.csv
 sudo ~/loom-experiments/nvshmem-loopback/run_put_lat.sh        # put_lat_steve.txt
@@ -324,6 +336,7 @@ sudo ~/loom-experiments/nvshmem-loopback/run_put_lat.sh load   # put_lat_steve_l
 - `run_dispatch_block.sh`, `dispatch_ibgda_block_H{1024,7168}_load{0,1}.csv`: B1 with `--block` (packed per destination, like B2 block).
 - `deepep_post.cu`, `build_deepep_post.sh`, `run_deepep_post.sh`: DeepEP's post path vs NVSHMEM's put (needs DeepEP V1 a56d615 headers in `deepep-include/`, see the build script).
 - `deepep_post_lat.csv`, `deepep_post_dispatch_H{1024,7168}.csv`: its outputs.
+- `run_msgrate.sh`, `msgrate_steve.csv`: IBGDA vs IBRC message rate (NVSHMEM perftests, CTA sweep).
 - `dispatch_proxy.cu`: the B2 dispatch benchmark (verbs + CPU proxy).
 - `dispatch_proxy.csv`: its outputs.
 - `run_dispatch_proxy.sh`: the B2 sweep (H × load).
