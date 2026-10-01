@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """M3 (trace part, extension): per-MoE-layer breakdown and NCCL "waiting vs. moving" analysis for the
-Mixtral-8x7B Kineto device traces (nemo_raw/device_<r>.json, ranks 0/2/3/6; TP2 x EP4, 1 node).
+Mixtral-8x7B Kineto device traces (nemo_raw/device_<r>.json, any subset of ranks 0..7; TP2 x EP4, 1 node).
 
 What it does (per rank, within the GPU-side ProfilerStep#0 window):
   A. Attributes every GPU kernel to the CPU op stack that launched it (Kineto correlation id ->
@@ -34,10 +34,15 @@ What it does (per rank, within the GPU-side ProfilerStep#0 window):
 
 Usage: python3 analyze_moe.py <nvlink_GBps_per_dir> <et_dir> device_*.json
 Writes moe_summary_Mixtral-8x7B.json next to this script (inputs for project_offsm.py).
+The Kineto JSONs are stream-parsed (jstream.py); only the event categories used below are kept.
+classify() (steps A-C, per-kernel labels) is reused by analyze_skew.py.
 """
 import sys, os, json, re, collections, statistics
 from multiprocessing import Pool
-import chakra_et
+import chakra_et, jstream
+
+CATS = {"kernel", "gpu_memcpy", "gpu_memset", "cpu_op", "user_annotation", "cuda_runtime", "cuda_driver",
+        "gpu_user_annotation"}
 
 ES = {"BFloat16": 2, "Half": 2, "Float": 4, "Long": 8, "Int": 4, "Byte": 1, "Double": 8}
 LAT_THR = 64 * 1024  # per-peer bytes below which a message is treated as latency-bound
@@ -112,9 +117,10 @@ def med(x):
     return statistics.median(x) if x else float("nan")
 
 
-def analyze(args):
-    path, peak, et_dir = args
-    d = json.load(open(path))
+def classify(path):
+    """Steps A-C for one rank. Every NCCL/compute kernel dict in gk gets k["cls"] (class name, see CLS) and
+    k["lay"] = (pass, micro-batch, layer index) if it starts inside a layer instance with exactly 2 EP a2a."""
+    d = jstream.load_kineto(path, CATS)
     rank = d["distributedInfo"]["rank"]; nsm = d["deviceProperties"][0]["numSms"]
     pgcfg = {p["pg_name"]: p["ranks"] for p in d["distributedInfo"]["pg_config"]}
     ev = d["traceEvents"]
@@ -204,12 +210,23 @@ def analyze(args):
             else:
                 c = "dense_other"
             t[c] += dur
+            k["cls"] = c; k["lay"] = (p, mbi, li)
         busy = ulen([(k["s"], min(k["e"], e)) for k in ks])
         comm_u = ulen([(k["s"], min(k["e"], e)) for k in ks if k["nccl"]])
         comp_u = ulen([(k["s"], min(k["e"], e)) for k in ks if not k["nccl"]])
         a2a_bytes = [int(k["a"]["In msg nelems"]) * ES[k["a"]["dtype"]] for k in ep]
         rows.append(dict(p=p, mb=mbi, l=li, span=e - s, bad=0, idle=e - s - busy, comm_u=comm_u,
                          comp_u=comp_u, a2a_bytes=a2a_bytes, **t))
+    return dict(rank=rank, nsm=nsm, pgcfg=pgcfg, ev=ev, d=d, gk=gk, T0=T0, T1=T1, allnccl=allnccl, ep_pg=ep_pg,
+                lay=lay, rows=rows)
+
+
+def analyze(args):
+    path, peak, et_dir = args
+    c = classify(path)
+    rank, nsm, gk, rows, allnccl, ep_pg = c["rank"], c["nsm"], c["gk"], c["rows"], c["allnccl"], c["ep_pg"]
+    T0, T1 = c["T0"], c["T1"]
+    del c
     # --- NCCL kernel bandwidth (whole step)
     nk = []
     for k in gk:
@@ -315,8 +332,8 @@ def report(R, peak):
             un = 1 - sum(k["tpk"] for k in K) / sum(k["dur"] for k in K)
             print(f"{r['rank']} | {key[0]} | {key[1]} | {key[2]} | {len(K)} | {cs} | {med([k['peer'] for k in K])/1024:.1f} | "
                   f"{sum(k['dur'] for k in K)/1e3:.1f} | {med(bw):.1f} | {bw[int(0.95*(len(bw)-1))]:.1f} | {bw[-1]:.1f} | {med(ps):.2f} | {100*un:.1f}")
-    print("\n### all 4 ranks pooled: excess over the fastest same-size kernel (empirical wait estimate)")
-    print("for each (type, role, group size, in-bytes) the minimum duration over all 4 ranks is taken as the 'moving' time;")
+    print(f"\n### all {len(R)} ranks pooled: excess over the fastest same-size kernel (empirical wait estimate)")
+    print(f"for each (type, role, group size, in-bytes) the minimum duration over all {len(R)} ranks is taken as the 'moving' time;")
     print("excess = sum(dur - min_dur) / sum(dur). This is a tighter, empirical estimate of time spent waiting/skewed.")
     print("type | role | n | in MiB | kernels | min dur us | busBW at min GB/s | median dur us | sum dur ms | excess over min %")
     ex = collections.defaultdict(list)
@@ -340,7 +357,7 @@ def report(R, peak):
         print(f"rank {r['rank']}: NCCL sum {r['whole']['nccl_sum_ms']:.1f} ms, of which 'moving' (sum of per-size minima) by role: "
               + ", ".join(f"{a} {b:.1f}" for a, b in sorted(mv.items())) + f"; comm wall {r['whole']['comm_wall_ms']:.1f} ms; "
               f"comm/compute overlap {r['whole']['overlap_ms']:.1f} ms; NCCL SM-time {r['whole']['nccl_sm_ms']:.0f} SM*ms")
-    print("\n### all 4 ranks pooled, by type and per-peer size regime")
+    print(f"\n### all {len(R)} ranks pooled, by type and per-peer size regime")
     print("type | role | n | regime | kernels | sum dur ms | median busBW GB/s | median GB/s per held SM | unexplained %")
     bwsum = {}
     for key, K in sorted(agg.items(), key=lambda x: -sum(k["dur"] for k in x[1])):
@@ -356,9 +373,21 @@ def report(R, peak):
                                                            ctas=collections.Counter(k["ctas"] for k in Kr).most_common(1)[0][0])
     Kall = [k for K in agg.values() for k in K]
     un = 1 - sum(k["tpk"] for k in Kall) / sum(k["dur"] for k in Kall)
-    print(f"\nall NCCL kernels, 4 ranks pooled: {len(Kall)} kernels, {sum(k['dur'] for k in Kall)/1e3:.1f} ms; "
+    print(f"\nall NCCL kernels, {len(R)} ranks pooled: {len(Kall)} kernels, {sum(k['dur'] for k in Kall)/1e3:.1f} ms; "
           f"time explained by data movement at {peak} GB/s = {100*(1-un):.1f}%, unexplained = {100*un:.1f}%")
     print(f"per-SM rate needed to reach the NVLink peak: 32 CTAs -> {peak/32:.1f} GB/s/SM, 24 CTAs -> {peak/24:.1f} GB/s/SM")
+    if len(R) > 4:   # cross-rank summary of the per-rank medians above (E2 table); printed only for > 4 ranks
+        print(f"\n## across ranks {[r['rank'] for r in R]}: median of the per-rank medians [min - max over ranks], "
+              "us (% of layer span); and the rank with the min / max median")
+        for p in ("fwd", "bwd"):
+            print(f"\n### {p}")
+            print("class | median of per-rank median us | min us | max us | median of per-rank median % | min % | max % | rank at min | rank at max")
+            for c in ["span"] + CLS:
+                v = {rk: summ[rk][p][c]["med_us"] for rk in summ}
+                f = {rk: summ[rk][p][c].get("med_pct", 100.0) for rk in summ}
+                lo, hi = min(v, key=v.get), max(v, key=v.get)
+                print(f"{c} | {med(list(v.values())):.1f} | {v[lo]:.1f} | {v[hi]:.1f} | {med(list(f.values())):.1f} | "
+                      f"{min(f.values()):.1f} | {max(f.values()):.1f} | {lo} | {hi}")
     out = os.path.join(os.path.dirname(os.path.abspath(__file__)), "moe_summary_Mixtral-8x7B.json")
     json.dump(dict(peak_GBps=peak, per_rank=summ, nccl_bw=bwsum, unexplained_all_pct=100 * un, excess_over_min_pct=100 * extot[0] / extot[1]), open(out, "w"), indent=1)
     print(f"\n(summary written to {out})")

@@ -47,7 +47,8 @@ def main():
     m = json.load(open(os.path.join(H, "moe_summary_Mixtral-8x7B.json")))
     print("# PROJECTION (not measured): SM-holding cost of communication kernels and off-SM recovery")
     print("# theta ranges use testbed [perfect-partitioning, measured co-location] throughput; all ms per training step\n")
-    print("## Mixtral-8x7B (Kineto ranks 0/2/3/6; comm kernels hold 24-32 SMs -> k=20 used as a lower bound)")
+    rks = "/".join(sorted(m["per_rank"], key=int))
+    print(f"## Mixtral-8x7B (Kineto ranks {rks}; comm kernels hold 24-32 SMs -> k=20 used as a lower bound)")
     print("rank | step ms | E expert GEMM ms | C_held MoE comm ms | C_moving ms | overlap O ms | "
           "S1 lost ms | S2-held lost ms (% step) | S2-moving lost ms (% step) | NCCL SM-time as full-GPU ms (% step)")
     rows = []

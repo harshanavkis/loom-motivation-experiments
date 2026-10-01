@@ -5,9 +5,11 @@ time, compute/communication overlap, and SM-time share of NCCL kernels within Pr
 SM-time model: a kernel with G = gridX*gridY*gridZ CTAs occupies min(G, numSms) SMs for its whole
 duration (upper bound on residency; NCCL launches 1 CTA per channel, one CTA per SM).
 Usage: python3 analyze_kineto.py <gpus_per_node> device_*.json
-Each file is ~155 MB and is loaded with the stdlib json module (fits easily in RAM).
+Each file is ~155 MB; it is stream-parsed with jstream.py (stdlib json.raw_decode), keeping only the
+event categories used here.
 """
 import sys, json, re, collections
+import jstream
 
 
 def union(iv):
@@ -45,7 +47,7 @@ def coll_type(e):
 
 
 def analyze(path, G):
-    d = json.load(open(path))
+    d = jstream.load_kineto(path, {"gpu_user_annotation", "kernel", "gpu_memcpy", "gpu_memset"})
     rank = d["distributedInfo"]["rank"]; world = d["distributedInfo"]["world_size"]
     nsm = d["deviceProperties"][0]["numSms"]; gpu = d["deviceProperties"][0]["name"]
     ev = d["traceEvents"]

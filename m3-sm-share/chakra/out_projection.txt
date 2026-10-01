@@ -1,17 +1,21 @@
 # PROJECTION (not measured): SM-holding cost of communication kernels and off-SM recovery
 # theta ranges use testbed [perfect-partitioning, measured co-location] throughput; all ms per training step
 
-## Mixtral-8x7B (Kineto ranks 0/2/3/6; comm kernels hold 24-32 SMs -> k=20 used as a lower bound)
+## Mixtral-8x7B (Kineto ranks 0/1/2/3/4/5/6/7; comm kernels hold 24-32 SMs -> k=20 used as a lower bound)
 rank | step ms | E expert GEMM ms | C_held MoE comm ms | C_moving ms | overlap O ms | S1 lost ms | S2-held lost ms (% step) | S2-moving lost ms (% step) | NCCL SM-time as full-GPU ms (% step)
-0 | 5872 | 1452 | 2015 | 352 | 77.2 | 16-39 | 384-1030 (6.5-17.5%) | 74-180 (1.3-3.1%) | 537 (9.1%)
-2 | 5873 | 1451 | 2370 | 352 | 70.1 | 15-36 | 384-1211 (6.5-20.6%) | 74-180 (1.3-3.1%) | 604 (10.3%)
-3 | 5873 | 1472 | 2372 | 352 | 67.1 | 14-34 | 389-1212 (6.6-20.6%) | 74-180 (1.3-3.1%) | 588 (10.0%)
-6 | 5874 | 1475 | 664 | 352 | 12.4 | 3-6 | 139-339 (2.4-5.8%) | 74-180 (1.3-3.1%) | 173 (2.9%)
+0 | 5872 | 1452 | 2015 | 351 | 77.2 | 16-39 | 384-1030 (6.5-17.5%) | 73-180 (1.3-3.1%) | 537 (9.1%)
+1 | 5873 | 1447 | 1948 | 351 | 48.0 | 10-25 | 382-996 (6.5-17.0%) | 73-180 (1.3-3.1%) | 491 (8.4%)
+2 | 5873 | 1451 | 2370 | 351 | 70.1 | 15-36 | 384-1211 (6.5-20.6%) | 73-180 (1.3-3.1%) | 604 (10.3%)
+3 | 5873 | 1472 | 2372 | 351 | 67.1 | 14-34 | 389-1212 (6.6-20.6%) | 73-180 (1.3-3.1%) | 588 (10.0%)
+4 | 5873 | 1441 | 2054 | 351 | 60.9 | 13-31 | 381-1050 (6.5-17.9%) | 73-180 (1.3-3.1%) | 524 (8.9%)
+5 | 5873 | 1462 | 2197 | 351 | 72.3 | 15-37 | 386-1123 (6.6-19.1%) | 73-180 (1.3-3.1%) | 569 (9.7%)
+6 | 5874 | 1475 | 664 | 351 | 12.4 | 3-6 | 139-339 (2.4-5.8%) | 73-180 (1.3-3.1%) | 173 (2.9%)
+7 | 5874 | 1462 | 1286 | 351 | 99.4 | 21-51 | 269-657 (4.6-11.2%) | 73-180 (1.3-3.1%) | 393 (6.7%)
 
 k sweep for rank 0 (what the loss would be if the comm kernels held only k SMs), S2-held / S2-moving, ms:
   k=8: S2-held 152-156 ms; S2-moving 33-34 ms  (E x (1/theta - 1) upper limit 156-152 ms)
   k=16: S2-held 183-545 ms; S2-moving 39-96 ms  (E x (1/theta - 1) upper limit 183-545 ms)
-  k=20: S2-held 384-1030 ms; S2-moving 74-180 ms  (E x (1/theta - 1) upper limit 384-1517 ms)
+  k=20: S2-held 384-1030 ms; S2-moving 73-180 ms  (E x (1/theta - 1) upper limit 384-1517 ms)
 
 ## Mixtral-8x22B (ET only; no grids, so k is swept; medians over 32 ranks)
 E (GEMMs under LinearWithGradAccumulation..., includes LM head) = 1121 ms; C_held (EP a2a inter + TP AG/RS intra) = 12215 ms; C_moving = 1149 ms
