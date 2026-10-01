@@ -216,6 +216,31 @@ A work-request fetch costs the NIC 1.0 µs, a payload read from GPU memory 1.45 
 
 **Unified-contract bound** (Figure 1c band): if a kernel started a remote transfer like a local one, it would pay a store + system fence (0.58 µs, `fence_cost`), the NIC's own time, and one load of a completion word in host memory (0.70 µs). That gives 3.9 µs when the store carries the data (NIC floor) and 5.4 µs when the NIC reads the payload from GPU memory, against 5.44 µs for the proxy (which also needs a core) and 12.6 µs for IBGDA. Not counted: the flight of a GPU store to the NIC (the CPU's MMIO flight is inside the NIC's time here) and any engine work beyond what the CX-7 does.
 
+### GPU-initiated with DeepEP's own post path (`deepep_post.cu`, 2026-10-01)
+
+Everything GPU-initiated above uses NVSHMEM's generic put. DeepEP ships a leaner post path (V1 a56d615, `csrc/kernels/legacy/ibgda_device.cuh`): warp-parallel WQE writes, a gpu-scope `__threadfence()`, gpu-scope release stores for the doorbell record and the doorbell (no system-scope fence), and one doorbell per 4 messages per QP. `deepep_post.cu` runs it, unmodified except one line, on the same IBGDA QPs as NVSHMEM's put. The one line: DeepEP indexes RC QPs PE-major (older NVSHMEM), and 3.6.5 lays them out QP-major (`rcs[id * npes + pe]`). `build_deepep_post.sh` patches that index into a copy. Unpatched, it picks the never-created QP to itself and faults.
+
+Single message, one warp, put → completion on that QP, NVSHMEM default QPs (as the perftest), medians of 3 runs (`deepep_post_lat.csv`):
+
+| 8 B | post (SM time) | put + completion |
+|---|---|---|
+| NVSHMEM `putmem_nbi_warp` + `quiet` | 7.33 µs | 14.27 µs |
+| DeepEP `put_nbi_warp<true>` + per-QP quiet | **3.07 µs** | **9.22 µs** |
+
+Dispatch, per token (DeepEP LL style: QP = destination, message index = slot, 24 QPs/PE, `NVSHMEM_QP_DEPTH=1024`), 20 CTAs, idle, µs (`deepep_post_dispatch_H{1024,7168}.csv`):
+
+| H | tokens | DeepEP | NVSHMEM per token | NVSHMEM packed | best proxy |
+|---|---|---|---|---|---|
+| 1 KiB | 16 | **35.3** | 82.4 | 43.1 | 189.8 |
+| 1 KiB | 32 | **40.6** | 82.8 | 44.2 | 203.1 |
+| 1 KiB | 128 | 156.4 | 173.3 | **80.1** | 172.4 |
+| 7 KiB | 16 | **56.9** | 90.0 | 86.3 | 212.4 |
+| 7 KiB | 128 | **331.9** | 368.8 | 367.1 | 464.4 |
+
+- DeepEP skips the WQ slot check and requires `NVSHMEM_QP_DEPTH >= (tokens + 1) * 2` messages in flight per QP (`deep_ep/buffers/legacy.py`), so the deepep mode runs 16–128 tokens only. A first try at 1024/4096 tokens overran the QPs, reported an impossible 26 GB/s and hung at exit.
+- With 24 QPs/PE, `nvshmem_quiet` polls every QP and the NVSHMEM single-message number inflates to ~34 µs. The latency test therefore uses NVSHMEM's default QP count.
+- Figure 1 now takes each path at its best measured variant: 1c GPU-initiated = DeepEP (9.2 µs, 3.1 µs SM per post); 1b = min over DeepEP / NVSHMEM per token / NVSHMEM packed, and min over proxy packed / per token. Best GPU vs best proxy at 16–32 tokens: 2.1–5.4×. The unified bound vs the best GPU variant at 16 tokens: 1.2–1.9×.
+
 ### Unified-contract bound for dispatch: the GPU-triggered copy engine (`dispatch_ce.cu`)
 
 The same dispatch (routing, token sizes, batches, 8/20 CTAs, GEMM load) started the way a kernel starts a local transfer: the kernel's last CTA writes a flag in HBM that releases copies pre-enqueued on a copy-engine stream (`cuStreamWaitValue32` → `cudaMemcpyBatchAsync`, PreferOverlapWithCompute → `cuStreamWriteValue32` done), then spins on done. The destination is a buffer in the same GPU's HBM (a local peer). "token" = the kernel only routes and the engine copies each token message from the token buffer (no SM copies); "block" = the kernel packs per destination on SMs and the engine runs 8 copies. The copy list is built on the host from the same deterministic routing before the trigger; it stands in for an engine that takes descriptors from the kernel. Timed like B1/B2: CUDA events around the kernel, median of 20.
@@ -267,6 +292,7 @@ cd ~/loom-experiments/latency && $NUMA -N 0 -m 0 ./ce_triggered < /dev/null > ce
 ~/loom-experiments/latency/run_dispatch_ce.sh                                        # dispatch_ce_H*_load*.csv, about 15 min
 sudo ~/loom-experiments/gpu-posted/run_dispatch.sh < /dev/null                       # B1 sweep: dispatch_ibgda_H{1024,7168}_load{0,1}.csv
 sudo ~/loom-experiments/gpu-posted/run_dispatch_block.sh < /dev/null                 # B1 packed: dispatch_ibgda_block_H*_load*.csv
+~/loom-experiments/gpu-posted/build_deepep_post.sh && sudo ~/loom-experiments/gpu-posted/run_deepep_post.sh   # deepep_post_*.csv
 ~/loom-experiments/latency/run_dispatch_proxy.sh                                      # B2 sweep: dispatch_proxy_H*_load*.csv
 cd ~/loom-experiments/latency && $NUMA -N 0 -m 0 ./dispatch_proxy < /dev/null > dispatch_proxy.csv
 sudo ~/loom-experiments/nvshmem-loopback/run_put_lat.sh        # put_lat_steve.txt
@@ -296,6 +322,8 @@ sudo ~/loom-experiments/nvshmem-loopback/run_put_lat.sh load   # put_lat_steve_l
 - `dispatch_ibgda.cu`, `run_dispatch.sh`, `build_gpu_posted.sh`: the B1 dispatch benchmark (NVSHMEM; root for memlock). The runnable copy is in `~/loom-experiments/gpu-posted`.
 - `dispatch_ibgda.csv`: its outputs.
 - `run_dispatch_block.sh`, `dispatch_ibgda_block_H{1024,7168}_load{0,1}.csv`: B1 with `--block` (packed per destination, like B2 block).
+- `deepep_post.cu`, `build_deepep_post.sh`, `run_deepep_post.sh`: DeepEP's post path vs NVSHMEM's put (needs DeepEP V1 a56d615 headers in `deepep-include/`, see the build script).
+- `deepep_post_lat.csv`, `deepep_post_dispatch_H{1024,7168}.csv`: its outputs.
 - `dispatch_proxy.cu`: the B2 dispatch benchmark (verbs + CPU proxy).
 - `dispatch_proxy.csv`: its outputs.
 - `run_dispatch_proxy.sh`: the B2 sweep (H × load).

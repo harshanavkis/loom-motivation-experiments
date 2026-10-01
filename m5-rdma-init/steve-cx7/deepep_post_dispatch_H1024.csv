@@ -1,0 +1,20 @@
+# nvshmem post path, use_async_postsend=0 num_rc_per_pe=24
+test,mode,H,tokens,ctas,messages,median_us,p10_us,p90_us,GBps
+dispatch,nvshmem,1024,16,8,90,79.6,74.3,83.6,1.16
+dispatch,nvshmem,1024,16,20,90,82.4,76.8,90.3,1.12
+dispatch,nvshmem,1024,32,8,170,79.3,75.8,91.8,2.19
+dispatch,nvshmem,1024,32,20,170,82.8,77.2,95.8,2.10
+dispatch,nvshmem,1024,128,8,683,183.3,168.1,202.2,3.82
+dispatch,nvshmem,1024,128,20,683,173.3,166.5,193.7,4.03
+dispatch,nvshmem,1024,1024,8,5446,1088.2,1062.7,1168.3,5.12
+dispatch,nvshmem,1024,1024,20,5446,1082.3,1061.9,1148.3,5.15
+dispatch,nvshmem,1024,4096,8,21711,4657.3,4541.9,4731.2,4.77
+dispatch,nvshmem,1024,4096,20,21711,4659.8,4541.8,4715.8,4.77
+# deepep post path, use_async_postsend=0 num_rc_per_pe=24
+test,mode,H,tokens,ctas,messages,median_us,p10_us,p90_us,GBps
+dispatch,deepep,1024,16,8,90,35.5,33.9,43.3,2.59
+dispatch,deepep,1024,16,20,90,35.3,33.9,43.2,2.61
+dispatch,deepep,1024,32,8,170,40.7,38.8,60.6,4.28
+dispatch,deepep,1024,32,20,170,40.6,39.0,43.1,4.29
+dispatch,deepep,1024,128,8,683,149.1,145.3,166.5,4.69
+dispatch,deepep,1024,128,20,683,156.4,150.8,176.5,4.47

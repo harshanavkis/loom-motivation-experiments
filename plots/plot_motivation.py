@@ -90,21 +90,28 @@ def mixtral_8x22b_layer_bytes():
 
 
 def dispatch_sweep(ctas=20):
-    """Median dispatch latency (us), idle, both paths packed per destination (like for like):
-    GPU-initiated from dispatch_ibgda --block, CPU proxy "block" from dispatch_sweep_all.csv."""
+    """Median dispatch latency (us), idle, each path at its best measured variant per point:
+    GPU-initiated = min(NVSHMEM per token, NVSHMEM packed (--block), DeepEP's post path per
+    token (deepep_post, <= 128 tokens)); CPU proxy = min(packed, per token)."""
     rows = []
+    for line in open(os.path.join(CX7, 'dispatch_sweep_all.csv')):
+        f = line.strip().split(',')
+        if f[0] == 'ibgda' and len(f) >= 8:
+            rows.append(('gpu-initiated', 'nvshmem-token', int(f[1]), int(f[2]), int(f[3]), int(f[4]), float(f[7])))
+        elif f[0] == 'proxy' and len(f) >= 9:
+            rows.append(('cpu-proxy', f[3], int(f[1]), int(f[2]), int(f[4]), int(f[5]), float(f[7])))
     for H in (1024, 7168):
         for line in open(os.path.join(CX7, f'dispatch_ibgda_block_H{H}_load0.csv')):
             f = line.strip().split(',')
             if f[0] == 'ibgda_block':
-                rows.append(('gpu-initiated', int(f[1]), int(f[2]), int(f[3]), int(f[4]), float(f[7])))
-    for line in open(os.path.join(CX7, 'dispatch_sweep_all.csv')):
-        f = line.strip().split(',')
-        if f[0] == 'proxy' and len(f) >= 9 and f[3] == 'block':
-            H, load, T, c, med = int(f[1]), int(f[2]), int(f[4]), int(f[5]), float(f[7])
-            rows.append(('cpu-proxy', H, load, T, c, med))
-    df = pd.DataFrame(rows, columns=['variant', 'H', 'load', 'tokens', 'ctas', 'us'])
-    return df[(df.load == 0) & (df.ctas == ctas)]
+                rows.append(('gpu-initiated', 'nvshmem-block', int(f[1]), int(f[2]), int(f[3]), int(f[4]), float(f[7])))
+        for line in open(os.path.join(CX7, f'deepep_post_dispatch_H{H}.csv')):
+            f = line.strip().split(',')
+            if f[0] == 'dispatch' and f[1] == 'deepep':
+                rows.append(('gpu-initiated', 'deepep-token', int(f[2]), 0, int(f[3]), int(f[4]), float(f[6])))
+    df = pd.DataFrame(rows, columns=['variant', 'impl', 'H', 'load', 'tokens', 'ctas', 'us'])
+    df = df[(df.load == 0) & (df.ctas == ctas)]
+    return df.loc[df.groupby(['variant', 'H', 'tokens']).us.idxmin()].reset_index(drop=True)
 
 
 def dispatch_bound(ctas=20):
@@ -135,9 +142,11 @@ def initiator_latency():
         f = line.strip().split(',')
         if f[0] == 'proxy' and f[1] == '8':
             out['cpu-proxy'] = float(f[2])
-    txt = open(os.path.join(CX7, 'put_lat_steve.txt')).read()
-    m = re.search(r'## shmem_put_latency.*?\n.*?^8\s+Thread\s+([\d.]+)', txt, re.S | re.M)
-    out['gpu-initiated'] = float(m.group(1))
+    # GPU-initiated: DeepEP's post path (put + completion, one warp), median of the runs
+    runs = [line.strip().split(',') for line in open(os.path.join(CX7, 'deepep_post_lat.csv'))]
+    runs = [f for f in runs if f[0] == 'lat' and f[1] == 'deepep' and f[2] == '8']
+    out['gpu-initiated'] = statistics.median(float(f[4]) for f in runs)
+    out['gpu-initiated-post'] = statistics.median(float(f[3]) for f in runs)
     for line in open(os.path.join(CX7, 'ce_triggered_idle.csv')):
         f = line.strip().split(',')
         if f[0] == 'triggered' and f[1] == 'd2d' and f[2] == '8':
@@ -272,7 +281,7 @@ def panel_initiator(ax, fs):
     lat = initiator_latency()
     order = ['cpu-proxy', 'gpu-initiated', 'copy-engine']
     notes = {'cpu-proxy': '0.075 us post\n+ 1 core',
-             'gpu-initiated': '6-8 us SM\nper post',
+             'gpu-initiated': f"{lat['gpu-initiated-post']:.1f} us SM\nper post",
              'copy-engine': 'local peers\nonly'}
     colors = {'cpu-proxy': PASTEL[3], 'gpu-initiated': PASTEL[0], 'copy-engine': PASTEL[1]}
     hatches = {'cpu-proxy': '', 'gpu-initiated': '///', 'copy-engine': '\\\\'}
@@ -350,6 +359,7 @@ def main():
     # print the plotted numbers so the paper text can be checked against them
     print('layer bytes MiB:', {k: round(v, 1) for k, v in mixtral_8x22b_layer_bytes().items()})
     print('initiator us:', initiator_latency())
+    print(dispatch_sweep().sort_values(['variant', 'H', 'tokens']).to_string(index=False))
     print('unified bound us (store carries data, NIC reads payload):', unified_bound())
     ce, rate, floor = dispatch_bound()
     print(f'dispatch bound: NIC rate {rate / 1e3:.2f} GB/s, floor {floor:.2f} us')

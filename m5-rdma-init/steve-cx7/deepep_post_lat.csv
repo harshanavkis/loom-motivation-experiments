@@ -1,0 +1,24 @@
+# nvshmem post path, use_async_postsend=0 num_rc_per_pe=2
+test,mode,size,post_med_us,total_med_us,total_p10_us,total_p90_us
+lat,nvshmem,8,7.33,14.27,13.82,14.82
+lat,nvshmem,7168,7.42,15.23,14.37,15.36
+# deepep post path, use_async_postsend=0 num_rc_per_pe=2
+test,mode,size,post_med_us,total_med_us,total_p10_us,total_p90_us
+lat,deepep,8,3.17,9.28,9.22,9.31
+lat,deepep,7168,3.17,9.82,9.76,9.89
+# nvshmem post path, use_async_postsend=0 num_rc_per_pe=2
+test,mode,size,post_med_us,total_med_us,total_p10_us,total_p90_us
+lat,nvshmem,8,6.53,13.28,12.64,13.82
+lat,nvshmem,7168,6.56,14.11,13.18,14.24
+# deepep post path, use_async_postsend=0 num_rc_per_pe=2
+test,mode,size,post_med_us,total_med_us,total_p10_us,total_p90_us
+lat,deepep,8,3.07,9.22,9.15,9.28
+lat,deepep,7168,3.07,9.70,9.66,9.76
+# nvshmem post path, use_async_postsend=0 num_rc_per_pe=2
+test,mode,size,post_med_us,total_med_us,total_p10_us,total_p90_us
+lat,nvshmem,8,7.46,14.43,13.79,15.10
+lat,nvshmem,7168,7.46,15.42,14.34,15.62
+# deepep post path, use_async_postsend=0 num_rc_per_pe=2
+test,mode,size,post_med_us,total_med_us,total_p10_us,total_p90_us
+lat,deepep,8,2.56,8.48,8.42,8.58
+lat,deepep,7168,2.56,9.02,8.99,9.06
