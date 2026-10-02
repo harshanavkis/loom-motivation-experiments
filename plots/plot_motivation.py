@@ -257,7 +257,8 @@ def panel_dispatch(ax, fs):
             s = df[(df.variant == v) & (df.H == H)].sort_values('tokens')
             ax.plot([x[t] for t in s.tokens], s.us, color=color, marker=mk, markersize=12,
                     linewidth=2, markeredgecolor='k', alpha=0.9)
-    for v, ls, lw in (('local: SM stores', '-', 4), ('local: copy engine', '--', 3)):
+    for v, ls, lw in (('local: SM stores', '-', 4),):   # the copy-engine curve used host-built copy lists: not a
+                                                     # mechanism a kernel has for data-dependent dispatch
         for H, mk in markers.items():
             s = loc[(loc.variant == v) & (loc.H == H)].sort_values('tokens')
             ax.plot([x[t] for t in s.tokens], s.us, color=VARIANTS['loom'][1], marker=mk, markersize=12,
@@ -275,9 +276,8 @@ def panel_dispatch(ax, fs):
     ax.grid(True, alpha=0.3)
     handles = [Line2D([0], [0], color=VARIANTS[v][1], linewidth=2) for v in ('gpu-initiated', 'cpu-proxy')]
     labels = [VARIANTS[v][0] for v in ('gpu-initiated', 'cpu-proxy')]
-    handles += [Line2D([0], [0], color=VARIANTS['loom'][1], linewidth=4),
-                Line2D([0], [0], color=VARIANTS['loom'][1], linewidth=3, linestyle='--')]
-    labels += ['local: SM stores', 'local: copy engine']
+    handles += [Line2D([0], [0], color=VARIANTS['loom'][1], linewidth=4)]
+    labels += ['local peer: SM stores']
     handles += [Line2D([0], [0], color='gray', linestyle='', marker=m, markersize=12, markeredgecolor='k') for m in markers.values()]
     labels += ['7 KiB', '1 KiB']
     ax.legend(handles, labels, loc='upper left', ncol=3, frameon=True, fontsize=fs['legend'],
@@ -333,7 +333,7 @@ def figure2(out_dir):
     ax.axhline(c['cpu-proxy'], color=color, linewidth=2, linestyle=':', label=f'{label} (holds a CPU core)')
     # unified-contract bound: the kernel starts the transfer like a local copy-engine copy
     ax.axhline(c['copy-engine'], color=VARIANTS['loom'][1], linewidth=3, linestyle='-.',
-               label='unified contract (bound): copy engine')
+               label='copy engine (zero-SM; unified: any peer)')
     ax.fill_between(x, c['gpu-initiated'], c['copy-engine'], color=PASTEL[2], alpha=0.5,
                     label='reclaimed vs gpu-initiated')
     gain = c['copy-engine'] - c['gpu-initiated'][-1]
