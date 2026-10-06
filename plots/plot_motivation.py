@@ -2,10 +2,11 @@
 """Loom motivation figures, in the style of jigsaw-plotting-scripts/plot_hw_exp.py.
 
 Figure 1 (intro, single column, loom-mix): Mixtral-8x22B bytes per MoE layer by fabric and kind
-of traffic (Chakra ET). Figure 3 (Section 2, 1x3, loom-costs): message rate, MoE dispatch, and the
-GEMM next to held SMs with the network throughput they buy. Figure 4 (Section 2.3, 1x3, loom-dispatch):
-a dispatch to local and remote peers until the receiver sees the signal (dispatch_bd.cu): where the
-time goes, SM time per dispatch, and the expert GEMM beside the dispatches. Older layout notes follow:
+of traffic (Chakra ET). Figure 3 (Section 2, 1x4, loom-costs): (a) message rate, GPU-initiated vs CPU
+proxy; (b) a 16 x 1 KiB dispatch to local and remote peers until the receiver sees the signal
+(dispatch_bd.cu); (c) the expert GEMM beside those dispatches (SMs shared); (d) the GEMM next to held
+SMs (SMs reserved) with the network throughput they buy and the copy engine. The CPU proxy appears in
+(a) only (owner, 2026-10-06). Older layout notes follow:
 Figure 1 (intro, 1x3): (a) Mixtral-8x22B bytes per MoE layer by fabric (Chakra ET),
 (b) MoE dispatch latency, GPU-initiated vs CPU proxy, both packed (steve H200 + CX-7),
 (c) message rate of 4 B puts vs CTAs issuing, GPU-initiated vs CPU proxy, with the NIC's rated
@@ -127,19 +128,6 @@ def dispatch_sweep(ctas=20):
     return df.loc[df.groupby(['variant', 'H', 'tokens']).us.idxmin()].reset_index(drop=True)
 
 
-def dispatch_local(ctas=20):
-    """The same dispatch to a local peer (same GPU's HBM), idle, written out the two ways a
-    kernel reaches a local peer: SM stores (dispatch_ce --sm, the DeepEP/NCCL NVLink path) and
-    the kernel-triggered copy engine, one copy per token (dispatch_ce token mode)."""
-    rows = []
-    for H in (1024, 7168):
-        for name, mode, f_ in (('local: SM stores', 'store', f'dispatch_sm_H{H}_load0.csv'),
-                               ('local: copy engine', 'token', f'dispatch_ce_H{H}_load0.csv')):
-            for line in open(os.path.join(CX7, f_)):
-                f = line.strip().split(',')
-                if f[0] in ('sm', 'ce') and f[3] == mode and int(f[5]) == ctas:
-                    rows.append((name, H, int(f[4]), float(f[7])))
-    return pd.DataFrame(rows, columns=['variant', 'H', 'tokens', 'us'])
 
 
 def initiator_latency():
@@ -280,42 +268,6 @@ def panel_layer_bytes(ax, fs, title):
         top_label(ax, title, fs['annotation'])
 
 
-def panel_dispatch(ax, fs, title):
-    df = dispatch_sweep()
-    toks = sorted(df.tokens.unique())
-    x = {t: i for i, t in enumerate(toks)}
-    markers = {7168: 'o', 1024: 's'}
-    # operating windows, as shaded x ranges
-    for lo, hi, name in ((-0.3, x[128] + 0.3, 'decode'), (x[1024] - 0.3, len(toks) - 0.7, 'prefill')):
-        ax.axvspan(lo, hi, color='gray', alpha=0.12, zorder=0)
-        ax.text((lo + hi) / 2, 1.2, name, ha='center', va='bottom', fontsize=fs['legend'], color='dimgray')
-    for v in ('gpu-initiated', 'cpu-proxy'):
-        label, color = VARIANTS[v]
-        for H, mk in markers.items():
-            s = df[(df.variant == v) & (df.H == H)].sort_values('tokens')
-            ax.plot([x[t] for t in s.tokens], s.us, color=color, marker=mk, markersize=12,
-                    linewidth=2, markeredgecolor='k', alpha=0.9)
-    # no local curve: it ended at the kernel's last store with no arrival signal, unlike these two
-    # (both end when the sender knows every token landed); Figure 4 compares local and remote
-    # with one end point, the receiver seeing the signal
-    ax.set_yscale('log')
-    ax.set_ylim(1, 1e7)           # room below for the window labels, above for the legend
-    ax.set_xlim(-0.5, len(toks) - 0.5)
-    ax.set_xticks(range(len(toks)))
-    ax.set_xticklabels([str(t) for t in toks], fontsize=fs['tick'])
-    ax.tick_params(axis='y', labelsize=fs['tick'])
-    ax.yaxis.set_major_locator(mticker.LogLocator(base=10, numticks=10))
-    ax.yaxis.set_major_formatter(mticker.LogFormatterMathtext())
-    ax.set_xlabel('Tokens dispatched (top-8, 8 destinations)', fontsize=fs['label'])
-    ax.set_ylabel('Dispatch latency [us]', fontsize=fs['label'])
-    ax.grid(True, alpha=0.3)
-    handles = [Line2D([0], [0], color=VARIANTS[v][1], linewidth=2) for v in ('gpu-initiated', 'cpu-proxy')]
-    labels = [VARIANTS[v][0] for v in ('gpu-initiated', 'cpu-proxy')]
-    handles += [Line2D([0], [0], color='gray', linestyle='', marker=m, markersize=12, markeredgecolor='k') for m in markers.values()]
-    labels += ['7 KiB', '1 KiB']
-    ax.legend(handles, labels, loc='upper left', ncol=3, frameon=True, fontsize=fs['legend'],
-              columnspacing=0.8, handlelength=1.5)
-    top_label(ax, title, fs['annotation'])
 
 
 def panel_msgrate(ax, fs, title):
@@ -327,7 +279,7 @@ def panel_msgrate(ax, fs, title):
         ax.plot([x[c] for c in s.ctas], s.mops, color=VARIANTS[v][1], marker=mk, markersize=12, linewidth=2,
                 markeredgecolor='k', alpha=0.9, label=VARIANTS[v][0])
     ax.axhline(CX7_RATED_MPPS, color=VARIANTS['loom'][1], linewidth=3, linestyle='--',
-               label='NIC rated limit (unified: no SMs)')
+               label='NIC rated limit')
     ax.set_yscale('log')
     ax.set_ylim(1, 1e5)           # headroom so the legend sits above the curves
     ax.set_xticks(range(len(ctas)))
@@ -337,7 +289,7 @@ def panel_msgrate(ax, fs, title):
     ax.set_xlabel('CTAs issuing 4 B puts (one SM each)', fontsize=fs['label'])
     ax.set_ylabel('Rate [M ops/s]', fontsize=fs['label'])
     ax.grid(True, alpha=0.3)
-    ax.legend(loc='upper left', ncol=2, frameon=True, fontsize=fs['legend'], columnspacing=0.8, handlelength=1.5)
+    ax.legend(loc='upper left', ncol=2, frameon=True, fontsize=fs['legend'] - 4, columnspacing=0.8, handlelength=1.5)
     top_label(ax, title, fs['annotation'])
 
 
@@ -349,8 +301,6 @@ def panel_held_sms(ax, fs, title):
                                    ('partitioned', '^', ':', 12, 2, 'partitioned')):
         ax.plot(x, c[v], color=VARIANTS[v][1], marker=mk, markersize=ms, linewidth=lw, linestyle=ls,
                 markeredgecolor='k', alpha=0.9, label=lab)
-    ax.axhline(c['cpu-proxy'], color=VARIANTS['cpu-proxy'][1], linewidth=2, linestyle=':',
-               label='cpu-proxy (1 core)')
     # the zero-SM path for host-queued transfers, which a unified contract keeps for any peer
     ax.axhline(c['copy-engine'], color=VARIANTS['loom'][1], linewidth=3, linestyle='-.',
                label='copy engine (0 SMs)')
@@ -383,7 +333,7 @@ def panel_dispatch_time(ax, fs, title, H=1024, T=16):
     """Where the time of one dispatch goes, until the receiver sees the signal (stacked)."""
     d = dispatch_breakdown()
     d = d[(d.H == H) & (d.tokens == T)].set_index('path')
-    segs = (('send', 'send loop (route, stage, post / store)', PASTEL[0], ''),
+    segs = (('send', 'send loop', PASTEL[0], ''),
             ('drain', 'waiting for own writes', PASTEL[3], '//'),
             ('signal', 'signal issued', PASTEL[1], '..'),
             ('flight', 'signal in flight', PASTEL[7], '\\\\'))
@@ -399,7 +349,7 @@ def panel_dispatch_time(ax, fs, title, H=1024, T=16):
     ax.set_xticks(x)
     ax.set_xticklabels(['local', 'remote:\nordered', 'remote:\nflush'], fontsize=fs['tick'])
     ax.tick_params(axis='y', labelsize=fs['tick'])
-    ax.set_ylim(0, 75)            # headroom so the legend sits above the bars
+    ax.set_ylim(0, 80)            # headroom so the legend sits above the bars
     ax.set_yticks([0, 10, 20, 30, 40])
     ax.set_ylabel('Latency [us]', fontsize=fs['label'])
     ax.grid(True, alpha=0.3, axis='y')
@@ -407,31 +357,6 @@ def panel_dispatch_time(ax, fs, title, H=1024, T=16):
     top_label(ax, title, fs['annotation'])
 
 
-def panel_dispatch_sm(ax, fs, title, H=1024):
-    """SM time per dispatch (CTA-us) vs tokens; dashed: the part flush spends waiting."""
-    d = dispatch_breakdown()
-    d = d[d.H == H]
-    toks = sorted(d.tokens.unique())
-    x = {t: i for i, t in enumerate(toks)}
-    for p, (lab, color) in BD_PATHS.items():
-        s = d[d.path == p].sort_values('tokens')
-        ax.plot([x[t] for t in s.tokens], s.cta_total_us, color=color, marker='o', markersize=12, linewidth=3,
-                markeredgecolor='k', alpha=0.9, label=lab)
-    s = d[d.path == 'flush-warpL24'].sort_values('tokens')
-    ax.plot([x[t] for t in s.tokens], s.cta_drain_us, color=BD_PATHS['flush-warpL24'][1], marker='o', markersize=10,
-            markerfacecolor='white', linewidth=2, linestyle='--', label='flush: waiting for completions')
-    ax.set_yscale('log')
-    ax.set_ylim(10, 1e7)          # headroom so the legend sits above the curves
-    ax.set_xticks(range(len(toks)))
-    ax.set_xticklabels([str(t) for t in toks], fontsize=fs['tick'])
-    ax.tick_params(axis='y', labelsize=fs['tick'])
-    ax.yaxis.set_major_locator(mticker.LogLocator(base=10, numticks=10))
-    ax.yaxis.set_major_formatter(mticker.LogFormatterMathtext())
-    ax.set_xlabel('Tokens dispatched (1 KiB, top-8)', fontsize=fs['label'])
-    ax.set_ylabel('SM time [SM-us]', fontsize=fs['label'])
-    ax.grid(True, alpha=0.3)
-    ax.legend(loc='upper left', ncol=2, frameon=True, fontsize=fs['legend'] - 2, columnspacing=0.8, handlelength=1.4)
-    top_label(ax, title, fs['annotation'])
 
 
 def panel_dispatch_gemm(ax, fs, title):
@@ -440,34 +365,26 @@ def panel_dispatch_gemm(ax, fs, title):
     pts = [(H, T) for H, T, _ in D3_POINTS]
     x = np.arange(len(pts))
     w = 0.26
+    short = {'local': 'local', 'ordered-destL24': 'remote: ordered', 'flush-warpL24': 'remote: flush'}
     for j, (p, (lab, color)) in enumerate(BD_PATHS.items()):
+        lab = short[p]
         vals = [d[(d.path == p) & (d.H == H) & (d.tokens == T)].lost_pct.iloc[0] for H, T in pts]
         ax.bar(x + (j - 1) * w, vals, w, color=color, edgecolor='black', linewidth=1, label=lab)
         if p == 'flush-warpL24':
             for i, v in enumerate(vals):
                 ax.text(x[i] + (j - 1) * w, v + 0.15, f'{v:.1f}', ha='center', va='bottom', fontsize=fs['annotation'] - 6)
     ax.set_xticks(x)
-    ax.set_xticklabels([f"{T}×{H // 1024} KiB" for H, T in pts], fontsize=fs['tick'])
+    ax.set_xticklabels([f"{T}×{H // 1024}K" for H, T in pts], fontsize=fs['tick'])
     ax.tick_params(axis='y', labelsize=fs['tick'])
     ax.set_ylim(0, 11)            # headroom so the legend sits above the bars
     ax.set_yticks([0, 2, 4, 6])
-    ax.set_xlabel('Tokens × token size', fontsize=fs['label'])
+    ax.set_xlabel('Tokens × KiB per token', fontsize=fs['label'])
     ax.set_ylabel('GEMM lost [%]', fontsize=fs['label'])
     ax.grid(True, alpha=0.3, axis='y')
     ax.legend(loc='upper left', ncol=2, frameon=True, fontsize=fs['legend'] - 2, columnspacing=0.8, handlelength=1.4)
     top_label(ax, title, fs['annotation'])
 
 
-def figure_dispatch(out_dir):
-    """Section 2.3 (one row): a dispatch until the receiver sees the signal."""
-    fs = MOTIVATION_COMBINED_FONT_SIZES
-    fig, axes = plt.subplots(1, 3, figsize=E2E_COMBINED_FIGURE_SIZE)
-    panel_dispatch_time(axes[0], fs, '(a) 16 × 1 KiB, until signal seen (lower ↓)')
-    panel_dispatch_sm(axes[1], fs, '(b) SM time per dispatch (lower ↓)')
-    panel_dispatch_gemm(axes[2], fs, '(c) Expert GEMM beside dispatches (lower ↓)')
-    fig.subplots_adjust(left=0.05, right=0.98, top=0.88, bottom=0.18, wspace=0.30)
-    save(fig, out_dir, 'loom-dispatch')
-    plt.close(fig)
 
 
 def figure_intro(out_dir):
@@ -481,13 +398,16 @@ def figure_intro(out_dir):
 
 
 def figure_costs(out_dir):
-    """Section 2 (one row): message rate, MoE dispatch, GEMM next to held SMs."""
-    fs = MOTIVATION_COMBINED_FONT_SIZES
-    fig, axes = plt.subplots(1, 3, figsize=E2E_COMBINED_FIGURE_SIZE)
-    panel_msgrate(axes[0], fs, '(a) Message rate (higher is better ↑)')
-    panel_dispatch(axes[1], fs, '(b) MoE dispatch (lower is better ↓)')
-    panel_held_sms(axes[2], fs, '(c) GEMM next to held SMs (higher is better ↑)')
-    fig.subplots_adjust(left=0.05, right=0.94, top=0.88, bottom=0.18, wspace=0.36)
+    """Section 2 (one row): message rate; a dispatch until the receiver sees the signal; the expert
+    GEMM beside dispatches (SMs shared); the GEMM next to held SMs (SMs reserved)."""
+    # four across: fonts ~1.3x the three-panel sizes, so the printed text stays ~5 pt
+    fs = {'label': 50, 'tick': 46, 'legend': 42, 'annotation': 46}
+    fig, axes = plt.subplots(1, 4, figsize=(64, 9))
+    panel_msgrate(axes[0], fs, '(a) Message rate (higher ↑)')
+    panel_dispatch_time(axes[1], fs, '(b) 16 × 1 KiB dispatch (lower ↓)')
+    panel_dispatch_gemm(axes[2], fs, '(c) GEMM beside dispatches (lower ↓)')
+    panel_held_sms(axes[3], fs, '(d) GEMM next to held SMs (higher ↑)')
+    fig.subplots_adjust(left=0.04, right=0.96, top=0.88, bottom=0.2, wspace=0.38)
     save(fig, out_dir, 'loom-costs')
     plt.close(fig)
 
@@ -497,13 +417,11 @@ def main():
     os.makedirs(out_dir, exist_ok=True)
     figure_intro(out_dir)
     figure_costs(out_dir)
-    figure_dispatch(out_dir)
     # print the plotted numbers so the paper text can be checked against them
     print('layer bytes MiB:', {k: round(v, 1) for k, v in mixtral_8x22b_layer_bytes().items()})
     print('initiator us:', initiator_latency())
     print(dispatch_sweep().sort_values(['variant', 'H', 'tokens']).to_string(index=False))
     print('unified bound us (store carries data, NIC reads payload):', unified_bound())
-    print(dispatch_local().sort_values(['variant', 'H', 'tokens']).to_string(index=False))
     ks, c = held_sm_curves()
     print('held SMs', ks, {k: (np.round(v, 1).tolist() if isinstance(v, list) else round(v, 1)) for k, v in c.items()})
     b = dispatch_breakdown()
