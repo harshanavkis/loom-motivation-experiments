@@ -445,7 +445,9 @@ cd ~/loom-experiments/latency && $NUMA -N 0 -m 0 ./tma_bw > tma_bw.csv          
 cd ~/loom-experiments/latency && $NUMA -N 0 -m 0 ./dispatch_proxy < /dev/null > dispatch_proxy.csv
 sudo ~/loom-experiments/nvshmem-loopback/run_put_lat.sh        # put_lat_steve.txt
 sudo ~/loom-experiments/nvshmem-loopback/run_put_lat.sh load   # put_lat_steve_load.txt, GEMM as an MPS client
+~/loom-experiments/gpu-posted/fetch_deepep_include.sh   # only if deepep-include/ is missing (DeepEP V1 a56d615 headers)
 ~/loom-experiments/gpu-posted/build_deepep_post.sh && ~/loom-experiments/gpu-posted/build_dispatch_bd.sh
+sudo bash ~/loom-experiments/gpu-posted/bd_one.sh --path flush --qp warp --post lane --H 7168 --tokens 1,128 --iters 20   # one-off run
 mkdir -p ~/loom-experiments/gpu-posted/bd_v2
 sudo env OUT=$HOME/loom-experiments/gpu-posted/bd_v2/dispatch_bd ~/loom-experiments/gpu-posted/run_dispatch_bd.sh --ctas 2,4,8,20   # 5 variants, about 25 min
 sudo env OUT=$HOME/loom-experiments/gpu-posted/bd_v2/dispatch_bd VARIANTS="flush-warpL:--path_flush_--qp_warp_--post_lane ordered-destL3:--path_ordered_--qp_dest_--nq_3_--post_lane flush-destL3:--path_flush_--qp_dest_--nq_3_--post_lane" ~/loom-experiments/gpu-posted/run_dispatch_bd.sh --ctas 2,4,8,20
@@ -454,6 +456,9 @@ sudo ~/loom-experiments/gpu-posted/run_dispatch_d3.sh                           
 python3 summarize_d3.py bd_v2/d3_*.csv --csv bd_v2/d3_summary.csv > bd_v2/d3_summary.txt         # here, in steve-cx7/
 sudo env FILLER=gemm-up WINDOW_MS=1000 OUT=$HOME/loom-experiments/gpu-posted/bd_v2/d3gemm ~/loom-experiments/gpu-posted/run_dispatch_d3.sh   # about 10 min
 python3 summarize_d3.py bd_v2/d3gemm_*.csv --csv bd_v2/d3gemm_summary.csv > bd_v2/d3gemm_summary.txt
+sudo env FILLER=gemm-up WINDOW_MS=1000 REPS=3 TPS_1K="16:100,150,200,300,500,1000 128:200,300,400,600,1000,2000" \
+  TPS_7K="16:100,150,200,300,500,1000 128:500,700,1000,1500,2000,3000" OUT=$HOME/loom-experiments/gpu-posted/bd_v2/d3rate \
+  ~/loom-experiments/gpu-posted/run_dispatch_d3.sh   # GEMM lost vs dispatch rate: bd_v2/d3rate_*, about 25 min
 ```
 
 ## Files (`steve-cx7/`)
@@ -491,4 +496,7 @@ python3 summarize_d3.py bd_v2/d3gemm_*.csv --csv bd_v2/d3gemm_summary.csv > bd_v
 - `dispatch_bd.cu`, `build_dispatch_bd.sh`, `run_dispatch_bd.sh`: the dispatch time breakdown (local / flush / ordered, receiver-side end point). Needs `deepep-include/` from `build_deepep_post.sh`; root for memlock. `BD_DEBUG=1` dumps every CTA's and message's stamps for the first measured run.
 - `bd_v2/dispatch_bd_<variant>_H{1024,7168}_load{0,1}.csv`: one row per run at 2/4/8/20 CTAs. Variants: `local`; `flush` / `ordered` (one QP per destination, warp puts); `flush-warp` (QP per warp, warp puts); `ordered-dest3` (3 QPs per destination, warp puts); `flush-warpL`, `ordered-destL3`, `flush-destL3` (per-lane puts, V2.5's shape: the ones used above).
 - `summarize_bd.py`, `bd_v2/summary.{txt,csv}`: medians and the per-component breakdown per variant (named path-qpmode+QPs, e.g. `ordered-destL24`).
-- `run_dispatch_d3.sh`, `summarize_d3.py`, `bd_v2/d3_<variant>_H{1024,7168}.csv`, `bd_v2/d3_summary.{txt,csv}`: D3, compute lost per dispatch (filler beside the dispatch); `bd_v2/d3gemm_*`: the same with the expert GEMM as the filler.
+- `run_dispatch_d3.sh`, `summarize_d3.py`, `bd_v2/d3_<variant>_H{1024,7168}.csv`, `bd_v2/d3_summary.{txt,csv}`: D3, compute lost per dispatch (filler beside the dispatch); `bd_v2/d3gemm_*`: the same with the expert GEMM as the filler; `bd_v2/d3rate_*`: the expert GEMM at 6 dispatch intervals per size.
+- `bd_one.sh`: one dispatch_bd run with the loopback environment (root). `fetch_deepep_include.sh`: recreates `deepep-include/` from DeepEP a56d615 (checked identical to steve's copy).
+- `diag/`: the `%globaltimer` resolution and step histogram, and the GPUDirect RDMA write-ordering check (see `diag/README.md`).
+- After a reboot of steve, run `m3-sm-share/steve-rdma/setup_root.sh` (identity IOMMU for the GPU and NIC groups, PeerMappingOverride) before any RDMA run.

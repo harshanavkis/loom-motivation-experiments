@@ -61,7 +61,11 @@ for M in 1024 4096; do
   docker run --rm --device nvidia.com/gpu=all --ipc=host -v $PWD:/work -w /work loom-deepgemm \
     bash -c "cat /opt/DeepGEMM.commit; python dg_held.py --dtypes fp8 --ks 4,8,16,20 --reps 5 --iters 100 --m-per-group $M" > held_m$M.csv
 done
+./run_locked.sh   # the same with the SM clock locked at 1410 MHz (sudo nvidia-smi -lgc, reset on exit): locked_m*.csv
+docker run --rm --device nvidia.com/gpu=all --ipc=host -v $PWD:/work -w /work loom-deepgemm \
+  python dg_compare.py --profile --reps 5 > compare.csv   # cuBLAS vs DeepGEMM in one harness, with kernel profiles
 ```
+The image is built on steve (`docker build -t loom-deepgemm .`, ~18 GB); the user is in the docker group and GPUs are reached through CDI (`--device nvidia.com/gpu=all`).
 
 ## Files
 
