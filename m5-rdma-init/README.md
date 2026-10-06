@@ -273,6 +273,30 @@ The same dispatch (routing, token sizes, batches, 8/20 CTAs, GEMM load) started 
 - SM stores to the local peer (`dispatch_ce --sm`, `dispatch_sm_H{1024,7168}_load{0,1}.csv`), the path DeepEP and NCCL use for NVLink peers (a warp copies each token into the peer's slot): 9.5 / 16.4 µs at 16 × 1 KiB / 7 KiB tokens, 105 / 373 µs at 4096 tokens (418 GB/s from 20 CTAs). Figure 1b (2026-10-01) plots the two local curves as measured, SM stores and copy engine, with no NIC cap. At 16 tokens they are 2.3–3.7× below the best GPU-initiated RDMA variant. The earlier capped "bound" curve is dropped.
 - TRAP: under `--load`, cuBLAS loads a new GEMM kernel the first time an SM target is used. That load waits for an idle device while the copy stream waits on the kernel's flag, and the process deadlocks at 0% GPU utilisation. The load thread now runs every SM target once before the sweep.
 
+### Can a kernel start a copy-engine transfer? (`dev_ce_check.cu`, 2026-10-06)
+
+A 256 MiB D2D copy is started while EVERY SM is full: 264 CTAs × 1024 threads (2 × 1024 = the H200's 2048 threads per SM) spin on an HBM stop flag, and one of them is the parent that starts the copy. The host checks all 256 MiB after 0.3 s (D2H on a copy engine) while the SMs are still held (`dev_ce_check.csv`):
+
+| 256 MiB D2D copy | SMs full | SMs free |
+|---|---|---|
+| device-side `cudaMemcpyAsync` (CDP2, fire-and-forget) | 0% done; ran once the SMs were released (seen at 481 ms) | done |
+| memcpy node in a device-launched graph | 0% done; ran once released | done |
+| host `cudaMemcpyBatchAsync` + `PreferOverlapWithCompute` | done (copy engine) | done |
+| host plain `cudaMemcpyAsync` | 0% done (SM kernel) | done |
+
+So both ways a kernel can start a copy run as SM work: a kernel cannot start copy-engine work. A device graph launch must come from a kernel that itself runs in a graph (else "operation not supported"). TRAP: a first version held SMs with 32-thread CTAs (shared memory only); copy kernels fit beside those and it wrongly looked like a copy engine.
+
+### Copy bandwidth per SM: TMA vs stores (`tma_bw.cu`, 2026-10-06)
+
+k CTAs (one per SM) each copy 32 MiB, GPU memory to GPU memory (`tma_bw.csv`). TMA: one thread issues `cp.async.bulk` through 4 × 32 KiB shared-memory stages. Stores: 1024 threads, 16 B loads/stores.
+
+| SMs | 1 | 2 | 4 | 8 | 16 | 32 | 64 | 132 |
+|---|---|---|---|---|---|---|---|---|
+| TMA, GB/s | 45.3 | 90.6 | 181 | 362 | 722 | 1412 | 1738 | 1874 |
+| stores, GB/s | 34.9 | 68.9 | 136 | 263 | 496 | 878 | 1438 | 1864 |
+
+45 GB/s per SM with TMA, which is exactly DeepEP V2.5's per-SM write figure (`deep_ep/utils/envs.py`). One NVLink direction (~450 GB/s) takes ~10 SMs; a 400G NIC (50 GB/s) one or two. Local HBM -> HBM: an upper bound for an NVLink peer.
+
 ## Caveats / fairness
 
 - **The cross-socket topology on steve inflates GPU-posted latency more than CPU-posted.** The GPU-posted path crosses the socket interconnect several extra times per operation: doorbell write, work-request fetch from HBM, completion write to HBM. Each GPU↔NIC access across sockets costs about 1 µs here (GPU vs. host memory at an otherwise equal method: 2.64 vs. 1.48 µs one-way). So treat 10.7 µs as an upper bound for well-placed GPUs and NICs, not a typical value. The published NVSHMEM IBGDA inter-node put figure (7.5 µs one-way, 256 B, including the wire; arXiv 2606.05951) is the other end of the bracket.
@@ -306,6 +330,8 @@ sudo ~/loom-experiments/gpu-posted/run_dispatch.sh < /dev/null                  
 sudo ~/loom-experiments/gpu-posted/run_dispatch_block.sh < /dev/null                 # B1 packed: dispatch_ibgda_block_H*_load*.csv
 ~/loom-experiments/gpu-posted/build_deepep_post.sh && sudo ~/loom-experiments/gpu-posted/run_deepep_post.sh   # deepep_post_*.csv
 sudo ~/loom-experiments/nvshmem-loopback/run_msgrate.sh                              # msgrate_steve.csv
+cd ~/loom-experiments/latency && $NUMA -N 0 -m 0 ./dev_ce_check > dev_ce_check.csv          # kernel-started copies vs copy engine
+cd ~/loom-experiments/latency && $NUMA -N 0 -m 0 ./tma_bw > tma_bw.csv                      # TMA vs store bandwidth per SM
 ~/loom-experiments/latency/run_dispatch_proxy.sh                                      # B2 sweep: dispatch_proxy_H*_load*.csv
 cd ~/loom-experiments/latency && $NUMA -N 0 -m 0 ./dispatch_proxy < /dev/null > dispatch_proxy.csv
 sudo ~/loom-experiments/nvshmem-loopback/run_put_lat.sh        # put_lat_steve.txt
@@ -338,6 +364,8 @@ sudo ~/loom-experiments/nvshmem-loopback/run_put_lat.sh load   # put_lat_steve_l
 - `deepep_post.cu`, `build_deepep_post.sh`, `run_deepep_post.sh`: DeepEP's post path vs NVSHMEM's put (needs DeepEP V1 a56d615 headers in `deepep-include/`, see the build script).
 - `deepep_post_lat.csv`, `deepep_post_dispatch_H{1024,7168}.csv`: its outputs.
 - `run_msgrate.sh`, `msgrate_steve.csv`: IBGDA vs IBRC message rate (NVSHMEM perftests, CTA sweep).
+- `dev_ce_check.cu`, `dev_ce_check.csv`: can a kernel start a copy-engine transfer (device runtime memcpy, device graph launch) with every SM full.
+- `tma_bw.cu`, `tma_bw.csv`: copy bandwidth vs SMs, TMA and stores.
 - `dispatch_proxy.cu`: the B2 dispatch benchmark (verbs + CPU proxy).
 - `dispatch_proxy.csv`: its outputs.
 - `run_dispatch_proxy.sh`: the B2 sweep (H × load).

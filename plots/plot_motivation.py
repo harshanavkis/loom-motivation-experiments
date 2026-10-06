@@ -208,12 +208,16 @@ def held_sm_curves(ks=(4, 8, 16, 20)):
     b[['k', 'msg', 'target', 'tflops']] = b[['k', 'msg', 'target', 'tflops']].astype(float)
     bbase = b[b['mode'] == 'none'].tflops.median()
     curves['gpu-initiated'] = [100 * b[(b['mode'] == 'put') & (b.k == k) & (b.msg == 7168) & (b.target == 10)].tflops.median() / bbase for k in ks]
-    # CPU-posted RDMA (perftest, 20.5 GB/s GPU->host) next to the same GEMM
+    b['comm'] = b.comm.astype(float)
+    curves['gpu-initiated-GBps'] = [b[(b['mode'] == 'put') & (b.k == k) & (b.msg == 7168) & (b.target == 10)].comm.median() for k in ks]
     def none_metric(path):
         v = [float(f[9]) for f in (l.strip().split(',') for l in open(path))
              if f[0] == 'run' and f[1] != 'rep' and f[2] == 'gemm' and f[3] == 'none']
         return statistics.median(v)
-    curves['cpu-proxy'] = 100 * none_metric(os.path.join(INTERF, 'rdma_gpu2host.csv')) / none_metric(os.path.join(INTERF, 'rdma_none.csv'))
+    # CPU-posted RDMA matched to the GPU-initiated runs: 7 KiB writes, GPU memory -> GPU memory
+    curves['cpu-proxy'] = 100 * none_metric(os.path.join(INTERF, 'rdma_gpu2gpu_7k.csv')) / none_metric(os.path.join(INTERF, 'rdma_none.csv'))
+    rate = [l.split() for l in open(os.path.join(INTERF, 'rdma_cpu_7k.txt')) if l.split() and l.split()[0] == '7168'][0]
+    curves['cpu-proxy-GBps'] = float(rate[4]) * 1e6 * 7168 / 1e9   # perftest MsgRate [Mpps] x 7 KiB
     return list(ks), curves
 
 
@@ -322,16 +326,16 @@ def figure1(out_dir):
 def figure2(out_dir):
     fs = SINGLE_COLUMN_FONT_SIZES
     ks, c = held_sm_curves()
-    fig, ax = plt.subplots(figsize=SINGLE_COLUMN_FIGURE_SIZE)
+    fig, ax = plt.subplots(figsize=(SINGLE_COLUMN_FIGURE_SIZE[0], 6.6))   # taller: legend below the axes
     x = range(len(ks))
-    for v, mk, ls, ms, lw in (('gpu-initiated', 'o', '-', 16, 4), ('sm-copy', 's', '--', 8, 2),
-                              ('partitioned', '^', ':', 12, 2)):
+    for v, mk, ls, ms, lw in (('gpu-initiated', 'o', '-', 14, 4), ('partitioned', '^', ':', 12, 2)):
         label, color = VARIANTS[v]
         ax.plot(x, c[v], color=color, marker=mk, markersize=ms, linewidth=lw, linestyle=ls,
                 markeredgecolor='k', alpha=0.9, label=label)
     label, color = VARIANTS['cpu-proxy']
-    ax.axhline(c['cpu-proxy'], color=color, linewidth=2, linestyle=':', label=f'{label} (holds a CPU core)')
-    # unified-contract bound: the kernel starts the transfer like a local copy-engine copy
+    ax.axhline(c['cpu-proxy'], color=color, linewidth=2, linestyle=':',
+               label=f"{label} (1 core, {c['cpu-proxy-GBps']:.1f} GB/s)")
+    # the zero-SM path for host-queued transfers, which a unified contract keeps for any peer
     ax.axhline(c['copy-engine'], color=VARIANTS['loom'][1], linewidth=3, linestyle='-.',
                label='copy engine (zero-SM; unified: any peer)')
     ax.fill_between(x, c['gpu-initiated'], c['copy-engine'], color=PASTEL[2], alpha=0.5,
@@ -346,7 +350,16 @@ def figure2(out_dir):
     ax.set_xlabel('SMs held for communication (of 132)', fontsize=fs['label'])
     ax.set_ylabel('Expert GEMM throughput [%]', fontsize=fs['label'])
     ax.grid(True, alpha=0.3)
-    ax.legend(loc='lower left', ncol=1, frameon=True, fontsize=fs['legend'])
+    # right axis: the network throughput those held SMs buy (GPU-initiated 7 KiB puts, same runs)
+    ax2 = ax.twinx()
+    ax2.plot(x, c['gpu-initiated-GBps'], color=VARIANTS['gpu-initiated'][1], marker='o', markersize=10,
+             markerfacecolor='white', linewidth=2, linestyle='--', label='gpu-initiated network GB/s (right)')
+    ax2.set_ylim(0, 16.25)
+    ax2.set_ylabel('Network throughput [GB/s]', fontsize=fs['label'])
+    ax2.tick_params(axis='y', labelsize=fs['tick'])
+    h1, l1 = ax.get_legend_handles_labels(); h2, l2 = ax2.get_legend_handles_labels()
+    ax.legend(h1 + h2, l1 + l2, loc='upper center', bbox_to_anchor=(0.5, -0.17), ncol=2, frameon=True,
+              fontsize=fs['legend'] - 1, columnspacing=1.0)
     top_label(ax, '(Higher is better ↑)', fs['annotation'])
     plt.tight_layout()
     save(fig, out_dir, 'loom-held-sms')

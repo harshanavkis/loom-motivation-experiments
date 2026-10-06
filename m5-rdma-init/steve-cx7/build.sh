@@ -35,4 +35,10 @@ nix shell --impure nixpkgs#cudaPackages.cuda_nvcc -c nvcc -O3 -std=c++17 -arch=s
   -I"$CUDART/include" -I"$CCCL/include" -I"$CUBLAS_INC/include" -L"$CUDART/lib" -L"$CUBLAS_LIB/lib" -L/run/opengl-driver/lib \
   -Xlinker -rpath -Xlinker "$CUDART/lib:$CUBLAS_LIB/lib:/run/opengl-driver/lib" \
   dispatch_ce.cu -o dispatch_ce -lcublas -lcudart -lcuda
-echo built ./ce_latency ./ce_triggered ./proxy_b2 ./fence_cost ./dispatch_proxy ./nic_post ./dispatch_ce
+nix shell --impure nixpkgs#cudaPackages.cuda_nvcc -c nvcc -O3 -std=c++17 -rdc=true -arch=sm_90 \
+  -I"$CUDART/include" -I"$CCCL/include" -L"$CUDART/lib" -L/run/opengl-driver/lib \
+  -Xlinker -rpath -Xlinker "$CUDART/lib:/run/opengl-driver/lib" dev_ce_check.cu -o dev_ce_check -lcudadevrt -lcudart -lcuda
+nix shell --impure nixpkgs#cudaPackages.cuda_nvcc -c nvcc -O3 -std=c++17 -arch=sm_90a \
+  -I"$CUDART/include" -I"$CCCL/include" -L"$CUDART/lib" -L/run/opengl-driver/lib \
+  -Xlinker -rpath -Xlinker "$CUDART/lib:/run/opengl-driver/lib" tma_bw.cu -o tma_bw -lcudart
+echo built ./ce_latency ./ce_triggered ./proxy_b2 ./fence_cost ./dispatch_proxy ./nic_post ./dispatch_ce ./dev_ce_check ./tma_bw

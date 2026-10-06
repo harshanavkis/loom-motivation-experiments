@@ -1,0 +1,41 @@
+Conflicting CPU frequency values detected: 3900.000000 != 800.000000. CPU Frequency is not max.
+ WARNING: BW peak won't be measured in this run.
+Perftest doesn't supports device memory tests with inline messages: inline size set to 0
+initializing CUDA
+Listing all CUDA devices in system:
+CUDA device 0: PCIe address is 15:00
+
+Picking device No. 0
+[pid = 3811950, dev = 0] device name = [NVIDIA H200 NVL]
+creating CUDA Ctx
+making it the current CUDA Ctx
+using DMA-BUF for GPU buffer address at 0x7a41f3e00000 aligned at 0x7a41f3e00000 with aligned size 16384
+allocated GPU buffer of a 14336 address at 0x650fec891a60 for type CUDA_MEM_VMM
+Calling ibv_reg_mr_ex with dmabuf(offset=0, size=14336, addr=0x7a41f3e00000, fd=42) for QP #0
+---------------------------------------------------------------------------------------
+                    RDMA_Write BW Test
+ Dual-port       : OFF		Device         : mlx5_0
+ Number of qps   : 1		Transport type : IB
+ Connection type : RC		Using SRQ      : OFF
+ PCIe relax order: ON		Lock-free      : OFF
+ ibv_wr* API     : ON		Using Enhanced Reorder      : OFF
+ TX depth        : 128
+ CQ Moderation   : 100
+ CQE Poll Batch  : Dynamic
+ Mtu             : 1024[B]
+ Link type       : Ethernet
+ GID index       : 3
+ Max inline data : 0[B]
+ rdma_cm QPs	 : OFF
+ Data ex. method : Ethernet
+ NUMA node       : 1
+---------------------------------------------------------------------------------------
+ local address: LID 0000 QPN 0x060a PSN 0x71af6a RKey 0x008515 VAddr 0x007a41f3e01c00
+ GID: 00:00:00:00:00:00:00:00:00:00:255:255:169:254:169:187
+ remote address: LID 0000 QPN 0x0764 PSN 0xf97f86 RKey 0x04452a VAddr 0x0076dad7e01c00
+ GID: 00:00:00:00:00:00:00:00:00:00:255:255:169:254:48:90
+---------------------------------------------------------------------------------------
+ #bytes     #iterations    BW peak[MiB/sec]    BW average[MiB/sec]   MsgRate[Mpps]
+ 7168       98048900         0.00               14567.82		     2.131065
+---------------------------------------------------------------------------------------
+destroying current CUDA Ctx

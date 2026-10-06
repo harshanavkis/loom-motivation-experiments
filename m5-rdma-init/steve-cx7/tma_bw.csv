@@ -1,0 +1,18 @@
+# copy bandwidth vs SMs, 32 MiB per CTA, GPU memory -> GPU memory, one H200 (132 SMs)
+mode,ctas,GBps
+tma,1,45.3
+tma,2,90.6
+tma,4,181.1
+tma,8,361.6
+tma,16,722.2
+tma,32,1411.5
+tma,64,1738.3
+tma,132,1874.0
+store,1,34.9
+store,2,68.9
+store,4,136.3
+store,8,263.2
+store,16,496.4
+store,32,877.5
+store,64,1437.9
+store,132,1864.3

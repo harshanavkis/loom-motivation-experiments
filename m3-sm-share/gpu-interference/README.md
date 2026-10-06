@@ -44,7 +44,7 @@ Rates: 50 GB/s is a 400G NIC's line rate (CX-7), 100 GB/s an 800G one (CX-8); k 
 2. **SMs are taken in pairs** (2-CTA clusters, `--occ-cluster 2`, the default). This was the kinder placement for cuBLAS in the diagnostic below, so it is the conservative choice.
 3. **The GEMM is told how many SMs it has.** It gets `cublasSetSmCountTarget(132−k)`, as DeepGEMM is given `num_sms` next to DeepEP. The SM targets are warmed up before any SM-holding kernel runs, and cuBLAS gets a fixed 256 MiB workspace.
 4. **The stop flag lives in HBM** and is set by a small copy-engine memcpy. Polling a host-memory flag from 20 SMs perturbed the whole GPU (triad −45%) in the first version, and real comm kernels poll HBM.
-5. **The copy engine really is a copy engine.** `ce_check` holds all 132 SMs and confirms that `cudaMemcpyAsync` and `cudaMemcpyBatchAsync` complete, both D2D and D2H.
+5. **The copy engine really is a copy engine.** `ce_check` holds all 132 SMs and confirms that `cudaMemcpyAsync` and `cudaMemcpyBatchAsync` complete, both D2D and D2H. CORRECTION (2026-10-06): `ce_check`'s occupiers fill shared memory but not thread slots, so a copy kernel can still fit beside them. With every SM truly full (`../../m5-rdma-init/steve-cx7/dev_ce_check.cu`), plain `cudaMemcpyAsync` D2D does NOT complete (it is an SM kernel); only `cudaMemcpyBatchAsync` + `PreferOverlapWithCompute` does.
 6. The copy CTAs cycle through 32 MiB per CTA with streaming loads and stores (`__ldcs`/`__stcs`), so they touch HBM rather than the 60 MB L2.
 
 ## Results
@@ -109,7 +109,7 @@ Offloading does not remove HBM traffic: a CE moving 50–67 GB/s costs triad 2.4
 | batch d2h GB/s | 0.8 | 5.6 | 10.0 | 14.8 | 22.8 | 27.2 | 28.6 | 29.0 |
 
 At token granularity this measures about 1.5 M copies/s, i.e. 10–18 GB/s. CORRECTION (2026-10-01): the timer starts before the host enqueues the batch, so this is the driver building copies on the CPU, not the engine. With the batch built before a kernel triggers it, the engine runs 21,711 token copies at 64 GB/s (1 KiB) and 84 GB/s (7 KiB) (`../../m5-rdma-init`, `dispatch_ce.cu`). The limit is descriptor generation on the host. `cudaMemcpyAsync` in a loop is 3–4× worse still. An engine that replaces the SMs' scatter/gather needs scatter-gather descriptors, as a NIC's multi-SGE WQEs have (DeepEP PR #453 uses them). One copy per token will not do.
-- **Caveat on plain `cudaMemcpyAsync` D2D:** it reaches 1431 GB/s at 16 MB (`ce_size` rows), which is SM-kernel speed. When SMs are free, the driver apparently runs large D2D copies on SMs, even though the same call completes on a CE when all SMs are held (`ce_check`). Only `cudaMemcpyBatchAsync` with `PreferOverlapWithCompute` was used as "CE" in the tables above.
+- **Caveat on plain `cudaMemcpyAsync` D2D:** it reaches 1431 GB/s at 16 MB (`ce_size` rows), which is SM-kernel speed. When SMs are free, the driver runs large D2D copies on SMs, and with every SM truly full the same call does not progress (`dev_ce_check.cu`; the earlier `ce_check` result came from occupiers that left thread slots free). Only `cudaMemcpyBatchAsync` with `PreferOverlapWithCompute` was used as "CE" in the tables above.
 
 ### 5. CPU-posted RDMA next to compute (real NIC, steve CX-7 loopback)
 
@@ -181,3 +181,6 @@ Check first that the GPU is idle: `nvidia-smi --query-compute-apps=pid --format=
 - `results_steve.csv`: raw sweep (590 runs, 5 reps) plus `ce_check` and `ce_size` rows.
 - `summary_steve.md`: all tables, including `gemm_down` and triad in full.
 - `ce_streams_steve.csv`, `diag_placement_steve.txt`, `results_steve.gpu.txt`: raw outputs.
+
+
+**Matched to the GPU-initiated runs (2026-10-06, `rdma_cpu_posted_7k.sh`):** 7168 B writes, GPU memory to GPU memory, 90 s, next to the same GEMM (`rdma_gpu2gpu_7k.csv`, `rdma_cpu_7k.txt`): 2.13 M writes/s = 15.3 GB/s, poster = 1.00 CPU core, GEMM 100.1%. GPU-initiated 7 KiB puts in `../gpu-posted` reach 2.3 / 5.3 / 9.3 / 10.0 GB/s with 4 / 8 / 16 / 20 held SMs. This is Figure 3's right axis; the earlier 20.5 GB/s point was 64 KiB GPU -> host and is not comparable.

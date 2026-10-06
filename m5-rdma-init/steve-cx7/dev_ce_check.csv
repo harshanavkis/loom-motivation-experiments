@@ -1,0 +1,10 @@
+# 256 MiB D2D copy; held = every SM full (264 CTAs x 1024 threads); free = no other work
+mode,sms,complete,parent_saw_tail_us,device_call_err
+dev_memcpy,held,0.000,480786,0
+dev_graph,held,0.000,480601,0
+host_batch,held,1.000,-1,0
+host_plain,held,0.000,-1,0
+dev_memcpy,free,1.000,193,0
+dev_graph,free,1.000,131,0
+host_batch,free,1.000,-1,0
+host_plain,free,1.000,-1,0
