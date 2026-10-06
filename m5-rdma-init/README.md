@@ -355,6 +355,19 @@ At ≥ 1024 tokens both remote paths are bound by steve's NIC (≈ 5.2 M message
 - Kept: routing, the stores themselves, the store completion and fence before the signal, and the release signal. In total that is the local column: 3.9 µs of sender time and 55 CTA-µs.
 - Added, not measurable here: one physical trip through the fabric for the last data and the signal, and the link's bandwidth.
 
+**1 and 128 tokens of 7 KiB (paper Fig 3b, 2026-10-06).** 7 KiB is DeepSeek-V3's hidden size in FP8, 128 tokens per GPU is DeepEP's low-latency setting, 1 token is the fixed cost of a dispatch. One session, 20 CTAs, idle, medians of 20 runs (`bd_v2/dispatch_bd_t1_*`, `bd_v2/summary_t1.csv`; kept out of `summary.csv` so the 128-token runs are not counted twice). No message was ever missing.
+
+| µs until the receiver sees the signal | local | ordered | flush |
+|---|---|---|---|
+| 1 token (6 messages): total | 4.9 | 19.1 | 31.4 |
+| send loop / own writes / signal issued / flight | 1.8 / 1.5 / 1.3 / 0.2 | 4.3 / 0 / 4.6 / 10.0 | 9.5 / 11.9 / 4.1 / 5.0 |
+| SM time (CTA-µs), of it waiting | 39 | 32 | 428, 391 (91%) |
+| 128 tokens (683 messages, 4.9 MB): total | 12.5 | 348.8 | 365.2 |
+| send loop / own writes / signal issued / flight | 9.2 / 1.8 / 1.3 / 0.2 | 20.5 / 0 / 4.6 / 323.2 | 27.1 / 328.2 / 4.1 / 4.9 |
+| SM time (CTA-µs), of it waiting | 207 | 363 | 7138, 6824 (96%) |
+
+The payload alone needs 2.9 µs (1 token) and 331 µs (128 tokens) through the NIC at 14.8 GB/s, so 128 tokens are NIC-bound here. The 128-token numbers reproduce the earlier run: local 12.5 = 12.5, ordered 348.8 vs 348.0, flush 365.2 vs 346.5 (+5%). At one token the ordered path holds the SMs slightly less than local (32 vs 39 CTA-µs): it does not wait, and local's store completion and fence take 1.5 µs.
+
 ### Compute lost per dispatch (D3, `dispatch_bd.cu --d3`, 2026-10-06)
 
 **Question.** Is a dispatch's SM time (above) compute that other work loses, and how much per path?
@@ -451,7 +464,11 @@ sudo bash ~/loom-experiments/gpu-posted/bd_one.sh --path flush --qp warp --post 
 mkdir -p ~/loom-experiments/gpu-posted/bd_v2
 sudo env OUT=$HOME/loom-experiments/gpu-posted/bd_v2/dispatch_bd ~/loom-experiments/gpu-posted/run_dispatch_bd.sh --ctas 2,4,8,20   # 5 variants, about 25 min
 sudo env OUT=$HOME/loom-experiments/gpu-posted/bd_v2/dispatch_bd VARIANTS="flush-warpL:--path_flush_--qp_warp_--post_lane ordered-destL3:--path_ordered_--qp_dest_--nq_3_--post_lane flush-destL3:--path_flush_--qp_dest_--nq_3_--post_lane" ~/loom-experiments/gpu-posted/run_dispatch_bd.sh --ctas 2,4,8,20
-python3 summarize_bd.py bd_v2/dispatch_bd_*.csv --csv bd_v2/summary.csv > bd_v2/summary.txt   # here, in steve-cx7/
+python3 summarize_bd.py $(ls bd_v2/dispatch_bd_*.csv | grep -v _t1_) --csv bd_v2/summary.csv > bd_v2/summary.txt   # here, in steve-cx7/
+# Fig 3b (1 and 128 x 7 KiB, one session): on steve, for each of --path local | --path ordered --qp dest --nq 3 --post lane |
+#   --path flush --qp warp --post lane: sudo bash ~/loom-experiments/gpu-posted/bd_one.sh <path args> --H 7168 --tokens 1,128 --iters 20
+#   > ~/loom-experiments/gpu-posted/bd_v2/dispatch_bd_t1_{local,ordered-destL3,flush-warpL}_H7168_load0.csv; scp them to bd_v2/, then
+python3 summarize_bd.py bd_v2/dispatch_bd_t1_*.csv --csv bd_v2/summary_t1.csv
 sudo ~/loom-experiments/gpu-posted/run_dispatch_d3.sh                                  # D3: bd_v2/d3_<variant>_H*.csv, about 12 min
 python3 summarize_d3.py bd_v2/d3_*.csv --csv bd_v2/d3_summary.csv > bd_v2/d3_summary.txt         # here, in steve-cx7/
 sudo env FILLER=gemm-up WINDOW_MS=1000 OUT=$HOME/loom-experiments/gpu-posted/bd_v2/d3gemm ~/loom-experiments/gpu-posted/run_dispatch_d3.sh   # about 10 min

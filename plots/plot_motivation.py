@@ -3,9 +3,12 @@
 
 Figure 1 (intro, single column, loom-mix): Mixtral-8x22B bytes per MoE layer by fabric and kind
 of traffic (Chakra ET). Figure 3 (Section 2, 1x3, loom-costs): (a) message rate, GPU-initiated vs CPU
-proxy; (b) a 16 x 1 KiB dispatch to local and remote peers until the receiver sees the signal
-(dispatch_bd.cu); (c) SM time per dispatch vs batch size. The CPU proxy appears in (a) only (owner,
-2026-10-06). The GEMM panels (shared SMs: GEMM lost vs dispatch rate; reserved SMs: DeepGEMM next to
+proxy; (b) a dispatch of 1 and of 128 7 KiB tokens to local and remote peers until the receiver sees the
+signal (dispatch_bd.cu), with the time the payload needs through the NIC; (c) transport state each GPU
+holds vs EP size (m2-device-state/totals.out). The CPU proxy appears in (a) only (owner, 2026-10-06).
+Dropped 2026-10-06 (owner): the 16 x 1 KiB breakdown (16 x 1 KiB was our choice, not a standard size;
+128 x 7 KiB is DeepEP's low-latency setting) and the SM-time-per-dispatch panel (its numbers are
+printed for the text). The GEMM panels (shared SMs: GEMM lost vs dispatch rate; reserved SMs: DeepGEMM next to
 held SMs) were dropped from the figure the same day (owner): their numbers are printed for the text.
 Older layout notes follow:
 Figure 1 (intro, 1x3): (a) Mixtral-8x22B bytes per MoE layer by fabric (Chakra ET),
@@ -18,6 +21,7 @@ Figure 2 (Section 2, single column): compute left vs SMs held for communication.
 Every number is read from the committed result files of this repository.
 Usage: python3 plot_motivation.py <output dir>   (writes .pdf and .png)
 """
+import io
 import os
 import re
 import sys
@@ -37,6 +41,8 @@ POSTED = os.path.join(ROOT, 'm3-sm-share', 'gpu-posted')
 CX7 = os.path.join(ROOT, 'm5-rdma-init', 'steve-cx7')
 DEEPGEMM = os.path.join(ROOT, 'm3-sm-share', 'deepgemm')
 BD = os.path.join(CX7, 'bd_v2')
+M2 = os.path.join(ROOT, 'm2-device-state')
+NIC_TO_HBM_GBPS = 14.8   # best NIC -> HBM rate in steve's RDMA sweeps (m5 README)
 # dispatch_bd variants plotted: summary name -> (label, color). Remote: per-lane DeepEP puts (V2.5's
 # shape); flush = V2.5's normal dispatch (QPs follow the warps), ordered = V1 low latency (3 QPs per
 # destination, a signal behind each QP's data)
@@ -229,6 +235,29 @@ def dispatch_breakdown():
     return d[(d.ctas == 20) & (d.load == 0) & d.path.isin(list(BD_PATHS))]
 
 
+def dispatch_breakdown_t1():
+    """dispatch_bd.cu, 1 and 128 tokens of 7 KiB in one session (bd_v2/summary_t1.csv), 20 CTAs, idle."""
+    d = pd.read_csv(os.path.join(BD, 'summary_t1.csv'))
+    return d[(d.ctas == 20) & (d.load == 0) & d.path.isin(list(BD_PATHS))]
+
+
+def transport_state():
+    """Per-GPU HBM (MiB) and QPs from m2-device-state/totals.out (source analysis, 1 NIC per GPU)."""
+    series = {'DeepEP-V1 LL': 'v1-ll', 'DeepEP-V1 normal': 'v1-normal', 'DeepEP-V2.5 hybrid, CX-7': 'v2.5'}
+    rows, cur = [], None
+    for line in open(os.path.join(M2, 'totals.out')):
+        if line.startswith('### '):
+            cur = None
+            for k, v in series.items():
+                if line.startswith('### ' + k):
+                    qps = re.search(r'QPs total=(\d+)', line) or re.search(r'QPs=(\d+)', line)
+                    cur = [v, int(re.search(r'EP(\d+)', line).group(1)), int(qps.group(1))]
+        elif cur and 'TOTAL GPU HBM' in line:
+            rows.append(cur + [float(re.search(r'([\d.]+) MiB', line).group(1))])
+            cur = None
+    return pd.DataFrame(rows, columns=['series', 'ep', 'qps', 'mib'])
+
+
 def dispatch_rate():
     """--d3 --d3-filler gemm-up interval sweep (bd_v2/d3rate_<variant>_H*.csv): per (path, H, tokens,
     requested period) the medians over 3 repetitions of the ACHIEVED rate (dispatches / measured
@@ -313,65 +342,85 @@ def panel_msgrate(ax, fs, title):
 
 
 
-def panel_dispatch_time(ax, fs, title, H=1024, T=16):
-    """Where the time of one dispatch goes, until the receiver sees the signal (stacked)."""
-    d = dispatch_breakdown()
-    d = d[(d.H == H) & (d.tokens == T)].set_index('path')
-    segs = (('send', 'send loop', PASTEL[0], ''),
-            ('drain', 'waiting for own writes', PASTEL[3], '//'),
-            ('signal', 'signal issued', PASTEL[1], '..'),
-            ('flight', 'signal in flight', PASTEL[7], '\\\\'))
+BD_SEGS = (('send', 'send loop', PASTEL[0], ''),
+           ('drain', 'waiting for own writes', PASTEL[3], '//'),
+           ('signal', 'signal issued', PASTEL[1], '..'),
+           ('flight', 'signal in flight', PASTEL[7], '\\\\'))
+
+
+def panel_dispatch_time(axes, fs, title, H=7168, tokens=(1, 128)):
+    """Where the time of one dispatch goes, until the receiver sees the signal (stacked), one sub-axis
+    per batch size; dashed: the payload's time through the NIC at the testbed's NIC -> HBM rate."""
+    d = dispatch_breakdown_t1()
     x = np.arange(len(BD_PATHS))
-    bottom = np.zeros(len(x))
-    for col, lab, color, hatch in segs:
-        vals = np.array([d.loc[p, col] for p in BD_PATHS])
-        ax.bar(x, vals, 0.6, bottom=bottom, color=color, hatch=hatch, edgecolor='black', linewidth=1, label=lab)
-        bottom += vals
-    for i, p in enumerate(BD_PATHS):
-        ax.text(x[i], d.loc[p, 'seen_us'] + 0.8, f"{d.loc[p, 'seen_us']:.1f}", ha='center', va='bottom',
-                fontsize=fs['annotation'])
-    ax.set_xticks(x)
-    ax.set_xticklabels(['local', 'remote:\nordered', 'remote:\nflush'], fontsize=fs['tick'])
+    for ax, T in zip(axes, tokens):
+        t = d[(d.H == H) & (d.tokens == T)].set_index('path')
+        bottom = np.zeros(len(x))
+        for col, lab, color, hatch in BD_SEGS:
+            vals = np.array([t.loc[p, col] for p in BD_PATHS])
+            ax.bar(x, vals, 0.6, bottom=bottom, color=color, hatch=hatch, edgecolor='black', linewidth=1, label=lab)
+            bottom += vals
+        top = max(t.seen_us)
+        for i, p in enumerate(BD_PATHS):
+            ax.text(x[i], t.loc[p, 'seen_us'] + 0.04 * top, f"{t.loc[p, 'seen_us']:.0f}", ha='center',
+                    va='bottom', fontsize=fs['annotation'])
+        # remote bars only: the payload (one 7 KiB message per destination) at the NIC's rate
+        link_us = nic_payload_us(H, T)
+        ax.plot([0.6, 2.4], [link_us, link_us], color='black', linewidth=4, linestyle='--', label='payload through NIC')
+        ax.set_xticks(x)
+        ax.set_xticklabels(['local', 'rem.\nordered', 'rem.\nflush'], fontsize=fs['tick'] - 4)
+        ax.tick_params(axis='y', labelsize=fs['tick'])
+        ax.set_ylim(0, top * 3.0)     # headroom so the legend sits above the bars
+        ax.yaxis.set_major_locator(mticker.MaxNLocator(4))
+        ax.grid(True, alpha=0.3, axis='y')
+        ax.set_xlabel(f'{T} token{"s" if T > 1 else ""}', fontsize=fs['label'])
+    axes[0].set_ylabel('Latency [us]', fontsize=fs['label'])
+    axes[0].legend(loc='upper left', ncol=1, frameon=True, fontsize=fs['legend'] - 8, handlelength=1.4,
+                   labelspacing=0.3, borderpad=0.3)
+    axes[0].text(1.1, 1.0, title, transform=axes[0].transAxes, ha='center', va='bottom',
+                 fontsize=fs['annotation'], color='navy', fontweight='bold', clip_on=False)
+
+
+def nic_payload_us(H, T):
+    """Payload bytes of a dispatch (messages from the run) through the NIC at NIC_TO_HBM_GBPS, in us."""
+    return msgs_per_dispatch(T) * H / (NIC_TO_HBM_GBPS * 1e3)
+
+
+def msgs_per_dispatch(T):
+    for f in os.listdir(BD):
+        if f.startswith('dispatch_bd_t1_flush') and f.endswith('.csv'):
+            rows = [l for l in open(os.path.join(BD, f)) if l.strip() and not l.startswith(('#', 'WARN'))]
+            d = pd.read_csv(io.StringIO(''.join(rows)))
+            return int(d[d.tokens == T].msgs.iloc[0])
+
+
+def panel_transport_state(ax, fs, title):
+    """HBM each GPU holds for GPU-initiated RDMA transport state vs EP size; labels: QPs (each with a
+    NIC doorbell page mapped into the GPU)."""
+    d = transport_state()
+    eps = sorted(d.ep.unique())
+    series = (('v1-ll', 'DeepEP V1 low-latency', 'lightskyblue', ''),
+              ('v1-normal', 'DeepEP V1 normal', 'white', '//'),
+              ('v2.5', 'DeepEP V2.5', 'tab:blue', ''))
+    w = 0.27
+    for j, (k, lab, color, hatch) in enumerate(series):
+        s_ = d[d.series == k].set_index('ep')
+        xs = np.arange(len(eps)) + (j - 1) * w
+        vals = [s_.loc[e, 'mib'] for e in eps]
+        ax.bar(xs, vals, w, color=color, hatch=hatch, edgecolor='black', linewidth=1, label=lab)
+        for xi, e in zip(xs, eps):
+            ax.text(xi, s_.loc[e, 'mib'] + 12, f"{s_.loc[e, 'qps']:,}", ha='center', va='bottom', rotation=90,
+                    fontsize=fs['annotation'] - 10)
+    ax.set_xticks(range(len(eps)))
+    ax.set_xticklabels([f'EP{e}' for e in eps], fontsize=fs['tick'])
     ax.tick_params(axis='y', labelsize=fs['tick'])
-    ax.set_ylim(0, 80)            # headroom so the legend sits above the bars
-    ax.set_yticks([0, 10, 20, 30, 40])
-    ax.set_ylabel('Latency [us]', fontsize=fs['label'])
+    ax.set_ylim(0, 1150)          # headroom so the legend sits above the bars
+    ax.set_yticks([0, 200, 400, 600])
+    ax.set_xlabel('GPUs in the expert-parallel group', fontsize=fs['label'])
+    ax.set_ylabel('HBM per GPU [MiB]', fontsize=fs['label'])
     ax.grid(True, alpha=0.3, axis='y')
-    ax.legend(loc='upper left', ncol=2, frameon=True, fontsize=fs['legend'] - 2, columnspacing=0.8, handlelength=1.4)
-    top_label(ax, title, fs['annotation'])
-
-
-
-
-
-
-
-
-def panel_dispatch_sm(ax, fs, title, H=1024):
-    """SM time per dispatch (CTA-us) vs tokens, 20 CTAs, idle; dashed: the part flush spends waiting."""
-    d = dispatch_breakdown()
-    d = d[d.H == H]
-    toks = sorted(d.tokens.unique())
-    x = {t: i for i, t in enumerate(toks)}
-    short = {'local': 'local', 'ordered-destL24': 'remote: ordered', 'flush-warpL24': 'remote: flush'}
-    for p, (_, color) in BD_PATHS.items():
-        s_ = d[d.path == p].sort_values('tokens')
-        ax.plot([x[t] for t in s_.tokens], s_.cta_total_us, color=color, marker='o', markersize=12, linewidth=3,
-                markeredgecolor='k', alpha=0.9, label=short[p])
-    s_ = d[d.path == 'flush-warpL24'].sort_values('tokens')
-    ax.plot([x[t] for t in s_.tokens], s_.cta_drain_us, color=BD_PATHS['flush-warpL24'][1], marker='o', markersize=10,
-            markerfacecolor='white', linewidth=2, linestyle='--', label='flush: waiting')
-    ax.set_yscale('log')
-    ax.set_ylim(10, 1e8)          # headroom so the legend sits above the curves
-    ax.set_xticks(range(len(toks)))
-    ax.set_xticklabels([str(t) for t in toks], fontsize=fs['tick'])
-    ax.tick_params(axis='y', labelsize=fs['tick'])
-    ax.yaxis.set_major_locator(mticker.LogLocator(base=10, numticks=10))
-    ax.yaxis.set_major_formatter(mticker.LogFormatterMathtext())
-    ax.set_xlabel('Tokens dispatched (1 KiB, top-8)', fontsize=fs['label'])
-    ax.set_ylabel('SM time [SM-us]', fontsize=fs['label'])
-    ax.grid(True, alpha=0.3)
-    ax.legend(loc='upper left', ncol=2, frameon=True, fontsize=fs['legend'] - 2, columnspacing=0.8, handlelength=1.4)
+    ax.legend(loc='upper left', ncol=1, frameon=True, fontsize=fs['legend'] - 4, handlelength=1.4,
+              labelspacing=0.3, borderpad=0.3)
     top_label(ax, title, fs['annotation'])
 
 
@@ -386,14 +435,16 @@ def figure_intro(out_dir):
 
 
 def figure_costs(out_dir):
-    """Section 2 (one row): message rate; a dispatch until the receiver sees the signal; SM time per
-    dispatch."""
+    """Section 2 (one row): message rate; a dispatch until the receiver sees the signal; transport
+    state per GPU."""
     fs = MOTIVATION_COMBINED_FONT_SIZES
-    fig, axes = plt.subplots(1, 3, figsize=E2E_COMBINED_FIGURE_SIZE)
-    panel_msgrate(axes[0], fs, '(a) Message rate (higher is better ↑)')
-    panel_dispatch_time(axes[1], fs, '(b) 16 × 1 KiB dispatch (lower is better ↓)')
-    panel_dispatch_sm(axes[2], fs, '(c) SM time per dispatch (lower is better ↓)')
-    fig.subplots_adjust(left=0.05, right=0.98, top=0.88, bottom=0.18, wspace=0.28)
+    fig = plt.figure(figsize=E2E_COMBINED_FIGURE_SIZE)
+    gs = fig.add_gridspec(1, 3, left=0.05, right=0.98, top=0.88, bottom=0.18, wspace=0.28)
+    sub = gs[0, 1].subgridspec(1, 2, wspace=0.32)
+    panel_msgrate(fig.add_subplot(gs[0, 0]), fs, '(a) Message rate (higher is better ↑)')
+    panel_dispatch_time([fig.add_subplot(sub[0, 0]), fig.add_subplot(sub[0, 1])], fs,
+                        '(b) Dispatch of 7 KiB tokens (lower is better ↓)')
+    panel_transport_state(fig.add_subplot(gs[0, 2]), fs, '(c) Transport state per GPU (lower is better ↓)')
     save(fig, out_dir, 'loom-costs')
     plt.close(fig)
 
@@ -414,6 +465,12 @@ def main():
     b = dispatch_breakdown()
     print(b[['path', 'H', 'tokens', 'send', 'drain', 'signal', 'flight', 'seen_us', 'cta_total_us', 'cta_drain_us']]
           .sort_values(['path', 'H', 'tokens']).to_string(index=False))
+    print('1 / 128 x 7 KiB, one session (Fig 3b):')
+    print(dispatch_breakdown_t1()[['path', 'tokens', 'send', 'drain', 'signal', 'flight', 'seen_us', 'cta_total_us',
+                                   'cta_drain_us']].sort_values(['tokens', 'path']).to_string(index=False))
+    print('payload through the NIC us:', {T: round(nic_payload_us(7168, T), 1) for T in (1, 128)})
+    print('transport state (Fig 3c):')
+    print(transport_state().to_string(index=False))
     print(dispatch_rate().sort_values(['H', 'tokens', 'path', 'rate_per_ms']).to_string(index=False))
 
 
