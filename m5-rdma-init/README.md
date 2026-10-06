@@ -391,11 +391,20 @@ Reading:
 
 At the shorter periods flush loses 1.2 / 4.2 / 2.1 / 10.3%. The noise is ~0.2% (local at 16 × 1 KiB: −0.06…0.24%).
 - **The percentage depends on the dispatch rate, which the harness chooses.** Per dispatch, the GEMM loses 6–51× more beside flush than beside the local path, and 1–8× more beside ordered.
-- **Beside a GEMM, every path first waits for tiles to free its SMs** (tiles run ~70–80 µs). Launch → done is 74–79 µs for local and 186–650 µs for flush, against 4–5 µs idle.
+- **Beside a GEMM, every path first waits for tiles to free its SMs.** At one dispatch per ms or less (interval sweep below), launch → done is 225–245 µs for local and ordered and 270–670 µs for flush, against 4–5 µs idle: ~220 µs of it is waiting for 20 SMs. CORRECTION: an earlier version said 74–79 µs. That came from the 100/200 µs periods, where dispatches queue back to back and each takes the SMs its predecessor just freed.
 - **Flush wastes more here than in isolation** (16 × 7 KiB: 1661 SM-µs vs 1017 CTA-µs of residency idle). Its CTAs start staggered as tiles end, and the completion wait keeps the early ones resident until the late ones' data has drained.
 - **Local lost less than its residency in some cells.** Each GEMM call ends in a partial wave, and those idle SMs absorb part of the dispatch for free.
 - **The down projection** (2048 → 7168) made a dispatch wait 132–141 µs, longer than a tile. cuBLAS seems to pick a kernel there that keeps its CTAs until it ends, so it is not used.
 - **This is the shared-SM model** (NCCL-style overlap). With SMs reserved for communication, as in DeepEP, the GEMM loses the reservation (Fig 3c) and a slower dispatch costs latency (D1).
+
+**GEMM lost vs dispatch rate** (`bd_v2/d3rate_*`, owner asked for more intervals): the same runs at intervals of 100–1000 µs (16 tokens), 200–2000 µs (128 × 1 KiB) and 500–3000 µs (128 × 7 KiB), 3 repetitions. The x axis is the rate achieved (dispatches ÷ measured window), not the requested one: beside this GEMM, backlogged dispatches top out near 4/ms for every path, the time to collect 20 SMs from the GEMM's tiles.
+
+| | max rate beside the GEMM | GEMM lost at it | at 1 dispatch/ms |
+|---|---|---|---|
+| 16 × 1 KiB: local / ordered / flush | 4.0 / 3.8 / 3.5 per ms | 0.27 / 0.33 / 1.5% | ~0 / 0.3 / 0.7% |
+| 128 × 7 KiB: local / ordered / flush | 2.0* / 2.0* / 1.6 per ms | 0.85 / 0.97 / 10.3% | 0.5 / 0.5 / 5.9% |
+
+\*the shortest interval tested. Loss grows with the rate on every path, far faster for flush. Flush's cost per dispatch also rises at low rates (16 × 1 KiB: 573 → 948 SM-µs from 3.5 to 1 per ms): an isolated dispatch collects its SMs over ~220 µs, so its CTAs start staggered and the completion wait keeps the early ones resident. Local and ordered at ≤1/ms are near the noise (~0.1% of 132 SMs).
 
 ## Caveats / fairness
 

@@ -21,9 +21,11 @@ for H in 1024 7168; do for V in $VARIANTS; do
   TPS="16:50,100 128:200,400"; [ $H = 7168 ] && TPS="16:100,200 128:500,1000"
   # beside a GEMM a dispatch first waits ~70 us for tiles to free its SMs: no 50 us period
   [ $FILLER != fma ] && [ $H = 1024 ] && TPS="16:100,200 128:200,400"
+  # interval sweeps: TPS_1K / TPS_7K override the tokens:periods list per token size
+  [ $H = 1024 ] && TPS=${TPS_1K:-$TPS}; [ $H = 7168 ] && TPS=${TPS_7K:-$TPS}
   for TP in $TPS; do
     timeout 1200 $MPI/bin/mpiexec -n 2 $NUMA --cpunodebind=0 --membind=0 $D/dispatch_bd $ARGS --H $H --tokens ${TP%%:*} \
-      --ctas 20 --d3 ${TP#*:} --d3-filler $FILLER --reps 5 --window-ms $WINDOW_MS "$@" < /dev/null >> $F 2>> ${F%.csv}.err
+      --ctas 20 --d3 ${TP#*:} --d3-filler $FILLER --reps ${REPS:-5} --window-ms $WINDOW_MS "$@" < /dev/null >> $F 2>> ${F%.csv}.err
     echo "variant=$NAME H=$H tokens=${TP%%:*} exit=$?  output: $F"
   done
   chown harshanavkis $F ${F%.csv}.err

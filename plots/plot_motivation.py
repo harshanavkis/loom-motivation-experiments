@@ -227,20 +227,20 @@ def dispatch_breakdown():
     return d[(d.ctas == 20) & (d.load == 0) & d.path.isin(list(BD_PATHS))]
 
 
-# the GEMM-beside points: (H, tokens, dispatch period us), one period per size
-D3_POINTS = ((1024, 16, 200), (1024, 128, 400), (7168, 16, 200), (7168, 128, 1000))
-
-
-def dispatch_gemm():
-    """--d3 --d3-filler gemm-up medians (bd_v2/d3gemm_summary.csv): the expert GEMM's throughput
-    lost (%) beside dispatches at a fixed period, per path."""
-    d = pd.read_csv(os.path.join(BD, 'd3gemm_summary.csv'))
+def dispatch_rate():
+    """--d3 --d3-filler gemm-up interval sweep (bd_v2/d3rate_<variant>_H*.csv): per (path, H, tokens,
+    requested period) the medians over 3 repetitions of the ACHIEVED rate (dispatches / measured
+    window, per ms) and of the expert GEMM's throughput lost (%)."""
     rows = []
-    for H, T, P in D3_POINTS:
-        for p in BD_PATHS:
-            r = d[(d.path == p) & (d.H == H) & (d.tokens == T) & (d.period_us == P)].iloc[0]
-            rows.append((p, H, T, P, 100 * r.lost_frac, r.lost_sm_us))
-    return pd.DataFrame(rows, columns=['path', 'H', 'tokens', 'period_us', 'lost_pct', 'lost_sm_us'])
+    names = {'local': 'local', 'ordered-destL3': 'ordered-destL24', 'flush-warpL': 'flush-warpL24'}
+    for f, p in names.items():
+        for H in (1024, 7168):
+            for line in open(os.path.join(BD, f'd3rate_{f}_H{H}.csv')):
+                x = line.strip().split(',')
+                if x[0] == 'd3' and x[1] != 'path':
+                    rows.append((p, H, int(x[5]), int(x[7]), float(x[9]) / float(x[10]) * 1e3, 100 * float(x[14])))
+    d = pd.DataFrame(rows, columns=['path', 'H', 'tokens', 'period_us', 'rate_per_ms', 'lost_pct'])
+    return d.groupby(['path', 'H', 'tokens', 'period_us'], as_index=False).median()
 
 
 # ---------------------------------------------------------------- panels
@@ -359,29 +359,28 @@ def panel_dispatch_time(ax, fs, title, H=1024, T=16):
 
 
 
-def panel_dispatch_gemm(ax, fs, title):
-    """Expert GEMM throughput lost beside dispatches (grouped bars)."""
-    d = dispatch_gemm()
-    pts = [(H, T) for H, T, _ in D3_POINTS]
-    x = np.arange(len(pts))
-    w = 0.26
-    short = {'local': 'local', 'ordered-destL24': 'remote: ordered', 'flush-warpL24': 'remote: flush'}
-    for j, (p, (lab, color)) in enumerate(BD_PATHS.items()):
-        lab = short[p]
-        vals = [d[(d.path == p) & (d.H == H) & (d.tokens == T)].lost_pct.iloc[0] for H, T in pts]
-        ax.bar(x + (j - 1) * w, vals, w, color=color, edgecolor='black', linewidth=1, label=lab)
-        if p == 'flush-warpL24':
-            for i, v in enumerate(vals):
-                ax.text(x[i] + (j - 1) * w, v + 0.15, f'{v:.1f}', ha='center', va='bottom', fontsize=fs['annotation'] - 6)
-    ax.set_xticks(x)
-    ax.set_xticklabels([f"{T}×{H // 1024}K" for H, T in pts], fontsize=fs['tick'])
-    ax.tick_params(axis='y', labelsize=fs['tick'])
-    ax.set_ylim(0, 11)            # headroom so the legend sits above the bars
-    ax.set_yticks([0, 2, 4, 6])
-    ax.set_xlabel('Tokens × KiB per token', fontsize=fs['label'])
+def panel_dispatch_rate(ax, fs, title, sizes=((1024, 16, 'o'), (7168, 128, 's'))):
+    """Expert GEMM throughput lost vs the dispatch rate achieved beside it, per path and size."""
+    d = dispatch_rate()
+    for p, (lab, color) in BD_PATHS.items():
+        for H, T, mk in sizes:
+            s_ = d[(d.path == p) & (d.H == H) & (d.tokens == T)].sort_values('rate_per_ms')
+            ax.plot(s_.rate_per_ms, s_.lost_pct, color=color, marker=mk, markersize=14, linewidth=3,
+                    markeredgecolor='k', alpha=0.9)
+    ax.set_xlim(0, 4.5)
+    ax.set_ylim(-0.5, 25)         # headroom so the legend sits above the curves
+    ax.set_yticks([0, 5, 10])
+    ax.tick_params(axis='both', labelsize=fs['tick'])
+    ax.set_xlabel('Dispatches per ms', fontsize=fs['label'])
     ax.set_ylabel('GEMM lost [%]', fontsize=fs['label'])
-    ax.grid(True, alpha=0.3, axis='y')
-    ax.legend(loc='upper left', ncol=2, frameon=True, fontsize=fs['legend'] - 2, columnspacing=0.8, handlelength=1.4)
+    ax.grid(True, alpha=0.3)
+    short = {'local': 'local', 'ordered-destL24': 'remote: ordered', 'flush-warpL24': 'remote: flush'}
+    handles = [Line2D([0], [0], color=c, linewidth=3) for _, c in BD_PATHS.values()]
+    labels = [short[p] for p in BD_PATHS]
+    handles += [Line2D([0], [0], color='gray', linestyle='', marker=mk, markersize=14, markeredgecolor='k') for _, _, mk in sizes]
+    labels += [f'{T}×{H // 1024} KiB' for H, T, _ in sizes]
+    ax.legend(handles, labels, loc='upper left', ncol=2, frameon=True, fontsize=fs['legend'] - 2,
+              columnspacing=0.8, handlelength=1.4)
     top_label(ax, title, fs['annotation'])
 
 
@@ -405,7 +404,7 @@ def figure_costs(out_dir):
     fig, axes = plt.subplots(1, 4, figsize=(64, 9))
     panel_msgrate(axes[0], fs, '(a) Message rate (higher ↑)')
     panel_dispatch_time(axes[1], fs, '(b) 16 × 1 KiB dispatch (lower ↓)')
-    panel_dispatch_gemm(axes[2], fs, '(c) GEMM beside dispatches (lower ↓)')
+    panel_dispatch_rate(axes[2], fs, '(c) GEMM beside dispatches (lower ↓)')
     panel_held_sms(axes[3], fs, '(d) GEMM next to held SMs (higher ↑)')
     fig.subplots_adjust(left=0.04, right=0.96, top=0.88, bottom=0.2, wspace=0.38)
     save(fig, out_dir, 'loom-costs')
@@ -427,7 +426,7 @@ def main():
     b = dispatch_breakdown()
     print(b[['path', 'H', 'tokens', 'send', 'drain', 'signal', 'flight', 'seen_us', 'cta_total_us', 'cta_drain_us']]
           .sort_values(['path', 'H', 'tokens']).to_string(index=False))
-    print(dispatch_gemm().to_string(index=False))
+    print(dispatch_rate().sort_values(['H', 'tokens', 'path', 'rate_per_ms']).to_string(index=False))
 
 
 if __name__ == '__main__':

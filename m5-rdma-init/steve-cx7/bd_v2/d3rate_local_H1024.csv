@@ -1,0 +1,56 @@
+WARN: device irdma0 is not enumerated as an mlx5 device. Skipping...
+
+WARN: device irdma1 is not enumerated as an mlx5 device. Skipping...
+
+WARN: device irdma0 is not enumerated as an mlx5 device. Skipping...
+
+WARN: device irdma1 is not enumerated as an mlx5 device. Skipping...
+
+# D3: filler = cuBLAS strided-batched BF16 GEMM 8 x [1024 x 7168] x [7168 x 4096] on 2 streams, 481.0 GFLOP per call (132 SMs) + dispatch every P us, path=local H=1024; filler-only windows before and after each dispatch window
+d3,path,qp,nqp,H,tokens,ctas,period_us,rep,dispatches,window_us,filler_cta_us,filler_alone_per_ms,filler_per_ms,lost_frac,lost_sm_us_per_dispatch,resid_cta_us_per_dispatch,span_us_per_dispatch,filler,tflops_alone,tflops_with,dispatch_event_med_us
+d3,local,none,0,1024,16,20,100,0,10000,2490985,0.00,1.753,1.748,0.0027,87.9,81.5,10.18,gemm-up,843.3,841.0,82.3
+d3,local,none,0,1024,16,20,100,1,10000,2474460,0.00,1.760,1.753,0.0042,137.0,81.5,10.21,gemm-up,846.9,843.3,73.6
+d3,local,none,0,1024,16,20,100,2,10000,2397888,0.00,1.768,1.764,0.0020,63.1,81.0,10.38,gemm-up,850.5,848.8,75.6
+d3,local,none,0,1024,16,20,150,0,6667,1676443,0.00,1.757,1.750,0.0042,140.9,81.5,9.95,gemm-up,845.2,841.6,72.8
+d3,local,none,0,1024,16,20,150,1,6667,1686906,0.00,1.754,1.750,0.0026,86.5,81.4,9.92,gemm-up,844.0,841.8,75.0
+d3,local,none,0,1024,16,20,150,2,6667,1684904,0.00,1.754,1.750,0.0028,92.1,81.6,9.98,gemm-up,844.0,841.6,77.2
+d3,local,none,0,1024,16,20,200,0,5000,1255272,0.00,1.754,1.749,0.0029,95.9,81.5,10.12,gemm-up,844.0,841.5,73.1
+d3,local,none,0,1024,16,20,200,1,5000,1240081,0.00,1.762,1.764,-0.0014,-44.6,81.3,9.99,gemm-up,847.6,848.7,79.9
+d3,local,none,0,1024,16,20,200,2,5000,1251661,0.00,1.770,1.765,0.0026,86.8,81.3,9.87,gemm-up,851.2,849.0,76.6
+d3,local,none,0,1024,16,20,300,0,3334,1000697,0.00,1.769,1.766,0.0021,83.4,72.3,8.53,gemm-up,851.2,849.4,190.0
+d3,local,none,0,1024,16,20,300,1,3334,1000597,0.00,1.769,1.766,0.0017,68.3,72.2,8.72,gemm-up,851.0,849.5,238.7
+d3,local,none,0,1024,16,20,300,2,3334,1000515,0.00,1.769,1.766,0.0016,65.1,72.4,8.40,gemm-up,851.0,849.6,230.0
+d3,local,none,0,1024,16,20,500,0,2000,1000128,0.00,1.770,1.767,0.0015,101.7,69.4,7.45,gemm-up,851.2,849.9,230.3
+d3,local,none,0,1024,16,20,500,1,2000,1000530,0.00,1.769,1.767,0.0014,90.8,69.3,7.63,gemm-up,851.2,850.0,229.8
+d3,local,none,0,1024,16,20,500,2,2000,1000149,0.00,1.769,1.768,0.0010,65.5,69.6,7.74,gemm-up,851.2,850.3,222.0
+d3,local,none,0,1024,16,20,1000,0,1000,1000043,0.00,1.769,1.769,0.0003,42.5,70.3,7.27,gemm-up,851.2,850.9,224.7
+d3,local,none,0,1024,16,20,1000,1,1000,1000021,0.00,1.769,1.769,0.0000,2.4,70.4,7.26,gemm-up,851.0,850.9,225.0
+d3,local,none,0,1024,16,20,1000,2,1000,1000017,0.00,1.769,1.769,0.0000,2.4,70.4,7.21,gemm-up,851.0,850.9,225.7
+WARN: device irdma0 is not enumerated as an mlx5 device. Skipping...
+
+WARN: device irdma1 is not enumerated as an mlx5 device. Skipping...
+
+WARN: device irdma0 is not enumerated as an mlx5 device. Skipping...
+
+WARN: device irdma1 is not enumerated as an mlx5 device. Skipping...
+
+# D3: filler = cuBLAS strided-batched BF16 GEMM 8 x [1024 x 7168] x [7168 x 4096] on 2 streams, 481.0 GFLOP per call (132 SMs) + dispatch every P us, path=local H=1024; filler-only windows before and after each dispatch window
+d3,path,qp,nqp,H,tokens,ctas,period_us,rep,dispatches,window_us,filler_cta_us,filler_alone_per_ms,filler_per_ms,lost_frac,lost_sm_us_per_dispatch,resid_cta_us_per_dispatch,span_us_per_dispatch,filler,tflops_alone,tflops_with,dispatch_event_med_us
+d3,local,none,0,1024,128,20,200,0,5000,1286421,0.00,1.761,1.758,0.0019,65.7,103.6,12.56,gemm-up,847.1,845.5,73.4
+d3,local,none,0,1024,128,20,200,1,5000,1287898,0.00,1.769,1.764,0.0028,93.9,103.4,12.57,gemm-up,851.0,848.6,92.1
+d3,local,none,0,1024,128,20,200,2,5000,1286091,0.00,1.769,1.764,0.0027,91.0,103.5,12.62,gemm-up,851.0,848.7,77.2
+d3,local,none,0,1024,128,20,300,0,3334,1000684,0.00,1.770,1.764,0.0032,127.8,94.8,11.25,gemm-up,851.2,848.4,250.0
+d3,local,none,0,1024,128,20,300,1,3334,1000557,0.00,1.769,1.765,0.0023,89.2,94.8,11.30,gemm-up,851.0,849.0,233.2
+d3,local,none,0,1024,128,20,300,2,3334,1000675,0.00,1.769,1.765,0.0024,93.8,94.9,11.42,gemm-up,851.0,848.9,230.4
+d3,local,none,0,1024,128,20,400,0,2500,1000381,0.00,1.769,1.767,0.0009,49.8,92.7,10.27,gemm-up,851.0,850.1,225.2
+d3,local,none,0,1024,128,20,400,1,2500,1000716,0.00,1.769,1.767,0.0013,67.6,92.8,10.56,gemm-up,851.0,849.9,219.1
+d3,local,none,0,1024,128,20,400,2,2500,1000369,0.00,1.769,1.766,0.0015,79.2,92.8,10.29,gemm-up,851.0,849.7,222.4
+d3,local,none,0,1024,128,20,600,0,1667,1000265,0.00,1.769,1.768,0.0005,43.5,92.1,9.09,gemm-up,850.7,850.2,219.9
+d3,local,none,0,1024,128,20,600,1,1667,1000572,0.00,1.770,1.767,0.0014,112.6,91.9,9.21,gemm-up,851.2,850.0,236.5
+d3,local,none,0,1024,128,20,600,2,1667,1000285,0.00,1.770,1.766,0.0017,134.6,92.1,9.02,gemm-up,851.2,849.7,231.9
+d3,local,none,0,1024,128,20,1000,0,1000,999846,0.00,1.769,1.769,-0.0002,-20.1,93.5,9.38,gemm-up,851.0,851.1,228.5
+d3,local,none,0,1024,128,20,1000,1,1000,999608,0.00,1.769,1.769,0.0002,23.0,93.2,9.42,gemm-up,851.0,850.8,230.5
+d3,local,none,0,1024,128,20,1000,2,1000,999709,0.00,1.769,1.768,0.0008,111.2,93.2,9.14,gemm-up,851.0,850.2,226.0
+d3,local,none,0,1024,128,20,2000,0,500,998995,0.00,1.769,1.769,0.0001,34.1,94.6,9.92,gemm-up,851.0,850.8,223.3
+d3,local,none,0,1024,128,20,2000,1,500,998947,0.00,1.770,1.768,0.0009,244.7,94.8,9.50,gemm-up,851.2,850.4,223.6
+d3,local,none,0,1024,128,20,2000,2,500,998618,0.00,1.770,1.768,0.0006,157.7,94.6,9.07,gemm-up,851.2,850.7,217.6
