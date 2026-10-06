@@ -1,0 +1,80 @@
+
+=== filler gemm-up: H=1024 B, tokens=16, 20 CTAs, a dispatch every 100 us
+                                               local   flush-warpL24 ordered-destL24
+  compute lost per dispatch (SM-us)             51.3           454.4           113.1
+  dispatch residency (CTA-us)                   81.5           536.8           128.5
+  dispatch span (us)                             9.9            44.9            22.1
+  GEMM TFLOP/s alone                           846.9           848.1           851.0
+  GEMM TFLOP/s with dispatches                 846.1           838.0           848.2
+  GEMM throughput lost (%)                       0.1             1.2             0.3
+  dispatch launch -> done (us)                  76.1           186.4            79.0
+
+=== filler gemm-up: H=1024 B, tokens=16, 20 CTAs, a dispatch every 200 us
+                                               local   flush-warpL24 ordered-destL24
+  compute lost per dispatch (SM-us)             94.3           577.5           113.4
+  dispatch residency (CTA-us)                   81.5           536.8           128.6
+  dispatch span (us)                             9.7            44.9            22.1
+  GEMM TFLOP/s alone                           851.2           851.0           851.0
+  GEMM TFLOP/s with dispatches                 848.8           838.0           848.2
+  GEMM throughput lost (%)                       0.3             1.5             0.3
+  dispatch launch -> done (us)                  74.5           375.6            86.7
+
+=== filler gemm-up: H=1024 B, tokens=128, 20 CTAs, a dispatch every 200 us
+                                               local   flush-warpL24 ordered-destL24
+  compute lost per dispatch (SM-us)             96.5          3277.3           335.2
+  dispatch residency (CTA-us)                  104.5          2916.0           321.6
+  dispatch span (us)                            12.8           160.5            34.9
+  GEMM TFLOP/s alone                           851.0           850.9           851.0
+  GEMM TFLOP/s with dispatches                 848.5           814.5           843.4
+  GEMM throughput lost (%)                       0.3             4.2             0.9
+  dispatch launch -> done (us)                  73.9           590.0           331.7
+
+=== filler gemm-up: H=1024 B, tokens=128, 20 CTAs, a dispatch every 400 us
+                                               local   flush-warpL24 ordered-destL24
+  compute lost per dispatch (SM-us)             65.6          3343.3           517.5
+  dispatch residency (CTA-us)                   94.2          2928.9           326.7
+  dispatch span (us)                            10.5           160.4            32.5
+  GEMM TFLOP/s alone                           850.7           851.0           851.0
+  GEMM TFLOP/s with dispatches                 849.7           814.5           842.6
+  GEMM throughput lost (%)                       0.1             4.3             1.0
+  dispatch launch -> done (us)                 229.0           589.8           259.6
+
+=== filler gemm-up: H=7168 B, tokens=16, 20 CTAs, a dispatch every 100 us
+                                               local   flush-warpL24 ordered-destL24
+  compute lost per dispatch (SM-us)             70.8          1634.0           121.2
+  dispatch residency (CTA-us)                   95.3          1251.0           133.3
+  dispatch span (us)                            11.7            73.8            22.1
+  GEMM TFLOP/s alone                           850.5           850.5           851.0
+  GEMM TFLOP/s with dispatches                 848.7           832.2           848.0
+  GEMM throughput lost (%)                       0.2             2.1             0.3
+  dispatch launch -> done (us)                  79.3           578.1            80.2
+
+=== filler gemm-up: H=7168 B, tokens=16, 20 CTAs, a dispatch every 200 us
+                                               local   flush-warpL24 ordered-destL24
+  compute lost per dispatch (SM-us)             83.8          1661.0           116.3
+  dispatch residency (CTA-us)                   95.2          1249.3           133.5
+  dispatch span (us)                            11.7            73.7            22.0
+  GEMM TFLOP/s alone                           851.0           851.0           851.0
+  GEMM TFLOP/s with dispatches                 848.8           832.2           848.2
+  GEMM throughput lost (%)                       0.2             2.2             0.3
+  dispatch launch -> done (us)                  76.3           577.2            81.7
+
+=== filler gemm-up: H=7168 B, tokens=128, 20 CTAs, a dispatch every 500 us
+                                               local   flush-warpL24 ordered-destL24
+  compute lost per dispatch (SM-us)            504.9          8620.8           643.2
+  dispatch residency (CTA-us)                  239.0          8293.4           349.0
+  dispatch span (us)                            20.7           430.6            34.1
+  GEMM TFLOP/s alone                           848.5           851.0           850.9
+  GEMM TFLOP/s with dispatches                 843.9           762.9           842.6
+  GEMM throughput lost (%)                       0.8            10.3             1.0
+  dispatch launch -> done (us)                 248.0           632.4           258.5
+
+=== filler gemm-up: H=7168 B, tokens=128, 20 CTAs, a dispatch every 1000 us
+                                               local   flush-warpL24 ordered-destL24
+  compute lost per dispatch (SM-us)            628.6          7776.0           675.2
+  dispatch residency (CTA-us)                  239.9          7366.8           355.1
+  dispatch span (us)                            20.9           388.1            34.3
+  GEMM TFLOP/s alone                           851.0           851.0           850.7
+  GEMM TFLOP/s with dispatches                 846.9           800.8           846.4
+  GEMM throughput lost (%)                       0.5             5.9             0.5
+  dispatch launch -> done (us)                 238.5           651.2           256.6

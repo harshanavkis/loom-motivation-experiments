@@ -380,6 +380,23 @@ Reading:
 - This models compute that shares SMs with communication at a fine grain. With SMs reserved for communication (DeepEP + DeepGEMM `num_sms`), the GEMM's loss is set by the reservation (Fig 3c), and a longer dispatch costs latency (D1) instead.
 - One GPU: the flush wait includes steve's NIC drain, with both directions on one dual-port NIC and every NIC↔HBM access crossing the socket, so its lost compute is an upper bound for this topology. The local peer is the same GPU's HBM, which is faster per store than an NVLink peer, so the local column is optimistic at large batches.
 
+**Beside the expert GEMM** (`--d3-filler gemm-up`, `bd_v2/d3gemm_*`): the same harness with the filler replaced by the up/gate GEMMs of one MoE layer. That is a cuBLAS strided-batched BF16 GEMM, 8 local experts × [1024 × 7168] × [7168 × 4096], on two low-priority streams, ~850 TFLOP/s alone. Each stream counts its GEMMs with `cuStreamWriteValue32` (no SM); windows are 1 s and completions are reaped once per window. Throughput lost (compute lost per dispatch, SM-µs):
+
+| | local | ordered | flush |
+|---|---|---|---|
+| 16 × 1 KiB, every 200 µs | 0.3% (94) | 0.3% (113) | 1.5% (578) |
+| 128 × 1 KiB, every 400 µs | 0.1% (66) | 1.0% (518) | 4.3% (3343) |
+| 16 × 7 KiB, every 200 µs | 0.2% (84) | 0.3% (116) | 2.2% (1661) |
+| 128 × 7 KiB, every 1000 µs | 0.5% (629) | 0.5% (675) | 5.9% (7776) |
+
+At the shorter periods flush loses 1.2 / 4.2 / 2.1 / 10.3%. The noise is ~0.2% (local at 16 × 1 KiB: −0.06…0.24%).
+- **The percentage depends on the dispatch rate, which the harness chooses.** Per dispatch, the GEMM loses 6–12× (flush) more than with the local path.
+- **Beside a GEMM, every path first waits for tiles to free its SMs** (tiles run ~70–80 µs). Launch → done is 74–79 µs for local and 186–650 µs for flush, against 4–5 µs idle.
+- **Flush wastes more here than in isolation** (16 × 7 KiB: 1661 SM-µs vs 1017 CTA-µs of residency idle). Its CTAs start staggered as tiles end, and the completion wait keeps the early ones resident until the late ones' data has drained.
+- **Local lost less than its residency in some cells.** Each GEMM call ends in a partial wave, and those idle SMs absorb part of the dispatch for free.
+- **The down projection** (2048 → 7168) made a dispatch wait 132–141 µs, longer than a tile. cuBLAS seems to pick a kernel there that keeps its CTAs until it ends, so it is not used.
+- **This is the shared-SM model** (NCCL-style overlap). With SMs reserved for communication, as in DeepEP, the GEMM loses the reservation (Fig 3c) and a slower dispatch costs latency (D1).
+
 ## Caveats / fairness
 
 - **The cross-socket topology on steve inflates GPU-posted latency more than CPU-posted.** The GPU-posted path crosses the socket interconnect several extra times per operation: doorbell write, work-request fetch from HBM, completion write to HBM. Each GPU↔NIC access across sockets costs about 1 µs here (GPU vs. host memory at an otherwise equal method: 2.64 vs. 1.48 µs one-way). So treat 10.7 µs as an upper bound for well-placed GPUs and NICs, not a typical value. The published NVSHMEM IBGDA inter-node put figure (7.5 µs one-way, 256 B, including the wire; arXiv 2606.05951) is the other end of the bracket.
@@ -426,6 +443,8 @@ sudo env OUT=$HOME/loom-experiments/gpu-posted/bd_v2/dispatch_bd VARIANTS="flush
 python3 summarize_bd.py bd_v2/dispatch_bd_*.csv --csv bd_v2/summary.csv > bd_v2/summary.txt   # here, in steve-cx7/
 sudo ~/loom-experiments/gpu-posted/run_dispatch_d3.sh                                  # D3: bd_v2/d3_<variant>_H*.csv, about 12 min
 python3 summarize_d3.py bd_v2/d3_*.csv --csv bd_v2/d3_summary.csv > bd_v2/d3_summary.txt         # here, in steve-cx7/
+sudo env FILLER=gemm-up WINDOW_MS=1000 OUT=$HOME/loom-experiments/gpu-posted/bd_v2/d3gemm ~/loom-experiments/gpu-posted/run_dispatch_d3.sh   # about 10 min
+python3 summarize_d3.py bd_v2/d3gemm_*.csv --csv bd_v2/d3gemm_summary.csv > bd_v2/d3gemm_summary.txt
 ```
 
 ## Files (`steve-cx7/`)
@@ -463,4 +482,4 @@ python3 summarize_d3.py bd_v2/d3_*.csv --csv bd_v2/d3_summary.csv > bd_v2/d3_sum
 - `dispatch_bd.cu`, `build_dispatch_bd.sh`, `run_dispatch_bd.sh`: the dispatch time breakdown (local / flush / ordered, receiver-side end point). Needs `deepep-include/` from `build_deepep_post.sh`; root for memlock. `BD_DEBUG=1` dumps every CTA's and message's stamps for the first measured run.
 - `bd_v2/dispatch_bd_<variant>_H{1024,7168}_load{0,1}.csv`: one row per run at 2/4/8/20 CTAs. Variants: `local`; `flush` / `ordered` (one QP per destination, warp puts); `flush-warp` (QP per warp, warp puts); `ordered-dest3` (3 QPs per destination, warp puts); `flush-warpL`, `ordered-destL3`, `flush-destL3` (per-lane puts, V2.5's shape: the ones used above).
 - `summarize_bd.py`, `bd_v2/summary.{txt,csv}`: medians and the per-component breakdown per variant (named path-qpmode+QPs, e.g. `ordered-destL24`).
-- `run_dispatch_d3.sh`, `summarize_d3.py`, `bd_v2/d3_<variant>_H{1024,7168}.csv`, `bd_v2/d3_summary.{txt,csv}`: D3, compute lost per dispatch (filler beside the dispatch).
+- `run_dispatch_d3.sh`, `summarize_d3.py`, `bd_v2/d3_<variant>_H{1024,7168}.csv`, `bd_v2/d3_summary.{txt,csv}`: D3, compute lost per dispatch (filler beside the dispatch); `bd_v2/d3gemm_*`: the same with the expert GEMM as the filler.

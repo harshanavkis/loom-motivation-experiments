@@ -1,0 +1,40 @@
+WARN: device irdma0 is not enumerated as an mlx5 device. Skipping...
+
+WARN: device irdma1 is not enumerated as an mlx5 device. Skipping...
+
+WARN: device irdma0 is not enumerated as an mlx5 device. Skipping...
+
+WARN: device irdma1 is not enumerated as an mlx5 device. Skipping...
+
+# D3: filler = cuBLAS strided-batched BF16 GEMM 8 x [1024 x 7168] x [7168 x 4096] on 2 streams, 481.0 GFLOP per call (132 SMs) + dispatch every P us, path=flush H=1024; filler-only windows before and after each dispatch window
+d3,path,qp,nqp,H,tokens,ctas,period_us,rep,dispatches,window_us,filler_cta_us,filler_alone_per_ms,filler_per_ms,lost_frac,lost_sm_us_per_dispatch,resid_cta_us_per_dispatch,span_us_per_dispatch,filler,tflops_alone,tflops_with,dispatch_event_med_us
+d3,flush,warpL,24,1024,16,20,100,0,10000,2890863,0.00,1.767,1.742,0.0144,549.5,536.2,45.00,gemm-up,850.2,838.0,186.4
+d3,flush,warpL,24,1024,16,20,100,1,10000,2891458,0.00,1.763,1.742,0.0116,443.3,537.0,45.10,gemm-up,847.8,838.0,190.0
+d3,flush,warpL,24,1024,16,20,100,2,10000,2894894,0.00,1.763,1.742,0.0119,454.4,535.5,44.91,gemm-up,848.1,838.0,172.9
+d3,flush,warpL,24,1024,16,20,100,3,10000,2888307,0.00,1.763,1.742,0.0120,457.3,536.9,44.70,gemm-up,848.1,837.9,462.2
+d3,flush,warpL,24,1024,16,20,100,4,10000,2891162,0.00,1.762,1.742,0.0117,446.9,536.8,44.81,gemm-up,847.8,837.9,114.7
+d3,flush,warpL,24,1024,16,20,200,0,5000,1452035,0.00,1.769,1.742,0.0150,576.8,539.5,44.77,gemm-up,851.0,838.1,424.6
+d3,flush,warpL,24,1024,16,20,200,1,5000,1447682,0.00,1.769,1.742,0.0152,581.3,536.8,45.03,gemm-up,851.0,838.0,96.3
+d3,flush,warpL,24,1024,16,20,200,2,5000,1445116,0.00,1.768,1.742,0.0151,577.5,537.5,44.85,gemm-up,850.7,837.8,375.6
+d3,flush,warpL,24,1024,16,20,200,3,5000,1445048,0.00,1.768,1.742,0.0151,575.7,536.0,44.89,gemm-up,850.7,837.9,430.0
+d3,flush,warpL,24,1024,16,20,200,4,5000,1446051,0.00,1.769,1.742,0.0153,582.9,535.4,44.99,gemm-up,851.0,838.0,367.4
+WARN: device irdma0 is not enumerated as an mlx5 device. Skipping...
+
+WARN: device irdma1 is not enumerated as an mlx5 device. Skipping...
+
+WARN: device irdma0 is not enumerated as an mlx5 device. Skipping...
+
+WARN: device irdma1 is not enumerated as an mlx5 device. Skipping...
+
+# D3: filler = cuBLAS strided-batched BF16 GEMM 8 x [1024 x 7168] x [7168 x 4096] on 2 streams, 481.0 GFLOP per call (132 SMs) + dispatch every P us, path=flush H=1024; filler-only windows before and after each dispatch window
+d3,path,qp,nqp,H,tokens,ctas,period_us,rep,dispatches,window_us,filler_cta_us,filler_alone_per_ms,filler_per_ms,lost_frac,lost_sm_us_per_dispatch,resid_cta_us_per_dispatch,span_us_per_dispatch,filler,tflops_alone,tflops_with,dispatch_event_med_us
+d3,flush,warpL,24,1024,128,20,200,0,5000,2971144,0.00,1.754,1.683,0.0404,3166.2,2823.8,160.13,gemm-up,843.7,809.7,593.4
+d3,flush,warpL,24,1024,128,20,200,1,5000,2953624,0.00,1.762,1.693,0.0391,3045.7,2923.8,160.53,gemm-up,847.6,814.5,590.0
+d3,flush,warpL,24,1024,128,20,200,2,5000,2953527,0.00,1.769,1.693,0.0428,3338.9,2916.0,160.47,gemm-up,850.9,814.5,588.4
+d3,flush,warpL,24,1024,128,20,200,3,5000,2951191,0.00,1.769,1.695,0.0421,3277.3,2885.1,160.10,gemm-up,850.9,815.1,589.7
+d3,flush,warpL,24,1024,128,20,200,4,5000,2953828,0.00,1.769,1.693,0.0429,3347.9,2923.4,160.50,gemm-up,851.0,814.4,590.0
+d3,flush,warpL,24,1024,128,20,400,0,2500,1477109,0.00,1.769,1.693,0.0429,3343.3,2934.0,160.76,gemm-up,851.0,814.5,588.9
+d3,flush,warpL,24,1024,128,20,400,1,2500,1477363,0.00,1.769,1.693,0.0430,3356.6,2930.6,160.64,gemm-up,851.0,814.3,589.8
+d3,flush,warpL,24,1024,128,20,400,2,2500,1477329,0.00,1.769,1.693,0.0430,3354.8,2928.9,160.43,gemm-up,851.0,814.4,589.7
+d3,flush,warpL,24,1024,128,20,400,3,2500,1476269,0.00,1.768,1.694,0.0418,3256.7,2913.5,160.40,gemm-up,850.5,814.9,590.3
+d3,flush,warpL,24,1024,128,20,400,4,2500,1476740,0.00,1.768,1.694,0.0421,3281.4,2921.5,160.38,gemm-up,850.5,814.7,590.4

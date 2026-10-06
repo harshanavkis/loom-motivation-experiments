@@ -284,6 +284,10 @@ __global__ void __launch_bounds__(1024, 1) filler(unsigned long long* done, int 
 __global__ void snapshot(const unsigned long long* done, unsigned long long* out) {
   out[0] = *(volatile const unsigned long long*)done; out[1] = gtimer();
 }
+// --d3-filler gemm-*: GEMMs completed per stream, written by cuStreamWriteValue32 (no SM needed)
+__global__ void snapshot_gemm(const unsigned* done, unsigned long long* out) {
+  out[0] = (unsigned long long)((volatile const unsigned*)done)[0] + ((volatile const unsigned*)done)[16]; out[1] = gtimer();
+}
 
 __global__ void set_nonce(char* tok, int T, int H, unsigned long long nonce) {
   const int t = blockIdx.x * blockDim.x + threadIdx.x;
@@ -360,6 +364,7 @@ int main(int argc, char** argv) {
   int H = 7168, path = LOCAL, iters = 20, qp_warp = 0, nq = 1, post_lane = 0, reps = 3; bool load = false;
   double window_us = 500000;
   std::vector<int> d3_periods;   // --d3: dispatch periods (us), see filler()
+  std::string d3_filler = "fma";   // --d3-filler fma | gemm-up | gemm-down
   std::vector<int> Ts = {16, 32, 128, 1024, 4096}, CTAs = {20};
   for (int i = 1; i < argc; i++) {
     if (!strcmp(argv[i], "--H")) H = atoi(argv[++i]);
@@ -371,6 +376,7 @@ int main(int argc, char** argv) {
     else if (!strcmp(argv[i], "--nq")) nq = atoi(argv[++i]);                     // QPs per destination (--qp dest)
     else if (!strcmp(argv[i], "--post")) post_lane = !strcmp(argv[++i], "lane");  // lane (V2.5) | warp (one warp put at a time)
     else if (!strcmp(argv[i], "--d3")) d3_periods = parse_list(argv[++i]);
+    else if (!strcmp(argv[i], "--d3-filler")) d3_filler = argv[++i];
     else if (!strcmp(argv[i], "--reps")) reps = atoi(argv[++i]);
     else if (!strcmp(argv[i], "--window-ms")) window_us = atof(argv[++i]) * 1e3;
     else if (!strcmp(argv[i], "--path")) { const char* p = argv[++i]; path = !strcmp(p, "flush") ? FLUSH : !strcmp(p, "ordered") ? ORDERED : LOCAL; }
@@ -448,18 +454,21 @@ int main(int argc, char** argv) {
     CK(cudaMalloc(&resid, 8)); CK(cudaMalloc(&span, 8)); CK(cudaMalloc(&span_start, 8));
     CK(cudaMemset(span_start, 0xff, 8)); CK(cudaMemset(counters, 0, R * 4)); CK(cudaMemset(ctas_done, 0, 4));
     Stamps sx = st; sx.resid = resid; sx.span = span; sx.span_start = span_start; sx.reset = 1;
+    // Completions are reaped once per window, not per dispatch: DeepEP's post path skips the
+    // queue-slot check, the CQ is collapsed, and the period exceeds the NIC's drain. A reap kernel
+    // per dispatch needs an SM of its own (the fillers fill the register file); reaping right after
+    // a dispatch spins there until the NIC drains (+300 SM-us per ordered dispatch at 128 x 7 KiB,
+    // a cost of the harness, not of the path).
     auto launch = [&](int T, int ctas) {
-      // reap the previous dispatch's completions first, as a library does when it posts next (the
-      // period exceeds the NIC's drain, so they have arrived). Reaping right after a dispatch spins
-      // until the NIC drains, on an SM of its own (the filler fills the register file): measured as
-      // +300 SM-us per ordered dispatch at 128 x 7 KiB, a cost of this harness, not of the path.
-      if (path != LOCAL) reap<<<1, 32, 0, ds>>>(nqp);
       if (path == LOCAL) dispatch<LOCAL><<<ctas, 256, SMEM_X, ds>>>(tok, send, recv_tx, sig_tx, T, H, counters, ctas_done, sx, qp_warp, nq, nqp, post_lane);
       else if (path == FLUSH) dispatch<FLUSH><<<ctas, 256, SMEM_X, ds>>>(tok, send, recv_tx, sig_tx, T, H, counters, ctas_done, sx, qp_warp, nq, nqp, post_lane);
       else dispatch<ORDERED><<<ctas, 256, SMEM_X, ds>>>(tok, send, recv_tx, sig_tx, T, H, counters, ctas_done, sx, qp_warp, nq, nqp, post_lane);
     };
+    const bool gemm = d3_filler != "fma", up = d3_filler == "gemm-up";
+    unsigned* gdone; CK(cudaMalloc(&gdone, 128)); CK(cudaMemset(gdone, 0, 128));
     auto snap = [&]() {
-      snapshot<<<1, 1, 0, ss>>>(fdone, snap_d); CK(cudaStreamSynchronize(ss));
+      if (gemm) snapshot_gemm<<<1, 1, 0, ss>>>(gdone, snap_d); else snapshot<<<1, 1, 0, ss>>>(fdone, snap_d);
+      CK(cudaStreamSynchronize(ss));
       return std::make_pair(((volatile unsigned long long*)snap_h)[0], ((volatile unsigned long long*)snap_h)[1]);
     };
     // calibrate the filler alone to ~5 us per CTA
@@ -471,29 +480,75 @@ int main(int argc, char** argv) {
       float ms; CK(cudaEventElapsedTime(&ms, a, b));
       fiters = std::max(100, (int)(fiters * 5.0 / (ms * 1e3 / 50)));
     }
-    std::atomic<bool> fstop{false};
-    auto floop = [&](cudaStream_t f) {
-      while (!fstop) { filler<<<nsm * 200, 1024, SMEM_X, f>>>(fdone, fiters, sink); cudaStreamSynchronize(f); }
+    // gemm-*: the expert GEMMs of one MoE layer on one GPU, cuBLAS strided-batched BF16 (DeepSeek-V3:
+    // 8 local experts x 1024 tokens; up/gate 7168 -> 4096, down 2048 -> 7168), planned for every SM
+    const int gE = 8, gM = 1024, gK = up ? 7168 : 2048, gN = up ? 4096 : 7168;
+    const double gflop = 2.0 * gE * gM * gK * gN;
+    cublasHandle_t gh[2] = {}; __nv_bfloat16 *gA = nullptr, *gB = nullptr, *gC[2] = {};
+    if (gemm) {
+      CK(cudaMalloc(&gA, (size_t)gE * gM * gK * 2)); CK(cudaMalloc(&gB, (size_t)gE * gK * gN * 2));
+      CK(cudaMemset(gA, 0x3c, (size_t)gE * gM * gK * 2)); CK(cudaMemset(gB, 0x3c, (size_t)gE * gK * gN * 2));
+      for (int i = 0; i < 2; i++) {
+        CK(cudaMalloc(&gC[i], (size_t)gE * gM * gN * 2));
+        cublasCreate(&gh[i]); cublasSetStream(gh[i], fs[i]);
+        void* ws; CK(cudaMalloc(&ws, 256ull << 20)); cublasSetWorkspace(gh[i], ws, 256ull << 20);   // never cudaMalloc mid-run
+      }
+    }
+    auto gemm_call = [&](int i) {
+      const float al = 1.f, be = 0.f;
+      cublasGemmStridedBatchedEx(gh[i], CUBLAS_OP_N, CUBLAS_OP_N, gN, gM, gK, &al, gB, CUDA_R_16BF, gN, (long long)gK * gN,
+                                 gA, CUDA_R_16BF, gK, (long long)gM * gK, &be, gC[i], CUDA_R_16BF, gN, (long long)gM * gN,
+                                 gE, CUBLAS_COMPUTE_32F, CUBLAS_GEMM_DEFAULT);
     };
-    std::thread f0(floop, fs[0]), f1(floop, fs[1]);
+    if (gemm) { gemm_call(0); CK(cudaStreamSynchronize(fs[0])); CK(cudaGetLastError()); }   // load the kernel first
+    std::atomic<bool> fstop{false};
+    auto floop = [&](int i) {
+      unsigned k = 0;
+      while (!fstop) {
+        if (gemm) { gemm_call(i); cuStreamWriteValue32((CUstream)fs[i], (CUdeviceptr)(gdone + 16 * i), ++k, CU_STREAM_WRITE_VALUE_DEFAULT); }
+        else filler<<<nsm * 200, 1024, SMEM_X, fs[i]>>>(fdone, fiters, sink);
+        cudaStreamSynchronize(fs[i]);
+      }
+    };
+    std::thread f0(floop, 0), f1(floop, 1);
     usleep(500000);
     // one window: filler CTAs finished per ns, with a dispatch every P us (P = 0: none)
+    // CUDA events around a sample of dispatches: launch -> done, including the wait for SMs
+    const int NEV = 256; cudaEvent_t ev[2][NEV];
+    for (auto& e : ev) for (auto& x : e) CK(cudaEventCreate(&x));
+    double ev_med = 0;
     auto window = [&](int T, int ctas, int P, int* n, double* dt) {
       auto [c0, g0] = snap();
       const auto t0 = std::chrono::steady_clock::now();
       auto el = [&] { return std::chrono::duration<double, std::micro>(std::chrono::steady_clock::now() - t0).count(); };
-      *n = 0;
-      if (P > 0) for (double next = 0; next < window_us; next += P) { while (el() < next) {} launch(T, ctas); ++*n; }
+      *n = 0; int ne = 0;
+      const int stride = P > 0 ? std::max(1, (int)(window_us / P) / NEV) : 1;
+      if (P > 0) for (double next = 0; next < window_us; next += P) {
+        while (el() < next) {}
+        const bool rec = *n % stride == 0 && ne < NEV;
+        if (rec) CK(cudaEventRecord(ev[0][ne], ds));
+        launch(T, ctas);
+        if (rec) CK(cudaEventRecord(ev[1][ne++], ds));
+        ++*n;
+      }
       else while (el() < window_us) {}
+      if (P > 0 && path != LOCAL) reap<<<1, 32, 0, ds>>>(nqp);
       CK(cudaStreamSynchronize(ds)); CK(cudaGetLastError());
+      if (ne) {
+        std::vector<float> v(ne);
+        for (int i = 0; i < ne; i++) CK(cudaEventElapsedTime(&v[i], ev[0][i], ev[1][i]));
+        std::sort(v.begin(), v.end()); ev_med = v[ne / 2] * 1e3;
+      }
       auto [c1, g1] = snap();
       *dt = (double)(g1 - g0);
       return (double)(c1 - c0) / *dt;
     };
-    printf("# D3: filler (%d SMs, %d FMA iterations per thread, 1024 threads, %d KiB shared per CTA) + dispatch every P us, "
-           "path=%s H=%d; filler-only windows before and after each dispatch window\n", nsm, fiters, SMEM_X / 1024, PATH_NAME[path], H);
+    if (gemm) printf("# D3: filler = cuBLAS strided-batched BF16 GEMM %d x [%d x %d] x [%d x %d] on 2 streams, %.1f GFLOP per call",
+                     gE, gM, gK, gK, gN, gflop / 1e9);
+    else printf("# D3: filler = %d FMA iterations per thread, 1024 threads, %d KiB shared per CTA", fiters, SMEM_X / 1024);
+    printf(" (%d SMs) + dispatch every P us, path=%s H=%d; filler-only windows before and after each dispatch window\n", nsm, PATH_NAME[path], H);
     printf("d3,path,qp,nqp,H,tokens,ctas,period_us,rep,dispatches,window_us,filler_cta_us,filler_alone_per_ms,filler_per_ms,"
-           "lost_frac,lost_sm_us_per_dispatch,resid_cta_us_per_dispatch,span_us_per_dispatch\n");
+           "lost_frac,lost_sm_us_per_dispatch,resid_cta_us_per_dispatch,span_us_per_dispatch,filler,tflops_alone,tflops_with,dispatch_event_med_us\n");
     for (int T : Ts)
       for (int ctas : CTAs)
         for (int P : d3_periods) {
@@ -508,10 +563,12 @@ int main(int argc, char** argv) {
             unsigned long long rs, sp;
             CK(cudaMemcpy(&rs, resid, 8, cudaMemcpyDeviceToHost)); CK(cudaMemcpy(&sp, span, 8, cudaMemcpyDeviceToHost));
             const double base = (before + after) / 2, lost = 1 - with / base;
-            printf("d3,%s,%s,%d,%d,%d,%d,%d,%d,%d,%.0f,%.2f,%.1f,%.1f,%.4f,%.1f,%.1f,%.2f\n", PATH_NAME[path],
+            const double ev_d = ev_med;   // from the dispatch window, before the filler-only one
+            printf("d3,%s,%s,%d,%d,%d,%d,%d,%d,%d,%.0f,%.2f,%.3f,%.3f,%.4f,%.1f,%.1f,%.2f,%s,%.1f,%.1f,%.1f\n", PATH_NAME[path],
                    path == LOCAL ? "none" : qp_warp ? (post_lane ? "warpL" : "warp") : (post_lane ? "destL" : "dest"), path == LOCAL ? 0 : nqp,
-                   H, T, ctas, P, rep, n, dt / 1e3, nsm / (base * 1e3), base * 1e6, with * 1e6, lost,
-                   lost * nsm * (dt / 1e3) / n, rs / 1e3 / n, sp / 1e3 / n);
+                   H, T, ctas, P, rep, n, dt / 1e3, gemm ? 0 : nsm / (base * 1e3), base * 1e6, with * 1e6, lost,
+                   lost * nsm * (dt / 1e3) / n, rs / 1e3 / n, sp / 1e3 / n, d3_filler.c_str(),
+                   gemm ? base * gflop / 1e3 : 0, gemm ? with * gflop / 1e3 : 0, ev_d);
             fflush(stdout);
             before = after;
           }
