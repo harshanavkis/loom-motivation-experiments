@@ -372,11 +372,11 @@ TRAP (harness): reaping an RDMA dispatch's completions right after it launches s
 | 16 × 7 KiB, every 100 µs | 97 (72) | 142 (98) | 1032 (994) |
 | 128 × 7 KiB, every 500 µs | 230 (209) | 375 (353) | 7084 (7033) |
 
-The other period of each pair is within 8% (`bd_v2/d3_summary.txt`).
+The other period of each pair is within 9% (`bd_v2/d3_summary.txt`).
 
 Reading:
 - **SM time is compute lost.** Lost work equals the dispatch's residency plus 15–45 SM-µs per dispatch for handing 20 SMs back and forth, on every path and at every period. D2's SM time can therefore be quoted as compute lost per dispatch.
-- **Per dispatch, compute lost to the remote paths is 1.5–3.6× (ordered) and 7–31× (flush) the local path's.** For flush the excess is the completion wait (D2: 60–95% of its SM time); for ordered it is the post chain.
+- **Per dispatch, compute lost to the remote paths is 1.5–3.6× (ordered) and 7–32× (flush) the local path's.** For flush the excess is the completion wait (D2: 65–95% of its SM time); for ordered it is the post chain.
 - This models compute that shares SMs with communication at a fine grain. With SMs reserved for communication (DeepEP + DeepGEMM `num_sms`), the GEMM's loss is set by the reservation (Fig 3c), and a longer dispatch costs latency (D1) instead.
 - One GPU: the flush wait includes steve's NIC drain, with both directions on one dual-port NIC and every NIC↔HBM access crossing the socket, so its lost compute is an upper bound for this topology. The local peer is the same GPU's HBM, which is faster per store than an NVLink peer, so the local column is optimistic at large batches.
 
