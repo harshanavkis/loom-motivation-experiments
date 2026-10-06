@@ -390,7 +390,7 @@ Reading:
 | 128 × 7 KiB, every 1000 µs | 0.5% (629) | 0.5% (675) | 5.9% (7776) |
 
 At the shorter periods flush loses 1.2 / 4.2 / 2.1 / 10.3%. The noise is ~0.2% (local at 16 × 1 KiB: −0.06…0.24%).
-- **The percentage depends on the dispatch rate, which the harness chooses.** Per dispatch, the GEMM loses 6–12× (flush) more than with the local path.
+- **The percentage depends on the dispatch rate, which the harness chooses.** Per dispatch, the GEMM loses 6–51× more beside flush than beside the local path, and 1–8× more beside ordered.
 - **Beside a GEMM, every path first waits for tiles to free its SMs** (tiles run ~70–80 µs). Launch → done is 74–79 µs for local and 186–650 µs for flush, against 4–5 µs idle.
 - **Flush wastes more here than in isolation** (16 × 7 KiB: 1661 SM-µs vs 1017 CTA-µs of residency idle). Its CTAs start staggered as tiles end, and the completion wait keeps the early ones resident until the late ones' data has drained.
 - **Local lost less than its residency in some cells.** Each GEMM call ends in a partial wave, and those idle SMs absorb part of the dispatch for free.
