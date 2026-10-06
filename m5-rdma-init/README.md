@@ -297,6 +297,64 @@ k CTAs (one per SM) each copy 32 MiB, GPU memory to GPU memory (`tma_bw.csv`). T
 
 45 GB/s per SM with TMA, which is exactly DeepEP V2.5's per-SM write figure (`deep_ep/utils/envs.py`). One NVLink direction (~450 GB/s) takes ~10 SMs; a 400G NIC (50 GB/s) one or two. Local HBM -> HBM: an upper bound for an NVLink peer.
 
+### Dispatch time breakdown with one end point (`dispatch_bd.cu`, 2026-10-06)
+
+**Question.** Where do the time and the SM time of one dispatch go on the local (load/store) path and on the remote GPU-initiated path, measured to the same end point: the receiver sees the arrival signal? The difference per component is what a fabric that gives every peer the local path removes. The earlier dispatch numbers end at different points: the RDMA kernels end at the sender's completions, the local kernel at its last store, with no signal.
+
+**Method.** Same routing and token sizes as the dispatch sweeps above (top-8 of 256 experts, R = 8 destinations, one message per token and destination), 256-thread CTAs, tokens spread over the SMs first. The token flow is DeepEP V2.5's (`impls/ep/dispatch.cuh`): TMA-load the token into shared memory, route it, then:
+- **local**: each lane TMA-stores the token into its destination's slot (V2.5's NVLink branch). End: every CTA waits for its stores and fences (system scope); the last CTA stores the R signals with release semantics (DeepEP V1's NVLink signal, `st_release_sys_global`). The destination is the same GPU's HBM.
+- **flush** (V2.5 normal dispatch): TMA-store the token into the send buffer, wait for it, then each lane posts the put for its destination (V2.5's per-lane `gin.put`) with DeepEP's IBGDA post path. QPs follow the warps (V2.5 maps QPs to SMs). End: every CTA rings every QP and waits for all completions (V2.5's GIN barrier flush); then the last CTA sends one RDMA atomic add per destination.
+- **ordered** (V1 low-latency semantics): as flush with no completion wait. 3 QPs per destination (V1 uses one per local expert); the last CTA posts a signal on each QP, behind that QP's data, and the RC QP keeps it there.
+
+DeepEP V1's post path only has a warp put, so per-lane posting uses a one-thread copy of it (`put_nbi_thread`: same helpers, WQE and doorbell batching). Variants with one warp put per destination in turn (`--post warp`) are also in the data. They make the remote send loop 3× longer (16 × 1 KiB: 36–46 µs to the signal), which overstates the post chain, so they are not used below.
+
+The receiver is one 1024-thread CTA on its own stream, started before the sender. Warp 0 polls the signal words; the other warps poll the last 8 B of every message (the run's nonce) and stamp `%globaltimer`. For the RDMA paths the receive buffer is PE 1's, which PE 0 maps by CUDA IPC (`NVSHMEM_DISABLE_CUDA_VMM=1`). Sender and receiver share one clock. The sender stamps each CTA's phases and each message's post, and sums per warp the time spent in route, load, stage, post and store. Every run checks that no message covered by a signal is missing when that signal is seen; none was. The GPU reports GPUDirect RDMA write ordering "owner". Median of 20 runs; `summarize_bd.py` derives the segments per run.
+
+TRAP (timing): a `%globaltimer` read right after `__syncthreads()` executes when the warp *reaches* the barrier, not when the barrier completes. `BAR.SYNC.DEFER_BLOCKING` only blocks instructions that depend on it, so stamps were up to 31 µs early, which showed as messages posted after their CTA's loop-end stamp. Post-barrier and post-fence stamps therefore read the timer under a predicate on `__syncthreads_count()` or on a load issued after the fence.
+
+**Results, idle, 20 CTAs** (µs; SM time in CTA-µs summed over CTAs; `steve-cx7/bd_v2/summary.txt` has every size, CTA count and variant, also with the GEMM running):
+
+| | 16 × 1 KiB: local | ordered | flush | 128 × 1 KiB: local | ordered | flush |
+|---|---|---|---|---|---|---|
+| send loop (GPU: route, load, stage, post / store) | 1.8 | 7.7 | 19.8 | 2.6 | 19.7 | 28.7 |
+| own writes complete (store + fence / completion wait) | 0.8 | 0 | 6.3 | 0.8 | 0 | 119.4 |
+| signal issued (GPU: release stores / RDMA atomic posts) | 1.3 | 4.5 | 4.1 | 1.3 | 4.4 | 4.1 |
+| signal flight (ordered: queued behind the data) | 0.4 | 17.4 | 5.1 | 0.2 | 119.0 | 5.1 |
+| **receiver sees the signal** | **4.1** | **28.7** | **34.7** | **4.9** | **143.6** | **155.8** |
+| last data seen | 2.3 | 25.1 | 23.2 | 3.5 | 141.1 | 146.2 |
+| one-way per message (post → seen), median | 0.6 | 11.7 | 11.3 | 0.5 | 63.1 | 69.9 |
+| SM time: send loop | 27 | 82 | 153 | 48 | 292 | 314 |
+| SM time: waiting for own writes | 14 | 0 | 313 | 14 | 0 | 2628 |
+| SM time: signal + exit | 14 | 19 | 19 | 14 | 19 | 19 |
+| **SM time per dispatch** | **55** | **101** | **481** | **76** | **311** | **2950** |
+| warp-µs in puts / staging | – | 53 / 2.8 | 123 / 2.9 | – | 1244 / 31 | 1068 / 30 |
+
+With 7 KiB tokens, 16 tokens: 5.1 / 57.2 / 61.4 µs and 70 / 102 / 1017 CTA-µs. With 2 CTAs, 16 × 1 KiB: 4.9 / 29.7 / 32.2 µs and 8.7 / 18.3 / 50.7 CTA-µs.
+
+**SMs given vs latency** (receiver sees the signal, µs, idle; 2 → 20 CTAs):
+
+| | local | ordered | flush |
+|---|---|---|---|
+| 16 × 1 KiB | 4.9 → 4.1 | 29.7 → 28.7 | 32.2 → 34.7 |
+| 128 × 1 KiB | 18.9 → 4.9 | 136.3 → 143.6 | 150.3 → 155.8 |
+| 128 × 7 KiB | 90.6 → 12.5 | 349.9 → 348.0 | 345.9 → 346.5 |
+
+Reading, at 16 × 1 KiB, where the link does not dominate:
+- **GPU side, the post chain:** posting stretches the send loop from 1.8 to 7.7 µs (ordered) and to 19.8 µs (flush; 160 warps share 24 QPs). Issuing the signal takes 4.1–4.5 µs instead of 1.3. Routing and the TMA load cost the same on every path.
+- **The staging copy is small:** 2.8 warp-µs for 16 tokens, 5% of the put calls. It grows with token size and few CTAs: 23 vs 43 warp-µs at 16 × 7 KiB on 2 CTAs.
+- **NIC side:** the last data lands 17 µs after the last post (ordered), 11.7 µs per message (median). That includes DeepEP's doorbell batching (one doorbell per 4 messages per QP), the WQE fetch, and the payload read across steve's sockets. This part depends on the testbed (see Caveats). A fabric that keeps the local path replaces it with its own forwarding, which this experiment cannot measure.
+- **Waiting for completions (flush):** every CTA stays resident until the NIC has drained and acknowledged, 313 of 481 CTA-µs. That share grows with the batch: 2628 of 2950 at 128 × 1 KiB, 6440 of 6767 at 128 × 7 KiB. The ordered signal avoids the wait (101 CTA-µs) and still pays the post chain. Its signal queues behind the data, so latency is not better than flush's.
+- **SMs:** extra SMs do not make the remote paths faster here; they are bound by the NIC. The local path scales with SMs (TMA at 45 GB/s per SM) and reaches 4–5 µs with 2 CTAs at 16 tokens.
+- **Where the remote path uses fewer SMs:** at 16 × 7 KiB on 2 CTAs, ordered takes 19.7 CTA-µs and local 26.2. The local path's SMs write every copy of a token (5.6 destinations on average), while the RDMA path stages one copy and the NIC fans it out.
+
+At ≥ 1024 tokens both remote paths are bound by steve's NIC (≈ 5.2 M messages/s at 1 KiB, ~15 GB/s into HBM across the socket at 7 KiB). The flush path then holds its CTAs for the whole drain: 21,000 CTA-µs at 1024 × 1 KiB, 212,000 at 4096 × 7 KiB.
+
+**What a fabric that keeps the local path removes, and what it keeps.**
+- Removed on the GPU: the post chain (+5.9 µs send loop and +3.2 µs signal for ordered at 16 × 1 KiB; more for flush), the completion wait and the SMs it holds (flush), the staging copy (small), and the per-QP state.
+- Replaced: the NIC's per-message work (doorbell, WQE fetch, payload DMA read). Here the last of the 90 messages lands 23–25 µs after the dispatch starts, against 2.3 µs locally.
+- Kept: routing, the stores themselves, the store completion and fence before the signal, and the release signal. In total that is the local column: 3.9 µs of sender time and 55 CTA-µs.
+- Added, not measurable here: one physical trip through the fabric for the last data and the signal, and the link's bandwidth.
+
 ## Caveats / fairness
 
 - **The cross-socket topology on steve inflates GPU-posted latency more than CPU-posted.** The GPU-posted path crosses the socket interconnect several extra times per operation: doorbell write, work-request fetch from HBM, completion write to HBM. Each GPU↔NIC access across sockets costs about 1 µs here (GPU vs. host memory at an otherwise equal method: 2.64 vs. 1.48 µs one-way). So treat 10.7 µs as an upper bound for well-placed GPUs and NICs, not a typical value. The published NVSHMEM IBGDA inter-node put figure (7.5 µs one-way, 256 B, including the wire; arXiv 2606.05951) is the other end of the bracket.
@@ -336,6 +394,11 @@ cd ~/loom-experiments/latency && $NUMA -N 0 -m 0 ./tma_bw > tma_bw.csv          
 cd ~/loom-experiments/latency && $NUMA -N 0 -m 0 ./dispatch_proxy < /dev/null > dispatch_proxy.csv
 sudo ~/loom-experiments/nvshmem-loopback/run_put_lat.sh        # put_lat_steve.txt
 sudo ~/loom-experiments/nvshmem-loopback/run_put_lat.sh load   # put_lat_steve_load.txt, GEMM as an MPS client
+~/loom-experiments/gpu-posted/build_deepep_post.sh && ~/loom-experiments/gpu-posted/build_dispatch_bd.sh
+mkdir -p ~/loom-experiments/gpu-posted/bd_v2
+sudo env OUT=$HOME/loom-experiments/gpu-posted/bd_v2/dispatch_bd ~/loom-experiments/gpu-posted/run_dispatch_bd.sh --ctas 2,4,8,20   # 5 variants, about 25 min
+sudo env OUT=$HOME/loom-experiments/gpu-posted/bd_v2/dispatch_bd VARIANTS="flush-warpL:--path_flush_--qp_warp_--post_lane ordered-destL3:--path_ordered_--qp_dest_--nq_3_--post_lane flush-destL3:--path_flush_--qp_dest_--nq_3_--post_lane" ~/loom-experiments/gpu-posted/run_dispatch_bd.sh --ctas 2,4,8,20
+python3 summarize_bd.py bd_v2/dispatch_bd_*.csv --csv bd_v2/summary.csv > bd_v2/summary.txt   # here, in steve-cx7/
 ```
 
 ## Files (`steve-cx7/`)
@@ -370,3 +433,6 @@ sudo ~/loom-experiments/nvshmem-loopback/run_put_lat.sh load   # put_lat_steve_l
 - `dispatch_proxy.csv`: its outputs.
 - `run_dispatch_proxy.sh`: the B2 sweep (H × load).
 - `dispatch_sweep_all.csv`: all sweep outputs, B1 and B2.
+- `dispatch_bd.cu`, `build_dispatch_bd.sh`, `run_dispatch_bd.sh`: the dispatch time breakdown (local / flush / ordered, receiver-side end point). Needs `deepep-include/` from `build_deepep_post.sh`; root for memlock. `BD_DEBUG=1` dumps every CTA's and message's stamps for the first measured run.
+- `bd_v2/dispatch_bd_<variant>_H{1024,7168}_load{0,1}.csv`: one row per run at 2/4/8/20 CTAs. Variants: `local`; `flush` / `ordered` (one QP per destination, warp puts); `flush-warp` (QP per warp, warp puts); `ordered-dest3` (3 QPs per destination, warp puts); `flush-warpL`, `ordered-destL3`, `flush-destL3` (per-lane puts, V2.5's shape: the ones used above).
+- `summarize_bd.py`, `bd_v2/summary.{txt,csv}`: medians and the per-component breakdown per variant (named path-qpmode+QPs, e.g. `ordered-destL24`).
