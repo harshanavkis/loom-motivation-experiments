@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """Loom motivation figures, in the style of jigsaw-plotting-scripts/plot_hw_exp.py.
 
+Figure 1 (intro, single column, loom-mix): Mixtral-8x22B bytes per MoE layer by fabric and kind
+of traffic (Chakra ET). Figure 3 (Section 2, 1x3, loom-costs): message rate, MoE dispatch, and the
+GEMM next to held SMs with the network throughput they buy. Older layout notes follow:
 Figure 1 (intro, 1x3): (a) Mixtral-8x22B bytes per MoE layer by fabric (Chakra ET),
 (b) MoE dispatch latency, GPU-initiated vs CPU proxy, both packed (steve H200 + CX-7),
 (c) message rate of 4 B puts vs CTAs issuing, GPU-initiated vs CPU proxy, with the NIC's rated
@@ -222,11 +225,11 @@ def held_sm_curves(ks=(4, 8, 16, 20)):
 
 
 # ---------------------------------------------------------------- panels
-def panel_layer_bytes(ax, fs):
+def panel_layer_bytes(ax, fs, title):
     b = mixtral_8x22b_layer_bytes()
-    segs = [('TP all-gather', [b['tp_ag'], 0], PASTEL[0], ''),
-            ('TP reduce-scatter', [b['tp_rs'], 0], PASTEL[1], '///'),
-            ('EP all-to-all', [b['a2a_local'], b['a2a_remote']], PASTEL[3], '\\\\')]
+    segs = [('TP all-gather (host-queued)', [b['tp_ag'], 0], PASTEL[0], ''),
+            ('TP reduce-scatter (host-queued)', [b['tp_rs'], 0], PASTEL[1], '///'),
+            ('EP all-to-all (kernel-initiated)', [b['a2a_local'], b['a2a_remote']], PASTEL[3], '\\\\')]
     y = np.arange(2)
     left = np.zeros(2)
     for name, vals, color, hatch in segs:
@@ -239,13 +242,14 @@ def panel_layer_bytes(ax, fs):
     ax.invert_yaxis()
     ax.set_xlabel('Bytes sent per MoE layer per GPU [MiB]', fontsize=fs['label'])
     ax.tick_params(axis='x', labelsize=fs['tick'])
-    ax.set_xlim(0, max(left) * 1.3)
+    ax.set_xlim(0, max(left) * 1.95)   # room right of the bars for the legend
     ax.grid(True, alpha=0.3, axis='x', color='gray', linestyle='-')
     ax.legend(loc='lower right', ncol=1, frameon=True, fontsize=fs['legend'])
-    top_label(ax, '(a) Mixtral-8x22B: both fabrics in every layer', fs['annotation'])
+    if title:
+        top_label(ax, title, fs['annotation'])
 
 
-def panel_dispatch(ax, fs):
+def panel_dispatch(ax, fs, title):
     df = dispatch_sweep()
     loc = dispatch_local()
     toks = sorted(df.tokens.unique())
@@ -286,10 +290,10 @@ def panel_dispatch(ax, fs):
     labels += ['7 KiB', '1 KiB']
     ax.legend(handles, labels, loc='upper left', ncol=3, frameon=True, fontsize=fs['legend'],
               columnspacing=0.8, handlelength=1.5)
-    top_label(ax, '(b) MoE dispatch (lower is better ↓)', fs['annotation'])
+    top_label(ax, title, fs['annotation'])
 
 
-def panel_msgrate(ax, fs):
+def panel_msgrate(ax, fs, title):
     m = message_rate()
     ctas = sorted(m.ctas.unique())
     x = {c: i for i, c in enumerate(ctas)}
@@ -309,68 +313,74 @@ def panel_msgrate(ax, fs):
     ax.set_ylabel('Rate [M ops/s]', fontsize=fs['label'])
     ax.grid(True, alpha=0.3)
     ax.legend(loc='upper left', ncol=2, frameon=True, fontsize=fs['legend'], columnspacing=0.8, handlelength=1.5)
-    top_label(ax, '(c) Message rate (higher is better ↑)', fs['annotation'])
+    top_label(ax, title, fs['annotation'])
 
 
-def figure1(out_dir):
-    fs = MOTIVATION_COMBINED_FONT_SIZES
-    fig, axes = plt.subplots(1, 3, figsize=E2E_COMBINED_FIGURE_SIZE)
-    panel_layer_bytes(axes[0], fs)
-    panel_dispatch(axes[1], fs)
-    panel_msgrate(axes[2], fs)
-    fig.subplots_adjust(left=0.06, right=0.99, top=0.88, bottom=0.18, wspace=0.25)
-    save(fig, out_dir, 'loom-motivation')
-    plt.close(fig)
-
-
-def figure2(out_dir):
-    fs = SINGLE_COLUMN_FONT_SIZES
+def panel_held_sms(ax, fs, title):
+    """GEMM throughput vs SMs held (left) and the network throughput those SMs buy (right)."""
     ks, c = held_sm_curves()
-    fig, ax = plt.subplots(figsize=(SINGLE_COLUMN_FIGURE_SIZE[0], 6.6))   # taller: legend below the axes
     x = range(len(ks))
-    for v, mk, ls, ms, lw in (('gpu-initiated', 'o', '-', 14, 4), ('partitioned', '^', ':', 12, 2)):
-        label, color = VARIANTS[v]
-        ax.plot(x, c[v], color=color, marker=mk, markersize=ms, linewidth=lw, linestyle=ls,
-                markeredgecolor='k', alpha=0.9, label=label)
-    label, color = VARIANTS['cpu-proxy']
-    ax.axhline(c['cpu-proxy'], color=color, linewidth=2, linestyle=':',
-               label=f"{label} (1 core, {c['cpu-proxy-GBps']:.1f} GB/s)")
+    for v, mk, ls, ms, lw, lab in (('gpu-initiated', 'o', '-', 14, 4, 'gpu-initiated'),
+                                   ('partitioned', '^', ':', 12, 2, 'partitioned')):
+        ax.plot(x, c[v], color=VARIANTS[v][1], marker=mk, markersize=ms, linewidth=lw, linestyle=ls,
+                markeredgecolor='k', alpha=0.9, label=lab)
+    ax.axhline(c['cpu-proxy'], color=VARIANTS['cpu-proxy'][1], linewidth=2, linestyle=':',
+               label='cpu-proxy (1 core)')
     # the zero-SM path for host-queued transfers, which a unified contract keeps for any peer
     ax.axhline(c['copy-engine'], color=VARIANTS['loom'][1], linewidth=3, linestyle='-.',
-               label='copy engine (zero-SM; unified: any peer)')
-    ax.fill_between(x, c['gpu-initiated'], c['copy-engine'], color=PASTEL[2], alpha=0.5,
-                    label='reclaimed vs gpu-initiated')
+               label='copy engine (0 SMs)')
+    ax.fill_between(x, c['gpu-initiated'], c['copy-engine'], color=PASTEL[2], alpha=0.5, label='reclaimed')
     gain = c['copy-engine'] - c['gpu-initiated'][-1]
-    ax.annotate(f'+{gain:.0f} pts', xy=(x[-1], c['gpu-initiated'][-1] + gain / 2), xytext=(-12, 0),
+    ax.annotate(f'+{gain:.0f} pts', xy=(x[-1], c['gpu-initiated'][-1] + gain * 0.35), xytext=(-12, 0),
                 textcoords='offset points', ha='right', va='center', fontsize=fs['annotation'])
     ax.set_xticks(list(x))
     ax.set_xticklabels([str(k) for k in ks], fontsize=fs['tick'])
     ax.tick_params(axis='y', labelsize=fs['tick'])
-    ax.set_ylim(40, 105)
+    ax.set_ylim(40, 170)          # headroom so the legend sits above the curves
+    ax.set_yticks([40, 60, 80, 100])
     ax.set_xlabel('SMs held for communication (of 132)', fontsize=fs['label'])
-    ax.set_ylabel('Expert GEMM throughput [%]', fontsize=fs['label'])
+    ax.set_ylabel('GEMM throughput [%]', fontsize=fs['label'])
     ax.grid(True, alpha=0.3)
-    # right axis: the network throughput those held SMs buy (GPU-initiated 7 KiB puts, same runs)
     ax2 = ax.twinx()
     ax2.plot(x, c['gpu-initiated-GBps'], color=VARIANTS['gpu-initiated'][1], marker='o', markersize=10,
-             markerfacecolor='white', linewidth=2, linestyle='--', label='gpu-initiated network GB/s (right)')
-    ax2.set_ylim(0, 16.25)
-    ax2.set_ylabel('Network throughput [GB/s]', fontsize=fs['label'])
+             markerfacecolor='white', linewidth=2, linestyle='--', label='GB/s (right)')
+    ax2.set_ylim(0, 26)
+    ax2.set_yticks([0, 5, 10, 15])
+    ax2.set_ylabel('Network [GB/s]', fontsize=fs['label'])
     ax2.tick_params(axis='y', labelsize=fs['tick'])
     h1, l1 = ax.get_legend_handles_labels(); h2, l2 = ax2.get_legend_handles_labels()
-    ax.legend(h1 + h2, l1 + l2, loc='upper center', bbox_to_anchor=(0.5, -0.17), ncol=2, frameon=True,
-              fontsize=fs['legend'] - 1, columnspacing=1.0)
-    top_label(ax, '(Higher is better ↑)', fs['annotation'])
+    ax.legend(h1 + h2, l1 + l2, loc='upper left', ncol=2, frameon=True, fontsize=fs['legend'] - 2,
+              columnspacing=0.8, handlelength=1.4)
+    top_label(ax, title, fs['annotation'])
+
+
+def figure_intro(out_dir):
+    """Introduction (single column): Mixtral-8x22B bytes per MoE layer by fabric and kind."""
+    fs = {'label': 20, 'tick': 18, 'legend': 16, 'annotation': 18}   # ~8 pt at column width
+    fig, ax = plt.subplots(figsize=(8, 3.1))
+    panel_layer_bytes(ax, fs, None)
     plt.tight_layout()
-    save(fig, out_dir, 'loom-held-sms')
+    save(fig, out_dir, 'loom-mix')
+    plt.close(fig)
+
+
+def figure_costs(out_dir):
+    """Section 2 (one row): message rate, MoE dispatch, GEMM next to held SMs."""
+    fs = MOTIVATION_COMBINED_FONT_SIZES
+    fig, axes = plt.subplots(1, 3, figsize=E2E_COMBINED_FIGURE_SIZE)
+    panel_msgrate(axes[0], fs, '(a) Message rate (higher is better ↑)')
+    panel_dispatch(axes[1], fs, '(b) MoE dispatch (lower is better ↓)')
+    panel_held_sms(axes[2], fs, '(c) GEMM next to held SMs (higher is better ↑)')
+    fig.subplots_adjust(left=0.05, right=0.94, top=0.88, bottom=0.18, wspace=0.36)
+    save(fig, out_dir, 'loom-costs')
     plt.close(fig)
 
 
 def main():
     out_dir = sys.argv[1] if len(sys.argv) > 1 else os.path.join(ROOT, 'plots', 'out')
     os.makedirs(out_dir, exist_ok=True)
-    figure1(out_dir)
-    figure2(out_dir)
+    figure_intro(out_dir)
+    figure_costs(out_dir)
     # print the plotted numbers so the paper text can be checked against them
     print('layer bytes MiB:', {k: round(v, 1) for k, v in mixtral_8x22b_layer_bytes().items()})
     print('initiator us:', initiator_latency())
