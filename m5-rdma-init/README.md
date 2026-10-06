@@ -355,6 +355,31 @@ At ≥ 1024 tokens both remote paths are bound by steve's NIC (≈ 5.2 M message
 - Kept: routing, the stores themselves, the store completion and fence before the signal, and the release signal. In total that is the local column: 3.9 µs of sender time and 55 CTA-µs.
 - Added, not measurable here: one physical trip through the fabric for the last data and the signal, and the link's bandwidth.
 
+### Compute lost per dispatch (D3, `dispatch_bd.cu --d3`, 2026-10-06)
+
+**Question.** Is a dispatch's SM time (above) compute that other work loses, and how much per path?
+
+**Method.** A filler of short CTAs (FMA chains, ~5 µs each, 1024 threads) keeps every SM busy from two low-priority streams. Dispatches (20 CTAs, the variants above, no receiver) launch at a fixed period on a high-priority stream and take SMs as filler CTAs finish. Filler and dispatch CTAs both reserve 120 KiB of shared memory, so each holds a whole SM, as DeepEP's comm kernels and the holders of `../m3-sm-share/gpu-interference` do. Compute lost per dispatch = (1 − filler rate with dispatches / filler rate without) × 132 SMs × window / dispatches. Each 0.5 s window with dispatches sits between two filler-only windows, and its baseline is their mean; 5 repetitions, median. The dispatch also sums its own CTA residency in the same run. Periods sit just above the slowest path's dispatch time, so the lost fraction stands well above the filler's window-to-window noise (~0.1%). A first run with a dispatch every 1–2 ms at 2 CTAs was below that noise and was discarded.
+
+TRAP (harness): reaping an RDMA dispatch's completions right after it launches spins until the NIC drains, on an SM of its own (the filler fills the register file). That added ~300 SM-µs per ordered dispatch at 128 × 7 KiB. A library reaps when it next posts, so the harness reaps the previous dispatch's completions before the next dispatch.
+
+**Results** (SM-µs per dispatch, median of 5; in parentheses: the dispatch's own residency in CTA-µs):
+
+| | local | ordered | flush |
+|---|---|---|---|
+| 16 × 1 KiB, every 100 µs | 76 (58) | 135 (97) | 539 (505) |
+| 128 × 1 KiB, every 200 µs | 95 (80) | 342 (306) | 3035 (2984) |
+| 16 × 7 KiB, every 100 µs | 97 (72) | 142 (98) | 1032 (994) |
+| 128 × 7 KiB, every 500 µs | 230 (209) | 375 (353) | 7084 (7033) |
+
+The other period of each pair is within 8% (`bd_v2/d3_summary.txt`).
+
+Reading:
+- **SM time is compute lost.** Lost work equals the dispatch's residency plus 15–45 SM-µs per dispatch for handing 20 SMs back and forth, on every path and at every period. D2's SM time can therefore be quoted as compute lost per dispatch.
+- **Per dispatch, compute lost to the remote paths is 1.5–3.6× (ordered) and 7–31× (flush) the local path's.** For flush the excess is the completion wait (D2: 60–95% of its SM time); for ordered it is the post chain.
+- This models compute that shares SMs with communication at a fine grain. With SMs reserved for communication (DeepEP + DeepGEMM `num_sms`), the GEMM's loss is set by the reservation (Fig 3c), and a longer dispatch costs latency (D1) instead.
+- One GPU: the flush wait includes steve's NIC drain, with both directions on one dual-port NIC and every NIC↔HBM access crossing the socket, so its lost compute is an upper bound for this topology. The local peer is the same GPU's HBM, which is faster per store than an NVLink peer, so the local column is optimistic at large batches.
+
 ## Caveats / fairness
 
 - **The cross-socket topology on steve inflates GPU-posted latency more than CPU-posted.** The GPU-posted path crosses the socket interconnect several extra times per operation: doorbell write, work-request fetch from HBM, completion write to HBM. Each GPU↔NIC access across sockets costs about 1 µs here (GPU vs. host memory at an otherwise equal method: 2.64 vs. 1.48 µs one-way). So treat 10.7 µs as an upper bound for well-placed GPUs and NICs, not a typical value. The published NVSHMEM IBGDA inter-node put figure (7.5 µs one-way, 256 B, including the wire; arXiv 2606.05951) is the other end of the bracket.
@@ -399,6 +424,8 @@ mkdir -p ~/loom-experiments/gpu-posted/bd_v2
 sudo env OUT=$HOME/loom-experiments/gpu-posted/bd_v2/dispatch_bd ~/loom-experiments/gpu-posted/run_dispatch_bd.sh --ctas 2,4,8,20   # 5 variants, about 25 min
 sudo env OUT=$HOME/loom-experiments/gpu-posted/bd_v2/dispatch_bd VARIANTS="flush-warpL:--path_flush_--qp_warp_--post_lane ordered-destL3:--path_ordered_--qp_dest_--nq_3_--post_lane flush-destL3:--path_flush_--qp_dest_--nq_3_--post_lane" ~/loom-experiments/gpu-posted/run_dispatch_bd.sh --ctas 2,4,8,20
 python3 summarize_bd.py bd_v2/dispatch_bd_*.csv --csv bd_v2/summary.csv > bd_v2/summary.txt   # here, in steve-cx7/
+sudo ~/loom-experiments/gpu-posted/run_dispatch_d3.sh                                  # D3: bd_v2/d3_<variant>_H*.csv, about 12 min
+python3 summarize_d3.py bd_v2/d3_*.csv --csv bd_v2/d3_summary.csv > bd_v2/d3_summary.txt         # here, in steve-cx7/
 ```
 
 ## Files (`steve-cx7/`)
@@ -436,3 +463,4 @@ python3 summarize_bd.py bd_v2/dispatch_bd_*.csv --csv bd_v2/summary.csv > bd_v2/
 - `dispatch_bd.cu`, `build_dispatch_bd.sh`, `run_dispatch_bd.sh`: the dispatch time breakdown (local / flush / ordered, receiver-side end point). Needs `deepep-include/` from `build_deepep_post.sh`; root for memlock. `BD_DEBUG=1` dumps every CTA's and message's stamps for the first measured run.
 - `bd_v2/dispatch_bd_<variant>_H{1024,7168}_load{0,1}.csv`: one row per run at 2/4/8/20 CTAs. Variants: `local`; `flush` / `ordered` (one QP per destination, warp puts); `flush-warp` (QP per warp, warp puts); `ordered-dest3` (3 QPs per destination, warp puts); `flush-warpL`, `ordered-destL3`, `flush-destL3` (per-lane puts, V2.5's shape: the ones used above).
 - `summarize_bd.py`, `bd_v2/summary.{txt,csv}`: medians and the per-component breakdown per variant (named path-qpmode+QPs, e.g. `ordered-destL24`).
+- `run_dispatch_d3.sh`, `summarize_d3.py`, `bd_v2/d3_<variant>_H{1024,7168}.csv`, `bd_v2/d3_summary.{txt,csv}`: D3, compute lost per dispatch (filler beside the dispatch).

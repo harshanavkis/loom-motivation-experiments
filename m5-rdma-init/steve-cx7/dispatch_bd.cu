@@ -42,6 +42,7 @@
 #include <thread>
 #include <atomic>
 #include <string>
+#include <chrono>
 #include <unistd.h>
 #include <cuda.h>
 #include <cuda_bf16.h>
@@ -135,7 +136,12 @@ __device__ __forceinline__ void put_nbi_thread(uint64_t rptr, uint64_t lptr, siz
   dl::ibgda_submit_requests<false>(qp, base, n, message_idx);
 }
 
-struct Stamps { unsigned long long *cta_start, *cta_loop, *cta_drain, *cta_exit, *signal, *warp, *post, *wend; int* who; };
+struct Stamps {
+  unsigned long long *cta_start, *cta_loop, *cta_drain, *cta_exit, *signal, *warp, *post, *wend; int* who;
+  // --d3 only (null otherwise): summed CTA residency, summed span (first CTA start -> signal issued),
+  // the span's start (atomicMin), and reset: the last CTA clears the counters for the next dispatch
+  unsigned long long *resid, *span, *span_start; int reset;
+};
 
 template <int kPath>
 __global__ void __launch_bounds__(256, 1)
@@ -147,7 +153,11 @@ dispatch(const char* tok, char* send, char* recv, int* sig, int T, int H, int* c
   const int lane = threadIdx.x & 31, w = threadIdx.x >> 5;
   const int gw = blockIdx.x * WARPS + w, nw = gridDim.x * WARPS;
   const int first = w * gridDim.x + blockIdx.x;   // tokens go round the SMs first, as DeepEP V2.5
-  if (threadIdx.x == 0) { st.cta_start[blockIdx.x] = gtimer(); fence_dep = 1; }
+  unsigned long long t_start = 0;
+  if (threadIdx.x == 0) {
+    t_start = gtimer(); st.cta_start[blockIdx.x] = t_start; fence_dep = 1;
+    if (st.span_start) atomicMin(st.span_start, t_start);
+  }
   __syncthreads();
   char* buf = smem + (size_t)w * HMAX;
   if (lane == 0) mbar_init(&bar[w]);
@@ -234,9 +244,12 @@ dispatch(const char* tok, char* send, char* recv, int* sig, int T, int H, int* c
     }
     t = sync_gtimer();
     if (threadIdx.x == 0) *st.signal = t;
+    if (st.span && threadIdx.x == 0) { atomicAdd(st.span, t - *st.span_start); *st.span_start = ~0ull; }
+    if (st.reset) { if (threadIdx.x < R) counters[threadIdx.x] = 0; if (threadIdx.x == 0) *ctas_done = 0; }
   }
   t = sync_gtimer();
   if (threadIdx.x == 0) st.cta_exit[blockIdx.x] = t;
+  if (st.resid && threadIdx.x == 0) atomicAdd(st.resid, t - t_start);
 }
 
 // after a remote run, outside the timing: reap the completions left (the signal's, and ordered's data)
@@ -246,6 +259,30 @@ __global__ void reap(int nqp) {
     dl::ibgda_post_send(qp, dl::ld_na_relaxed(&qp->mvars.tx_wq.ready_head));
     dl::nvshmemi_ibgda_quiet(1, threadIdx.x);
   }
+}
+
+// --d3: the compute a dispatch takes from work that shares the SMs at a fine grain. A filler of
+// short CTAs (FMA chains, ~5 us each) keeps every SM busy from two low-priority streams; dispatches
+// launch at a fixed period on a high-priority stream and take SMs as filler CTAs finish. Filler
+// and dispatch CTAs both reserve SMEM_X of shared memory, so each holds a whole SM (as DeepEP's
+// comm kernels and the holders of ../../m3-sm-share/gpu-interference do) and neither runs beside
+// the other. Filler work lost per dispatch, in SM-us, is compared with the dispatch's own CTA
+// residency measured in the same run.
+static const int SMEM_X = 120 * 1024;
+
+__global__ void __launch_bounds__(1024, 1) filler(unsigned long long* done, int iters, float* sink) {
+  extern __shared__ char hold[];   // never used: only reserves the SM
+  float a = threadIdx.x, b = a + 1.f, c = a + 2.f, d = a + 3.f;
+  for (int i = 0; i < iters; i++) {
+    a = fmaf(a, 1.0001f, 0.5f); b = fmaf(b, 0.9999f, 0.25f); c = fmaf(c, 1.0002f, 0.125f); d = fmaf(d, 0.9998f, 0.0625f);
+  }
+  if (a + b + c + d == 1234.5f) sink[threadIdx.x] = a;   // keeps the loop
+  __syncthreads();
+  if (threadIdx.x == 0) atomicAdd(done, 1ull);
+}
+
+__global__ void snapshot(const unsigned long long* done, unsigned long long* out) {
+  out[0] = *(volatile const unsigned long long*)done; out[1] = gtimer();
 }
 
 __global__ void set_nonce(char* tok, int T, int H, unsigned long long nonce) {
@@ -320,7 +357,9 @@ static std::vector<int> parse_list(const char* s) {
 }
 
 int main(int argc, char** argv) {
-  int H = 7168, path = LOCAL, iters = 20, qp_warp = 0, nq = 1, post_lane = 0; bool load = false;
+  int H = 7168, path = LOCAL, iters = 20, qp_warp = 0, nq = 1, post_lane = 0, reps = 3; bool load = false;
+  double window_us = 500000;
+  std::vector<int> d3_periods;   // --d3: dispatch periods (us), see filler()
   std::vector<int> Ts = {16, 32, 128, 1024, 4096}, CTAs = {20};
   for (int i = 1; i < argc; i++) {
     if (!strcmp(argv[i], "--H")) H = atoi(argv[++i]);
@@ -331,6 +370,9 @@ int main(int argc, char** argv) {
     else if (!strcmp(argv[i], "--qp")) qp_warp = !strcmp(argv[++i], "warp");   // warp | dest
     else if (!strcmp(argv[i], "--nq")) nq = atoi(argv[++i]);                     // QPs per destination (--qp dest)
     else if (!strcmp(argv[i], "--post")) post_lane = !strcmp(argv[++i], "lane");  // lane (V2.5) | warp (one warp put at a time)
+    else if (!strcmp(argv[i], "--d3")) d3_periods = parse_list(argv[++i]);
+    else if (!strcmp(argv[i], "--reps")) reps = atoi(argv[++i]);
+    else if (!strcmp(argv[i], "--window-ms")) window_us = atof(argv[++i]) * 1e3;
     else if (!strcmp(argv[i], "--path")) { const char* p = argv[++i]; path = !strcmp(p, "flush") ? FLUSH : !strcmp(p, "ordered") ? ORDERED : LOCAL; }
   }
   setenv("CUDA_MODULE_LOADING", "EAGER", 1);   // no lazy kernel load while the receiver spins
@@ -376,7 +418,7 @@ int main(int argc, char** argv) {
   CK(cudaMemset(tok, 1, (size_t)TMAX * HMAX));
   CK(cudaMemset(recv_obs, 0, (size_t)R * TMAX * HMAX));
 
-  Stamps st; unsigned long long *arr, *sig_ts; int *counters, *ctas_done, *cnt_d, *missing, *timed_out;
+  Stamps st = {}; unsigned long long *arr, *sig_ts; int *counters, *ctas_done, *cnt_d, *missing, *timed_out;
   CK(cudaMalloc(&st.cta_start, MAXCTA * 8)); CK(cudaMalloc(&st.cta_loop, MAXCTA * 8)); CK(cudaMalloc(&st.cta_drain, MAXCTA * 8));
   CK(cudaMalloc(&st.cta_exit, MAXCTA * 8)); CK(cudaMalloc(&st.signal, 8)); CK(cudaMalloc(&st.warp, MAXCTA * WARPS * NACT * 8));
   CK(cudaMalloc(&st.post, (size_t)R * TMAX * 8)); CK(cudaMalloc(&st.who, (size_t)R * TMAX * 4)); CK(cudaMalloc(&st.wend, MAXCTA * WARPS * 8)); CK(cudaMalloc(&arr, (size_t)R * TMAX * 8)); CK(cudaMalloc(&sig_ts, 32 * 8));
@@ -390,6 +432,95 @@ int main(int argc, char** argv) {
   cudaStream_t ks, rs; CK(cudaStreamCreateWithFlags(&ks, cudaStreamNonBlocking)); CK(cudaStreamCreateWithFlags(&rs, cudaStreamNonBlocking));
   cudaEvent_t ea, eb; CK(cudaEventCreate(&ea)); CK(cudaEventCreate(&eb));
   CK(cudaDeviceSynchronize());
+  if (!d3_periods.empty()) {   // D3: compute lost to the dispatch, see filler()
+    int nsm; CK(cudaDeviceGetAttribute(&nsm, cudaDevAttrMultiProcessorCount, 0));
+    CK(cudaFuncSetAttribute(filler, cudaFuncAttributeMaxDynamicSharedMemorySize, SMEM_X));
+    CK(cudaFuncSetAttribute(dispatch<LOCAL>, cudaFuncAttributeMaxDynamicSharedMemorySize, SMEM_X));
+    CK(cudaFuncSetAttribute(dispatch<FLUSH>, cudaFuncAttributeMaxDynamicSharedMemorySize, SMEM_X));
+    CK(cudaFuncSetAttribute(dispatch<ORDERED>, cudaFuncAttributeMaxDynamicSharedMemorySize, SMEM_X));
+    int lo, hi; CK(cudaDeviceGetStreamPriorityRange(&lo, &hi));
+    cudaStream_t fs[2], ds, ss;
+    for (auto& f : fs) CK(cudaStreamCreateWithPriority(&f, cudaStreamNonBlocking, lo));
+    CK(cudaStreamCreateWithPriority(&ds, cudaStreamNonBlocking, hi)); CK(cudaStreamCreateWithPriority(&ss, cudaStreamNonBlocking, hi));
+    unsigned long long *fdone, *snap_h, *snap_d, *resid, *span, *span_start; float* sink;
+    CK(cudaMalloc(&fdone, 8)); CK(cudaMemset(fdone, 0, 8)); CK(cudaMalloc(&sink, 1024 * 4));
+    CK(cudaHostAlloc((void**)&snap_h, 64, cudaHostAllocMapped)); CK(cudaHostGetDevicePointer((void**)&snap_d, snap_h, 0));
+    CK(cudaMalloc(&resid, 8)); CK(cudaMalloc(&span, 8)); CK(cudaMalloc(&span_start, 8));
+    CK(cudaMemset(span_start, 0xff, 8)); CK(cudaMemset(counters, 0, R * 4)); CK(cudaMemset(ctas_done, 0, 4));
+    Stamps sx = st; sx.resid = resid; sx.span = span; sx.span_start = span_start; sx.reset = 1;
+    auto launch = [&](int T, int ctas) {
+      // reap the previous dispatch's completions first, as a library does when it posts next (the
+      // period exceeds the NIC's drain, so they have arrived). Reaping right after a dispatch spins
+      // until the NIC drains, on an SM of its own (the filler fills the register file): measured as
+      // +300 SM-us per ordered dispatch at 128 x 7 KiB, a cost of this harness, not of the path.
+      if (path != LOCAL) reap<<<1, 32, 0, ds>>>(nqp);
+      if (path == LOCAL) dispatch<LOCAL><<<ctas, 256, SMEM_X, ds>>>(tok, send, recv_tx, sig_tx, T, H, counters, ctas_done, sx, qp_warp, nq, nqp, post_lane);
+      else if (path == FLUSH) dispatch<FLUSH><<<ctas, 256, SMEM_X, ds>>>(tok, send, recv_tx, sig_tx, T, H, counters, ctas_done, sx, qp_warp, nq, nqp, post_lane);
+      else dispatch<ORDERED><<<ctas, 256, SMEM_X, ds>>>(tok, send, recv_tx, sig_tx, T, H, counters, ctas_done, sx, qp_warp, nq, nqp, post_lane);
+    };
+    auto snap = [&]() {
+      snapshot<<<1, 1, 0, ss>>>(fdone, snap_d); CK(cudaStreamSynchronize(ss));
+      return std::make_pair(((volatile unsigned long long*)snap_h)[0], ((volatile unsigned long long*)snap_h)[1]);
+    };
+    // calibrate the filler alone to ~5 us per CTA
+    int fiters = 4000;
+    for (int k = 0; k < 2; k++) {
+      cudaEvent_t a, b; CK(cudaEventCreate(&a)); CK(cudaEventCreate(&b));
+      CK(cudaEventRecord(a, fs[0])); filler<<<nsm * 50, 1024, SMEM_X, fs[0]>>>(fdone, fiters, sink); CK(cudaEventRecord(b, fs[0]));
+      CK(cudaEventSynchronize(b)); CK(cudaGetLastError());
+      float ms; CK(cudaEventElapsedTime(&ms, a, b));
+      fiters = std::max(100, (int)(fiters * 5.0 / (ms * 1e3 / 50)));
+    }
+    std::atomic<bool> fstop{false};
+    auto floop = [&](cudaStream_t f) {
+      while (!fstop) { filler<<<nsm * 200, 1024, SMEM_X, f>>>(fdone, fiters, sink); cudaStreamSynchronize(f); }
+    };
+    std::thread f0(floop, fs[0]), f1(floop, fs[1]);
+    usleep(500000);
+    // one window: filler CTAs finished per ns, with a dispatch every P us (P = 0: none)
+    auto window = [&](int T, int ctas, int P, int* n, double* dt) {
+      auto [c0, g0] = snap();
+      const auto t0 = std::chrono::steady_clock::now();
+      auto el = [&] { return std::chrono::duration<double, std::micro>(std::chrono::steady_clock::now() - t0).count(); };
+      *n = 0;
+      if (P > 0) for (double next = 0; next < window_us; next += P) { while (el() < next) {} launch(T, ctas); ++*n; }
+      else while (el() < window_us) {}
+      CK(cudaStreamSynchronize(ds)); CK(cudaGetLastError());
+      auto [c1, g1] = snap();
+      *dt = (double)(g1 - g0);
+      return (double)(c1 - c0) / *dt;
+    };
+    printf("# D3: filler (%d SMs, %d FMA iterations per thread, 1024 threads, %d KiB shared per CTA) + dispatch every P us, "
+           "path=%s H=%d; filler-only windows before and after each dispatch window\n", nsm, fiters, SMEM_X / 1024, PATH_NAME[path], H);
+    printf("d3,path,qp,nqp,H,tokens,ctas,period_us,rep,dispatches,window_us,filler_cta_us,filler_alone_per_ms,filler_per_ms,"
+           "lost_frac,lost_sm_us_per_dispatch,resid_cta_us_per_dispatch,span_us_per_dispatch\n");
+    for (int T : Ts)
+      for (int ctas : CTAs)
+        for (int P : d3_periods) {
+          for (int i = 0; i < 20; i++) launch(T, ctas);   // warm up
+          CK(cudaStreamSynchronize(ds)); CK(cudaGetLastError());
+          int n0, n; double dt0, dt, dt1;
+          double before = window(T, ctas, 0, &n0, &dt0);
+          for (int rep = 0; rep < reps; rep++) {
+            CK(cudaMemset(resid, 0, 8)); CK(cudaMemset(span, 0, 8));
+            const double with = window(T, ctas, P, &n, &dt);
+            const double after = window(T, ctas, 0, &n0, &dt1);
+            unsigned long long rs, sp;
+            CK(cudaMemcpy(&rs, resid, 8, cudaMemcpyDeviceToHost)); CK(cudaMemcpy(&sp, span, 8, cudaMemcpyDeviceToHost));
+            const double base = (before + after) / 2, lost = 1 - with / base;
+            printf("d3,%s,%s,%d,%d,%d,%d,%d,%d,%d,%.0f,%.2f,%.1f,%.1f,%.4f,%.1f,%.1f,%.2f\n", PATH_NAME[path],
+                   path == LOCAL ? "none" : qp_warp ? (post_lane ? "warpL" : "warp") : (post_lane ? "destL" : "dest"), path == LOCAL ? 0 : nqp,
+                   H, T, ctas, P, rep, n, dt / 1e3, nsm / (base * 1e3), base * 1e6, with * 1e6, lost,
+                   lost * nsm * (dt / 1e3) / n, rs / 1e3 / n, sp / 1e3 / n);
+            fflush(stdout);
+            before = after;
+          }
+        }
+    fstop = true; f0.join(); f1.join();
+    { FILE* f = fopen(done_file, "w"); if (f) fclose(f); }
+    nvshmem_barrier_all(); nvshmem_finalize();
+    return 0;
+  }
   Load L; if (load) { for (int c : CTAs) L.warm.push_back(c + 1); L.start(); while (!L.ready) usleep(1000); usleep(500000); }
 
   printf("# dispatch breakdown, path=%s H=%d E=%d R=%d topk=%d load=%d, 256-thread CTAs, QPs: %s (%d), %d signals; times in us from the sender's first CTA start\n",

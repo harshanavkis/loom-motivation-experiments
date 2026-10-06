@@ -1,0 +1,48 @@
+
+=== H=1024 B, tokens=16, 20 CTAs, a dispatch every 50 us (filler CTA 4.88 us)
+                                               local   flush-warpL24 ordered-destL24
+  compute lost per dispatch (SM-us)             78.1           543.2           136.9
+  dispatch residency (CTA-us)                   57.7           505.9            94.7
+  dispatch span (us)                             4.2            31.2            11.8
+
+=== H=1024 B, tokens=16, 20 CTAs, a dispatch every 100 us (filler CTA 4.88 us)
+                                               local   flush-warpL24 ordered-destL24
+  compute lost per dispatch (SM-us)             75.9           539.0           135.4
+  dispatch residency (CTA-us)                   57.7           504.7            97.1
+  dispatch span (us)                             4.2            31.0            12.0
+
+=== H=1024 B, tokens=128, 20 CTAs, a dispatch every 200 us (filler CTA 4.88 us)
+                                               local   flush-warpL24 ordered-destL24
+  compute lost per dispatch (SM-us)             94.5          3034.7           341.5
+  dispatch residency (CTA-us)                   79.5          2983.7           305.9
+  dispatch span (us)                             5.2           152.7            24.9
+
+=== H=1024 B, tokens=128, 20 CTAs, a dispatch every 400 us (filler CTA 4.88 us)
+                                               local   flush-warpL24 ordered-destL24
+  compute lost per dispatch (SM-us)            102.3          3021.6           329.8
+  dispatch residency (CTA-us)                   79.5          2984.3           304.7
+  dispatch span (us)                             5.2           152.7            24.8
+
+=== H=7168 B, tokens=16, 20 CTAs, a dispatch every 100 us (filler CTA 4.99 us)
+                                               local   flush-warpL24 ordered-destL24
+  compute lost per dispatch (SM-us)             96.6          1032.1           142.2
+  dispatch residency (CTA-us)                   71.9           993.6            98.1
+  dispatch span (us)                             5.5            57.5            11.9
+
+=== H=7168 B, tokens=16, 20 CTAs, a dispatch every 200 us (filler CTA 4.99 us)
+                                               local   flush-warpL24 ordered-destL24
+  compute lost per dispatch (SM-us)             96.6          1041.9           141.2
+  dispatch residency (CTA-us)                   71.9           997.2            99.5
+  dispatch span (us)                             5.6            57.4            12.0
+
+=== H=7168 B, tokens=128, 20 CTAs, a dispatch every 500 us (filler CTA 4.87 us)
+                                               local   flush-warpL24 ordered-destL24
+  compute lost per dispatch (SM-us)            229.5          7083.5           374.7
+  dispatch residency (CTA-us)                  208.5          7032.9           352.5
+  dispatch span (us)                            12.5           355.2            25.0
+
+=== H=7168 B, tokens=128, 20 CTAs, a dispatch every 1000 us (filler CTA 4.87 us)
+                                               local   flush-warpL24 ordered-destL24
+  compute lost per dispatch (SM-us)            224.7          7050.6           393.6
+  dispatch residency (CTA-us)                  208.6          6999.3           353.1
+  dispatch span (us)                            12.5           353.5            25.0
