@@ -1,0 +1,129 @@
+
+==========
+== CUDA ==
+==========
+
+CUDA Version 12.9.1
+
+Container image Copyright (c) 2016-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+
+This container image and its contents are governed by the NVIDIA Deep Learning Container License.
+By pulling and using the container, you accept the terms and conditions of this license:
+https://developer.nvidia.com/ngc/nvidia-deep-learning-container-license
+
+A copy of this license is made available in this container at /NGC-DL-CONTAINER-LICENSE for your convenience.
+
+057ca5964aae0879ff2e0eb71ee05a3cb0ba3df7
+# fp8: m=8960 (valid 8363), n=4096, k=7168, 491.1 GFLOP, mean rel err 0.0369
+# bf16: m=8960 (valid 8363), n=4096, k=7168, 491.1 GFLOP, mean rel err 0.0000
+rep,dtype,k,mode,num_sms,us_per_gemm,tflops,pct_of_alone
+0,fp8,0,alone,132,447.1,1098.3,100.0
+0,fp8,0,ce,132,467.2,1051.2,95.7
+# ce 85.3 GB/s
+0,fp8,4,partitioned,128,479.6,1023.9,93.2
+0,fp8,4,held,128,502.3,977.7,89.0
+0,fp8,8,partitioned,124,528.9,928.4,84.5
+0,fp8,8,held,124,537.7,913.3,83.2
+0,fp8,16,partitioned,116,571.5,859.3,78.2
+0,fp8,16,held,116,562.4,873.2,79.5
+0,fp8,20,partitioned,112,563.0,872.2,79.4
+0,fp8,20,held,112,566.7,866.5,78.9
+0,bf16,0,alone,132,897.2,547.4,100.0
+0,bf16,0,ce,132,885.1,554.9,101.4
+# ce 85.6 GB/s
+0,bf16,4,partitioned,128,802.9,611.6,111.7
+0,bf16,4,held,128,861.2,570.2,104.2
+0,bf16,8,partitioned,124,961.7,510.6,93.3
+0,bf16,8,held,124,942.8,520.8,95.2
+0,bf16,16,partitioned,116,926.1,530.2,96.9
+0,bf16,16,held,116,926.7,529.9,96.8
+0,bf16,20,partitioned,112,925.6,530.6,96.9
+0,bf16,20,held,112,930.1,528.0,96.5
+1,fp8,0,alone,132,467.4,1050.7,100.0
+1,fp8,0,ce,132,503.0,976.3,92.9
+# ce 85.6 GB/s
+1,fp8,4,partitioned,128,489.2,1003.8,95.5
+1,fp8,4,held,128,500.0,982.1,93.5
+1,fp8,8,partitioned,124,522.4,940.0,89.5
+1,fp8,8,held,124,531.2,924.5,88.0
+1,fp8,16,partitioned,116,570.2,861.3,82.0
+1,fp8,16,held,116,569.1,862.9,82.1
+1,fp8,20,partitioned,112,564.9,869.3,82.7
+1,fp8,20,held,112,571.0,860.0,81.8
+1,bf16,0,alone,132,900.1,545.6,100.0
+1,bf16,0,ce,132,892.6,550.2,100.8
+# ce 85.6 GB/s
+1,bf16,4,partitioned,128,812.9,604.1,110.7
+1,bf16,4,held,128,860.0,571.0,104.7
+1,bf16,8,partitioned,124,960.0,511.6,93.8
+1,bf16,8,held,124,938.4,523.3,95.9
+1,bf16,16,partitioned,116,928.8,528.7,96.9
+1,bf16,16,held,116,938.3,523.3,95.9
+1,bf16,20,partitioned,112,932.3,526.7,96.5
+1,bf16,20,held,112,926.0,530.3,97.2
+2,fp8,0,alone,132,470.4,1043.9,100.0
+2,fp8,0,ce,132,499.2,983.7,94.2
+# ce 84.9 GB/s
+2,fp8,4,partitioned,128,491.1,999.9,95.8
+2,fp8,4,held,128,507.8,967.1,92.6
+2,fp8,8,partitioned,124,534.0,919.6,88.1
+2,fp8,8,held,124,539.8,909.8,87.2
+2,fp8,16,partitioned,116,576.0,852.5,81.7
+2,fp8,16,held,116,573.5,856.3,82.0
+2,fp8,20,partitioned,112,572.0,858.5,82.2
+2,fp8,20,held,112,578.8,848.4,81.3
+2,bf16,0,alone,132,905.6,542.3,100.0
+2,bf16,0,ce,132,903.7,543.4,100.2
+# ce 84.9 GB/s
+2,bf16,4,partitioned,128,814.3,603.1,111.2
+2,bf16,4,held,128,862.5,569.3,105.0
+2,bf16,8,partitioned,124,972.3,505.1,93.1
+2,bf16,8,held,124,964.5,509.1,93.9
+2,bf16,16,partitioned,116,942.7,520.9,96.1
+2,bf16,16,held,116,942.1,521.3,96.1
+2,bf16,20,partitioned,112,931.7,527.1,97.2
+2,bf16,20,held,112,926.1,530.3,97.8
+3,fp8,0,alone,132,464.3,1057.7,100.0
+3,fp8,0,ce,132,499.7,982.7,92.9
+# ce 84.9 GB/s
+3,fp8,4,partitioned,128,493.5,995.2,94.1
+3,fp8,4,held,128,508.3,966.1,91.3
+3,fp8,8,partitioned,124,533.2,921.1,87.1
+3,fp8,8,held,124,531.2,924.4,87.4
+3,fp8,16,partitioned,116,570.0,861.6,81.5
+3,fp8,16,held,116,575.1,853.9,80.7
+3,fp8,20,partitioned,112,567.7,865.1,81.8
+3,fp8,20,held,112,573.9,855.6,80.9
+3,bf16,0,alone,132,902.6,544.1,100.0
+3,bf16,0,ce,132,903.6,543.5,99.9
+# ce 84.8 GB/s
+3,bf16,4,partitioned,128,793.3,619.0,113.8
+3,bf16,4,held,128,857.5,572.7,105.3
+3,bf16,8,partitioned,124,957.5,512.9,94.3
+3,bf16,8,held,124,963.1,509.9,93.7
+3,bf16,16,partitioned,116,949.6,517.2,95.1
+3,bf16,16,held,116,949.7,517.1,95.0
+3,bf16,20,partitioned,112,936.6,524.3,96.4
+3,bf16,20,held,112,926.1,530.2,97.5
+4,fp8,0,alone,132,466.1,1053.6,100.0
+4,fp8,0,ce,132,504.4,973.6,92.4
+# ce 84.9 GB/s
+4,fp8,4,partitioned,128,488.2,1005.9,95.5
+4,fp8,4,held,128,494.0,994.0,94.3
+4,fp8,8,partitioned,124,523.4,938.2,89.0
+4,fp8,8,held,124,530.0,926.5,87.9
+4,fp8,16,partitioned,116,567.7,865.0,82.1
+4,fp8,16,held,116,568.2,864.3,82.0
+4,fp8,20,partitioned,112,567.3,865.6,82.2
+4,fp8,20,held,112,574.0,855.6,81.2
+4,bf16,0,alone,132,902.5,544.1,100.0
+4,bf16,0,ce,132,895.8,548.2,100.7
+# ce 84.8 GB/s
+4,bf16,4,partitioned,128,815.4,602.2,110.7
+4,bf16,4,held,128,866.9,566.5,104.1
+4,bf16,8,partitioned,124,960.7,511.2,93.9
+4,bf16,8,held,124,963.2,509.8,93.7
+4,bf16,16,partitioned,116,951.7,516.0,94.8
+4,bf16,16,held,116,952.6,515.5,94.7
+4,bf16,20,partitioned,112,940.8,522.0,95.9
+4,bf16,20,held,112,939.9,522.5,96.0

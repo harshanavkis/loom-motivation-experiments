@@ -34,6 +34,7 @@ CHAKRA = os.path.join(ROOT, 'm3-sm-share', 'chakra')
 INTERF = os.path.join(ROOT, 'm3-sm-share', 'gpu-interference')
 POSTED = os.path.join(ROOT, 'm3-sm-share', 'gpu-posted')
 CX7 = os.path.join(ROOT, 'm5-rdma-init', 'steve-cx7')
+DEEPGEMM = os.path.join(ROOT, 'm3-sm-share', 'deepgemm')
 BD = os.path.join(CX7, 'bd_v2')
 # dispatch_bd variants plotted: summary name -> (label, color). Remote: per-lane DeepEP puts (V2.5's
 # shape); flush = V2.5's normal dispatch (QPs follow the warps), ordered = V1 low latency (3 QPs per
@@ -243,6 +244,22 @@ def dispatch_rate():
     return d.groupby(['path', 'H', 'tokens', 'period_us'], as_index=False).median()
 
 
+def deepgemm_held(ks=(4, 8, 16, 20)):
+    """DeepGEMM FP8 expert GEMM (8 experts x M tokens, 7168 -> 4096) next to k SMs held for
+    communication and planned for 132 - k (dg_held.py): medians of 5, % of the same GEMM alone on
+    all SMs; plus the copy engine moving 50 GB/s beside it on all SMs."""
+    out = {}
+    for M in (1024, 4096):
+        rows = [l.strip().split(',') for l in open(os.path.join(DEEPGEMM, f'held_m{M}.csv'))
+                if l.count(',') == 7 and l[0].isdigit()]
+        df = pd.DataFrame(rows, columns=['rep', 'dtype', 'k', 'mode', 'num_sms', 'us', 'tflops', 'pct'])
+        df = df[df.dtype == 'fp8']
+        df[['k', 'pct']] = df[['k', 'pct']].astype(float)
+        out[M] = {m: [df[(df['mode'] == m) & (df.k == k)].pct.median() for k in ks] for m in ('held', 'partitioned')}
+        out[M]['ce50'] = df[df['mode'] == 'ce50'].pct.median()
+    return list(ks), out
+
+
 # ---------------------------------------------------------------- panels
 def panel_layer_bytes(ax, fs, title):
     b = mixtral_8x22b_layer_bytes()
@@ -294,38 +311,48 @@ def panel_msgrate(ax, fs, title):
 
 
 def panel_held_sms(ax, fs, title):
-    """GEMM throughput vs SMs held (left) and the network throughput those SMs buy (right)."""
-    ks, c = held_sm_curves()
+    """DeepSeek's setup: k SMs reserved for communication, DeepGEMM's FP8 expert GEMM planned for the
+    rest (left); the copy engine moving 50 GB/s beside it on all SMs; the network throughput
+    GPU-initiated puts reach with k SMs (right, ../gpu-posted)."""
+    ks, d = deepgemm_held()
+    _, c = held_sm_curves(tuple(ks))
     x = range(len(ks))
-    for v, mk, ls, ms, lw, lab in (('gpu-initiated', 'o', '-', 14, 4, 'gpu-initiated'),
-                                   ('partitioned', '^', ':', 12, 2, 'partitioned')):
-        ax.plot(x, c[v], color=VARIANTS[v][1], marker=mk, markersize=ms, linewidth=lw, linestyle=ls,
-                markeredgecolor='k', alpha=0.9, label=lab)
-    # the zero-SM path for host-queued transfers, which a unified contract keeps for any peer
-    ax.axhline(c['copy-engine'], color=VARIANTS['loom'][1], linewidth=3, linestyle='-.',
-               label='copy engine (0 SMs)')
-    ax.fill_between(x, c['gpu-initiated'], c['copy-engine'], color=PASTEL[2], alpha=0.5, label='reclaimed')
-    gain = c['copy-engine'] - c['gpu-initiated'][-1]
-    ax.annotate(f'+{gain:.0f} pts', xy=(x[-1], c['gpu-initiated'][-1] + gain * 0.35), xytext=(-12, 0),
+    for M, mk in ((1024, 'o'), (4096, 's')):
+        ax.plot(x, d[M]['held'], color=VARIANTS['gpu-initiated'][1], marker=mk, markersize=14, linewidth=4,
+                markeredgecolor='k', alpha=0.9)
+    ax.plot(x, [100 * (132 - k) / 132 for k in ks], color='black', linewidth=2, linestyle=':')
+    ce = d[1024]['ce50']
+    ax.axhline(ce, color=VARIANTS['loom'][1], linewidth=3, linestyle='-.')
+    ax.fill_between(x, d[1024]['held'], ce, color=PASTEL[2], alpha=0.5)
+    gain = ce - d[1024]['held'][-1]
+    ax.annotate(f'+{gain:.0f} pts', xy=(x[-1], d[1024]['held'][-1] + gain * 0.5), xytext=(-14, 0),
                 textcoords='offset points', ha='right', va='center', fontsize=fs['annotation'])
     ax.set_xticks(list(x))
     ax.set_xticklabels([str(k) for k in ks], fontsize=fs['tick'])
     ax.tick_params(axis='y', labelsize=fs['tick'])
-    ax.set_ylim(40, 170)          # headroom so the legend sits above the curves
-    ax.set_yticks([40, 60, 80, 100])
-    ax.set_xlabel('SMs held for communication (of 132)', fontsize=fs['label'])
+    ax.set_ylim(75, 140)          # headroom so the legend sits above the curves
+    ax.set_yticks([80, 90, 100])
+    ax.set_xlabel('SMs reserved for communication (of 132)', fontsize=fs['label'])
     ax.set_ylabel('GEMM throughput [%]', fontsize=fs['label'])
     ax.grid(True, alpha=0.3)
     ax2 = ax.twinx()
     ax2.plot(x, c['gpu-initiated-GBps'], color=VARIANTS['gpu-initiated'][1], marker='o', markersize=10,
-             markerfacecolor='white', linewidth=2, linestyle='--', label='GB/s (right)')
+             markerfacecolor='white', linewidth=2, linestyle='--')
     ax2.set_ylim(0, 26)
     ax2.set_yticks([0, 5, 10, 15])
     ax2.set_ylabel('Network [GB/s]', fontsize=fs['label'])
     ax2.tick_params(axis='y', labelsize=fs['tick'])
-    h1, l1 = ax.get_legend_handles_labels(); h2, l2 = ax2.get_legend_handles_labels()
-    ax.legend(h1 + h2, l1 + l2, loc='upper left', ncol=2, frameon=True, fontsize=fs['legend'] - 2,
-              columnspacing=0.8, handlelength=1.4)
+    handles = [Line2D([0], [0], color=VARIANTS['gpu-initiated'][1], linewidth=4, marker='o', markersize=14, markeredgecolor='k'),
+               Line2D([0], [0], color=VARIANTS['gpu-initiated'][1], linewidth=4, marker='s', markersize=14, markeredgecolor='k'),
+               Line2D([0], [0], color='black', linewidth=2, linestyle=':'),
+               Line2D([0], [0], color=VARIANTS['loom'][1], linewidth=3, linestyle='-.'),
+               plt.Rectangle((0, 0), 1, 1, color=PASTEL[2], alpha=0.5),
+               Line2D([0], [0], color=VARIANTS['gpu-initiated'][1], marker='o', markersize=10, markerfacecolor='white',
+                      linewidth=2, linestyle='--')]
+    labels = ['held, 1K tok/expert', 'held, 4K tok/expert', 'share of SMs left', 'copy engine',
+              'reclaimed', 'GB/s (right)']
+    ax.legend(handles, labels, loc='upper left', ncol=2, frameon=True, fontsize=fs['legend'] - 6,
+              columnspacing=0.6, handlelength=1.3)
     top_label(ax, title, fs['annotation'])
 
 
@@ -404,8 +431,8 @@ def figure_costs(out_dir):
     fig, axes = plt.subplots(1, 4, figsize=(64, 9))
     panel_msgrate(axes[0], fs, '(a) Message rate (higher ↑)')
     panel_dispatch_time(axes[1], fs, '(b) 16 × 1 KiB dispatch (lower ↓)')
-    panel_dispatch_rate(axes[2], fs, '(c) GEMM beside dispatches (lower ↓)')
-    panel_held_sms(axes[3], fs, '(d) GEMM next to held SMs (higher ↑)')
+    panel_dispatch_rate(axes[2], fs, '(c) GEMM, SMs shared (lower ↓)')
+    panel_held_sms(axes[3], fs, '(d) GEMM, SMs reserved (higher ↑)')
     fig.subplots_adjust(left=0.04, right=0.96, top=0.88, bottom=0.2, wspace=0.38)
     save(fig, out_dir, 'loom-costs')
     plt.close(fig)
@@ -421,6 +448,7 @@ def main():
     print('initiator us:', initiator_latency())
     print(dispatch_sweep().sort_values(['variant', 'H', 'tokens']).to_string(index=False))
     print('unified bound us (store carries data, NIC reads payload):', unified_bound())
+    print('DeepGEMM held', deepgemm_held())
     ks, c = held_sm_curves()
     print('held SMs', ks, {k: (np.round(v, 1).tolist() if isinstance(v, list) else round(v, 1)) for k, v in c.items()})
     b = dispatch_breakdown()

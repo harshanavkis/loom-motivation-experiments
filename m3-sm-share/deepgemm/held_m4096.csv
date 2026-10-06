@@ -1,0 +1,83 @@
+
+==========
+== CUDA ==
+==========
+
+CUDA Version 12.9.1
+
+Container image Copyright (c) 2016-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+
+This container image and its contents are governed by the NVIDIA Deep Learning Container License.
+By pulling and using the container, you accept the terms and conditions of this license:
+https://developer.nvidia.com/ngc/nvidia-deep-learning-container-license
+
+A copy of this license is made available in this container at /NGC-DL-CONTAINER-LICENSE for your convenience.
+
+057ca5964aae0879ff2e0eb71ee05a3cb0ba3df7
+# fp8: m=34048 (valid 33464), n=4096, k=7168, 1965.0 GFLOP, mean rel err 0.0369
+rep,dtype,k,mode,num_sms,us_per_gemm,tflops,pct_of_alone
+0,fp8,0,alone,132,1820.0,1079.7,100.0
+0,fp8,0,ce50,132,1886.8,1041.4,96.5
+# ce50 49.9 GB/s
+0,fp8,0,cemax,132,1924.8,1020.9,94.6
+# cemax 85.4 GB/s
+0,fp8,4,partitioned,128,1930.6,1017.8,94.3
+0,fp8,4,held,128,1991.1,986.9,91.4
+0,fp8,8,partitioned,124,1996.7,984.1,91.1
+0,fp8,8,held,124,1959.7,1002.7,92.9
+0,fp8,16,partitioned,116,2030.8,967.6,89.6
+0,fp8,16,held,116,2025.6,970.1,89.8
+0,fp8,20,partitioned,112,2096.7,937.2,86.8
+0,fp8,20,held,112,2094.6,938.1,86.9
+1,fp8,0,alone,132,1859.8,1056.5,100.0
+1,fp8,0,ce50,132,1909.0,1029.4,97.4
+# ce50 49.8 GB/s
+1,fp8,0,cemax,132,1960.1,1002.5,94.9
+# cemax 84.7 GB/s
+1,fp8,4,partitioned,128,1993.5,985.7,93.3
+1,fp8,4,held,128,1946.9,1009.3,95.5
+1,fp8,8,partitioned,124,1958.1,1003.5,95.0
+1,fp8,8,held,124,1963.0,1001.0,94.7
+1,fp8,16,partitioned,116,2041.7,962.4,91.1
+1,fp8,16,held,116,2056.8,955.4,90.4
+1,fp8,20,partitioned,112,2103.3,934.2,88.4
+1,fp8,20,held,112,2111.6,930.6,88.1
+2,fp8,0,alone,132,1869.0,1051.4,100.0
+2,fp8,0,ce50,132,1908.5,1029.6,97.9
+# ce50 49.8 GB/s
+2,fp8,0,cemax,132,1969.7,997.6,94.9
+# cemax 84.7 GB/s
+2,fp8,4,partitioned,128,1992.3,986.3,93.8
+2,fp8,4,held,128,1956.6,1004.3,95.5
+2,fp8,8,partitioned,124,1960.9,1002.1,95.3
+2,fp8,8,held,124,1957.1,1004.0,95.5
+2,fp8,16,partitioned,116,2039.5,963.5,91.6
+2,fp8,16,held,116,2034.3,965.9,91.9
+2,fp8,20,partitioned,112,2076.6,946.3,90.0
+2,fp8,20,held,112,2091.2,939.7,89.4
+3,fp8,0,alone,132,1867.3,1052.3,100.0
+3,fp8,0,ce50,132,1917.1,1025.0,97.4
+# ce50 49.9 GB/s
+3,fp8,0,cemax,132,1952.0,1006.7,95.7
+# cemax 85.5 GB/s
+3,fp8,4,partitioned,128,1976.4,994.2,94.5
+3,fp8,4,held,128,1964.6,1000.2,95.0
+3,fp8,8,partitioned,124,1952.6,1006.3,95.6
+3,fp8,8,held,124,1963.4,1000.8,95.1
+3,fp8,16,partitioned,116,2043.1,961.8,91.4
+3,fp8,16,held,116,2043.6,961.6,91.4
+3,fp8,20,partitioned,112,2082.2,943.7,89.7
+3,fp8,20,held,112,2092.5,939.1,89.2
+4,fp8,0,alone,132,1878.0,1046.3,100.0
+4,fp8,0,ce50,132,1939.5,1013.1,96.8
+# ce50 49.9 GB/s
+4,fp8,0,cemax,132,1970.6,997.2,95.3
+# cemax 85.5 GB/s
+4,fp8,4,partitioned,128,1990.3,987.3,94.4
+4,fp8,4,held,128,1955.2,1005.0,96.1
+4,fp8,8,partitioned,124,1959.8,1002.7,95.8
+4,fp8,8,held,124,1961.1,1002.0,95.8
+4,fp8,16,partitioned,116,2044.1,961.3,91.9
+4,fp8,16,held,116,2050.4,958.4,91.6
+4,fp8,20,partitioned,112,2086.5,941.8,90.0
+4,fp8,20,held,112,2099.8,935.8,89.4
