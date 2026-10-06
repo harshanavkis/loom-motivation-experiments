@@ -1,0 +1,132 @@
+
+==========
+== CUDA ==
+==========
+
+CUDA Version 12.9.1
+
+Container image Copyright (c) 2016-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+
+This container image and its contents are governed by the NVIDIA Deep Learning Container License.
+By pulling and using the container, you accept the terms and conditions of this license:
+https://developer.nvidia.com/ngc/nvidia-deep-learning-container-license
+
+A copy of this license is made available in this container at /NGC-DL-CONTAINER-LICENSE for your convenience.
+
+# cublas-bf16: 481.0 GFLOP
+# dg-fp8: 491.1 GFLOP
+# dg-bf16: 491.1 GFLOP
+# profile cublas-bf16 sms=132: grid=[2, 66, 1] block=[384, 1, 1] smem=213188 regs=168 dur=591.991us name=nvjet_tst_256x128_64x4_1x2_h_bz_coopA_NNT
+# profile cublas-bf16 sms=112: grid=[8, 14, 1] block=[384, 1, 1] smem=188636 regs=168 dur=746.977us name=nvjet_tst_320x128_64x3_2x4_h_bz_coopB_NNT
+# profile dg-fp8 sms=132: grid=[140, 1, 1] block=[512, 1, 1] smem=14592 regs=32 dur=3.36us name=void deep_gemm::transpose_fp32<512u, 64u, 56u, 128u, 57u>(float const*, float*, unsigned int)
+# profile dg-fp8 sms=132: grid=[132, 1, 1] block=[384, 1, 1] smem=215744 regs=168 dur=430.9us name=void deep_gemm::sm90_fp8_gemm_1d2d_impl<(cute::UMMA::Major)0, 0u, 4096u, 7168u, 8u, 128u, 192u, 128u, 128u, 128u, 128u, 4u, 128u, 256u, 2u, false, 132u, (deep_g
+# profile dg-fp8 sms=112: grid=[140, 1, 1] block=[512, 1, 1] smem=14592 regs=32 dur=3.456us name=void deep_gemm::transpose_fp32<512u, 64u, 56u, 128u, 57u>(float const*, float*, unsigned int)
+# profile dg-fp8 sms=112: grid=[112, 1, 1] block=[384, 1, 1] smem=215744 regs=168 dur=477.243us name=void deep_gemm::sm90_fp8_gemm_1d2d_impl<(cute::UMMA::Major)0, 0u, 4096u, 7168u, 8u, 128u, 192u, 128u, 128u, 128u, 128u, 4u, 128u, 256u, 2u, true, 112u, (deep_ge
+# profile dg-bf16 sms=132: grid=[132, 1, 1] block=[384, 1, 1] smem=213248 regs=168 dur=775.202us name=void deep_gemm::sm90_bf16_gemm_impl<(cute::UMMA::Major)0, (cute::UMMA::Major)0, 0u, 4096u, 7168u, 8u, 128u, 256u, 64u, 128u, 128u, 128u, 3u, 128u, 256u, 2u, fal
+# profile dg-bf16 sms=112: grid=[112, 1, 1] block=[384, 1, 1] smem=213248 regs=168 dur=793.634us name=void deep_gemm::sm90_bf16_gemm_impl<(cute::UMMA::Major)0, (cute::UMMA::Major)0, 0u, 4096u, 7168u, 8u, 128u, 256u, 64u, 128u, 128u, 128u, 3u, 128u, 256u, 2u, tru
+rep,gemm,k,mode,us_per_gemm,tflops,pct_of_alone,distinct_sms,smids
+0,cublas-bf16,0,alone,591.9,812.7,100.0,0,
+0,cublas-bf16,8,partitioned,653.5,736.0,90.6,0,
+0,cublas-bf16,8,held,654.6,734.9,90.4,8,124 125 126 127 128 129 130 131
+0,cublas-bf16,16,partitioned,666.2,722.0,88.8,0,
+0,cublas-bf16,16,held,814.2,590.8,72.7,16,0 1 2 3 4 5 6 7 124 125 126 127 128 129 130 131
+0,cublas-bf16,20,partitioned,747.2,643.8,79.2,0,
+0,cublas-bf16,20,held,1210.9,397.2,48.9,20,0 1 2 3 4 5 6 7 8 9 10 11 124 125 126 127 128 129 130 131
+0,dg-fp8,0,alone,448.9,1093.9,100.0,0,
+0,dg-fp8,8,partitioned,465.4,1055.1,96.5,0,
+0,dg-fp8,8,held,475.3,1033.2,94.5,8,124 125 126 127 128 129 130 131
+0,dg-fp8,16,partitioned,562.7,872.7,79.8,0,
+0,dg-fp8,16,held,568.4,863.9,79.0,16,0 1 2 3 4 5 6 7 124 125 126 127 128 129 130 131
+0,dg-fp8,20,partitioned,563.9,870.8,79.6,0,
+0,dg-fp8,20,held,566.9,866.2,79.2,20,0 1 2 3 4 5 6 7 8 9 10 11 124 125 126 127 128 129 130 131
+0,dg-bf16,0,alone,898.8,546.4,100.0,0,
+0,dg-bf16,8,partitioned,972.3,505.1,92.4,0,
+0,dg-bf16,8,held,961.8,510.6,93.4,8,124 125 126 127 128 129 130 131
+0,dg-bf16,16,partitioned,932.3,526.7,96.4,0,
+0,dg-bf16,16,held,946.1,519.0,95.0,16,0 1 2 3 4 5 6 7 124 125 126 127 128 129 130 131
+0,dg-bf16,20,partitioned,933.5,526.0,96.3,0,
+0,dg-bf16,20,held,925.2,530.8,97.1,20,0 1 2 3 4 5 6 7 8 9 10 11 124 125 126 127 128 129 130 131
+1,cublas-bf16,0,alone,700.9,686.3,100.0,0,
+1,cublas-bf16,8,partitioned,687.7,699.5,101.9,0,
+1,cublas-bf16,8,held,667.6,720.6,105.0,8,124 125 126 127 128 129 130 131
+1,cublas-bf16,16,partitioned,672.5,715.3,104.2,0,
+1,cublas-bf16,16,held,822.5,584.8,85.2,16,0 1 2 3 4 5 6 7 124 125 126 127 128 129 130 131
+1,cublas-bf16,20,partitioned,754.5,637.5,92.9,0,
+1,cublas-bf16,20,held,1221.7,393.7,57.4,20,0 1 2 3 4 5 6 7 8 9 10 11 124 125 126 127 128 129 130 131
+1,dg-fp8,0,alone,447.9,1096.4,100.0,0,
+1,dg-fp8,8,partitioned,495.1,991.8,90.5,0,
+1,dg-fp8,8,held,527.0,931.8,85.0,8,124 125 126 127 128 129 130 131
+1,dg-fp8,16,partitioned,568.5,863.8,78.8,0,
+1,dg-fp8,16,held,572.2,858.3,78.3,16,0 1 2 3 4 5 6 7 124 125 126 127 128 129 130 131
+1,dg-fp8,20,partitioned,565.8,867.9,79.2,0,
+1,dg-fp8,20,held,571.4,859.5,78.4,20,0 1 2 3 4 5 6 7 8 9 10 11 124 125 126 127 128 129 130 131
+1,dg-bf16,0,alone,901.7,544.6,100.0,0,
+1,dg-bf16,8,partitioned,985.8,498.1,91.5,0,
+1,dg-bf16,8,held,961.8,510.6,93.8,8,124 125 126 127 128 129 130 131
+1,dg-bf16,16,partitioned,930.2,527.9,96.9,0,
+1,dg-bf16,16,held,927.3,529.6,97.2,16,0 1 2 3 4 5 6 7 124 125 126 127 128 129 130 131
+1,dg-bf16,20,partitioned,925.5,530.6,97.4,0,
+1,dg-bf16,20,held,929.9,528.1,97.0,20,0 1 2 3 4 5 6 7 8 9 10 11 124 125 126 127 128 129 130 131
+2,cublas-bf16,0,alone,719.2,668.8,100.0,0,
+2,cublas-bf16,8,partitioned,739.5,650.5,97.3,0,
+2,cublas-bf16,8,held,674.8,712.9,106.6,8,124 125 126 127 128 129 130 131
+2,cublas-bf16,16,partitioned,675.0,712.6,106.5,0,
+2,cublas-bf16,16,held,822.5,584.9,87.5,16,0 1 2 3 4 5 6 7 124 125 126 127 128 129 130 131
+2,cublas-bf16,20,partitioned,754.4,637.6,95.3,0,
+2,cublas-bf16,20,held,1221.8,393.7,58.9,20,0 1 2 3 4 5 6 7 8 9 10 11 124 125 126 127 128 129 130 131
+2,dg-fp8,0,alone,449.7,1091.9,100.0,0,
+2,dg-fp8,8,partitioned,505.4,971.6,89.0,0,
+2,dg-fp8,8,held,528.9,928.5,85.0,8,124 125 126 127 128 129 130 131
+2,dg-fp8,16,partitioned,568.2,864.2,79.2,0,
+2,dg-fp8,16,held,568.1,864.4,79.2,16,0 1 2 3 4 5 6 7 124 125 126 127 128 129 130 131
+2,dg-fp8,20,partitioned,564.9,869.3,79.6,0,
+2,dg-fp8,20,held,571.4,859.5,78.7,20,0 1 2 3 4 5 6 7 8 9 10 11 124 125 126 127 128 129 130 131
+2,dg-bf16,0,alone,900.5,545.3,100.0,0,
+2,dg-bf16,8,partitioned,992.9,494.6,90.7,0,
+2,dg-bf16,8,held,966.5,508.1,93.2,8,124 125 126 127 128 129 130 131
+2,dg-bf16,16,partitioned,927.5,529.5,97.1,0,
+2,dg-bf16,16,held,926.8,529.9,97.2,16,0 1 2 3 4 5 6 7 124 125 126 127 128 129 130 131
+2,dg-bf16,20,partitioned,925.6,530.5,97.3,0,
+2,dg-bf16,20,held,929.6,528.3,96.9,20,0 1 2 3 4 5 6 7 8 9 10 11 124 125 126 127 128 129 130 131
+3,cublas-bf16,0,alone,702.2,685.0,100.0,0,
+3,cublas-bf16,8,partitioned,705.7,681.7,99.5,0,
+3,cublas-bf16,8,held,699.1,688.1,100.5,8,124 125 126 127 128 129 130 131
+3,cublas-bf16,16,partitioned,676.2,711.4,103.9,0,
+3,cublas-bf16,16,held,821.6,585.5,85.5,16,0 1 2 3 4 5 6 7 124 125 126 127 128 129 130 131
+3,cublas-bf16,20,partitioned,754.1,637.9,93.1,0,
+3,cublas-bf16,20,held,1221.7,393.7,57.5,20,0 1 2 3 4 5 6 7 8 9 10 11 124 125 126 127 128 129 130 131
+3,dg-fp8,0,alone,448.9,1094.0,100.0,0,
+3,dg-fp8,8,partitioned,513.2,956.9,87.5,0,
+3,dg-fp8,8,held,533.2,921.1,84.2,8,124 125 126 127 128 129 130 131
+3,dg-fp8,16,partitioned,572.1,858.4,78.5,0,
+3,dg-fp8,16,held,572.8,857.3,78.4,16,0 1 2 3 4 5 6 7 124 125 126 127 128 129 130 131
+3,dg-fp8,20,partitioned,569.4,862.4,78.8,0,
+3,dg-fp8,20,held,576.5,851.8,77.9,20,0 1 2 3 4 5 6 7 8 9 10 11 124 125 126 127 128 129 130 131
+3,dg-bf16,0,alone,903.9,543.3,100.0,0,
+3,dg-bf16,8,partitioned,975.5,503.4,92.7,0,
+3,dg-bf16,8,held,946.3,518.9,95.5,8,124 125 126 127 128 129 130 131
+3,dg-bf16,16,partitioned,931.4,527.2,97.1,0,
+3,dg-bf16,16,held,944.4,520.0,95.7,16,0 1 2 3 4 5 6 7 124 125 126 127 128 129 130 131
+3,dg-bf16,20,partitioned,935.8,524.8,96.6,0,
+3,dg-bf16,20,held,936.0,524.6,96.6,20,0 1 2 3 4 5 6 7 8 9 10 11 124 125 126 127 128 129 130 131
+4,cublas-bf16,0,alone,714.2,673.5,100.0,0,
+4,cublas-bf16,8,partitioned,697.7,689.5,102.4,0,
+4,cublas-bf16,8,held,661.1,727.7,108.0,8,124 125 126 127 128 129 130 131
+4,cublas-bf16,16,partitioned,668.1,720.0,106.9,0,
+4,cublas-bf16,16,held,817.7,588.3,87.3,16,0 1 2 3 4 5 6 7 124 125 126 127 128 129 130 131
+4,cublas-bf16,20,partitioned,749.6,641.7,95.3,0,
+4,cublas-bf16,20,held,1211.4,397.1,59.0,20,0 1 2 3 4 5 6 7 8 9 10 11 124 125 126 127 128 129 130 131
+4,dg-fp8,0,alone,450.8,1089.4,100.0,0,
+4,dg-fp8,8,partitioned,500.1,982.0,90.1,0,
+4,dg-fp8,8,held,529.9,926.8,85.1,8,124 125 126 127 128 129 130 131
+4,dg-fp8,16,partitioned,573.4,856.5,78.6,0,
+4,dg-fp8,16,held,571.1,859.8,78.9,16,0 1 2 3 4 5 6 7 124 125 126 127 128 129 130 131
+4,dg-fp8,20,partitioned,568.0,864.6,79.4,0,
+4,dg-fp8,20,held,574.7,854.5,78.4,20,0 1 2 3 4 5 6 7 8 9 10 11 124 125 126 127 128 129 130 131
+4,dg-bf16,0,alone,903.4,543.6,100.0,0,
+4,dg-bf16,8,partitioned,980.3,501.0,92.2,0,
+4,dg-bf16,8,held,961.0,511.0,94.0,8,124 125 126 127 128 129 130 131
+4,dg-bf16,16,partitioned,940.7,522.0,96.0,0,
+4,dg-bf16,16,held,945.0,519.6,95.6,16,0 1 2 3 4 5 6 7 124 125 126 127 128 129 130 131
+4,dg-bf16,20,partitioned,935.8,524.8,96.5,0,
+4,dg-bf16,20,held,938.9,523.0,96.2,20,0 1 2 3 4 5 6 7 8 9 10 11 124 125 126 127 128 129 130 131

@@ -28,6 +28,20 @@ DeepSeek-V3 reserves 20 of an H800's 132 SMs for its all-to-all kernels (report 
 - **At 20 SMs, the zero-SM path is therefore worth 8–13 points of this GEMM's throughput, not 51.**
 - **DeepGEMM's BF16 path** (`v2/`) runs at 545–636 TFLOP/s, below cuBLAS's 811, and barely notices fewer SMs (≥ 92% at k = 20). It is not used.
 
+## Why cuBLAS loses more (`dg_compare.py`, `compare.csv`)
+
+The owner asked whether the gap was a measurement error. `dg_compare.py` runs cuBLAS (`torch.mm`, BF16, the `../gpu-interference` shape, SM count set by `cublasSetSmCountTarget` on PyTorch's handle) and DeepGEMM in one process. The holders, timing and `%smid` checks are identical. At k = 20 (median of 5):
+
+| GEMM | alone | partitioned | held |
+|---|---|---|---|
+| cuBLAS BF16 | 685 TFLOP/s | 93.1% | 57.5% (48.9–59.0) |
+| DeepGEMM FP8 | 1094 TFLOP/s | 79.4% | 78.4% |
+| DeepGEMM BF16 | 545 TFLOP/s | 96.6% | 96.9% |
+
+The profiler shows why. Told 132 SMs, cuBLAS runs `nvjet_tst_256x128_64x4_1x2_…` (grid 132, 2-CTA clusters). Told 112, it switches to `nvjet_tst_320x128_64x3_2x4_…` (grid 112, 8-CTA clusters). A cluster must fit inside one GPC. The 20 holders sit on SMs 0–11 and 124–131, leaving too few free 8-SM groups, so part of cuBLAS's persistent grid waits for a second wave. DeepGEMM keeps 2-CTA multicast at any SM count (`sm90_fp8_gemm_1d2d_impl<…, 2u, …, 112u>`), which fits beside the holders. The total work is the same (481 vs 491 GFLOP), and DeepGEMM shows no gap in BF16 either, so neither FLOPs nor data type explains it.
+
+Baselines drift between runs on this host (clocks not locked): cuBLAS alone was 811 TFLOP/s in the C++ benchmark and 685 here, and DeepGEMM FP8 at k = 20 ranged 78–89% over four runs. Comparisons within a run hold; absolute percentages carry about ±5 points.
+
 ## Reproduce (on steve)
 
 ```sh
@@ -43,3 +57,4 @@ done
 - `Dockerfile`, `dg_held.py`: the image and the benchmark.
 - `held_m{1024,4096}.csv`: the plotted run (FP8, with `ce50`/`cemax`).
 - `v1/`: the first run (FP8 + BF16, no copy engine). `v2/`: FP8 + BF16 with an unpaced copy engine.
+- `dg_compare.py`, `compare.csv`: cuBLAS vs DeepGEMM in one harness, with kernel profiles (`# profile` lines) and holder SM ids.
