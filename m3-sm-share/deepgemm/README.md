@@ -28,6 +28,17 @@ DeepSeek-V3 reserves 20 of an H800's 132 SMs for its all-to-all kernels (report 
 - **At 20 SMs, the zero-SM path is therefore worth 8–13 points of this GEMM's throughput, not 51.**
 - **DeepGEMM's BF16 path** (`v2/`) runs at 545–636 TFLOP/s, below cuBLAS's 811, and barely notices fewer SMs (≥ 92% at k = 20). It is not used.
 
+## Locked clock (`run_locked.sh`, `locked_m{1024,4096}.csv`, `locked_clocks.csv`)
+
+To reduce run-to-run drift, the SM clock is locked at 1410 MHz (`nvidia-smi -lgc`, reset on exit). 1500 MHz touched the 600 W power cap; at 1410 about 10% of the samples still show the power cap pulling the clock to ~1100 MHz. Each mode is now compared with the GEMM alone measured right before and right after it, using their mean: a baseline taken once per repetition had drifted by up to 9 points within the repetition.
+
+| FP8, % of alone (median of 5, min–max) | k = 4 held | 8 | 16 | 20 | ce50 | cemax |
+|---|---|---|---|---|---|---|
+| ~1024 tokens/expert (alone 940 TFLOP/s) | 92.4 | 93.2 | 87.1 | 86.5 (85.0–88.3) | 104.7 | 96.6 |
+| ~4096 tokens/expert (alone 1002 TFLOP/s) | 99.4 | 98.5 | 95.0 | 93.7 (92.7–93.8) | 99.2 | 99.5 |
+
+Repetitions now agree within a few points, and held = partitioned again. The absolute numbers move with the clock: at 4096 tokens per expert, 93.7% at k = 20 here vs 87–89% unlocked. The GEMM's own speed is bimodal (916–1066 TFLOP/s alone), which is why ce50 comes out above 100%: no measurable cost. The paper quotes the range over all runs at DeepSeek's 20 SMs: 81–94%, roughly the 85% share of SMs left, with the copy engine at 50 GB/s costing at most 3%. Since 2026-10-06 the paper no longer plots this (owner): Loom keeps SM stores for kernel-initiated traffic, so a "reclaimed" panel invited a claim Loom does not make.
+
 ## Why cuBLAS loses more (`dg_compare.py`, `compare.csv`)
 
 The owner asked whether the gap was a measurement error. `dg_compare.py` runs cuBLAS (`torch.mm`, BF16, the `../gpu-interference` shape, SM count set by `cublasSetSmCountTarget` on PyTorch's handle) and DeepGEMM in one process. The holders, timing and `%smid` checks are identical. At k = 20 (median of 5):
@@ -58,3 +69,4 @@ done
 - `held_m{1024,4096}.csv`: the plotted run (FP8, with `ce50`/`cemax`).
 - `v1/`: the first run (FP8 + BF16, no copy engine). `v2/`: FP8 + BF16 with an unpaced copy engine.
 - `dg_compare.py`, `compare.csv`: cuBLAS vs DeepGEMM in one harness, with kernel profiles (`# profile` lines) and holder SM ids.
+- `run_locked.sh`, `locked_m{1024,4096}.csv`, `locked_clocks.csv`: the locked-clock rerun (adjacent baselines) and the clock/power samples.

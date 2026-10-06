@@ -168,22 +168,31 @@ def main():
         done.set(); th.join()
         return us, count[0] * ce_src.numel() / (time.perf_counter() - t0) / 1e9
 
+    def alone(fn):
+        deep_gemm.set_num_sms(nsm)
+        return timed(fn, args.iters)
+
+    # every mode is compared with the GEMM alone measured right before and right after it (their mean):
+    # a baseline taken once per repetition drifted by up to ~9 points within the repetition
     print('rep,dtype,k,mode,num_sms,us_per_gemm,tflops,pct_of_alone', flush=True)
     for rep in range(args.reps):
         for dtype, (fn, flop) in gemms.items():
-            deep_gemm.set_num_sms(nsm)
-            base = timed(fn, args.iters)
+            base = alone(fn)
             print(f'{rep},{dtype},0,alone,{nsm},{base:.1f},{flop / base / 1e6:.1f},100.0', flush=True)
             for r in (int(x) for x in args.ce_rates.split(',')):
+                b0 = alone(fn)
                 us, gbps = with_ce(fn, args.iters, r)
+                b = (b0 + alone(fn)) / 2
                 mode = f'ce{r}' if r else 'cemax'
-                print(f'{rep},{dtype},0,{mode},{nsm},{us:.1f},{flop / us / 1e6:.1f},{100 * base / us:.1f}', flush=True)
+                print(f'{rep},{dtype},0,{mode},{nsm},{us:.1f},{flop / us / 1e6:.1f},{100 * b / us:.1f}', flush=True)
                 print(f'# {mode} {gbps:.1f} GB/s', flush=True)
             for k in ks:
-                deep_gemm.set_num_sms(nsm - k)
                 for mode in ('partitioned', 'held'):
+                    b0 = alone(fn)
+                    deep_gemm.set_num_sms(nsm - k)
                     us = timed(fn, args.iters) if mode == 'partitioned' else held(fn, k, args.iters)
-                    print(f'{rep},{dtype},{k},{mode},{nsm - k},{us:.1f},{flop / us / 1e6:.1f},{100 * base / us:.1f}', flush=True)
+                    b = (b0 + alone(fn)) / 2
+                    print(f'{rep},{dtype},{k},{mode},{nsm - k},{us:.1f},{flop / us / 1e6:.1f},{100 * b / us:.1f}', flush=True)
 
 
 if __name__ == '__main__':

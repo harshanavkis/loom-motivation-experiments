@@ -2,11 +2,12 @@
 """Loom motivation figures, in the style of jigsaw-plotting-scripts/plot_hw_exp.py.
 
 Figure 1 (intro, single column, loom-mix): Mixtral-8x22B bytes per MoE layer by fabric and kind
-of traffic (Chakra ET). Figure 3 (Section 2, 1x4, loom-costs): (a) message rate, GPU-initiated vs CPU
+of traffic (Chakra ET). Figure 3 (Section 2, 1x3, loom-costs): (a) message rate, GPU-initiated vs CPU
 proxy; (b) a 16 x 1 KiB dispatch to local and remote peers until the receiver sees the signal
-(dispatch_bd.cu); (c) the expert GEMM beside those dispatches (SMs shared); (d) the GEMM next to held
-SMs (SMs reserved) with the network throughput they buy and the copy engine. The CPU proxy appears in
-(a) only (owner, 2026-10-06). Older layout notes follow:
+(dispatch_bd.cu); (c) SM time per dispatch vs batch size. The CPU proxy appears in (a) only (owner,
+2026-10-06). The GEMM panels (shared SMs: GEMM lost vs dispatch rate; reserved SMs: DeepGEMM next to
+held SMs) were dropped from the figure the same day (owner): their numbers are printed for the text.
+Older layout notes follow:
 Figure 1 (intro, 1x3): (a) Mixtral-8x22B bytes per MoE layer by fabric (Chakra ET),
 (b) MoE dispatch latency, GPU-initiated vs CPU proxy, both packed (steve H200 + CX-7),
 (c) message rate of 4 B puts vs CTAs issuing, GPU-initiated vs CPU proxy, with the NIC's rated
@@ -310,50 +311,6 @@ def panel_msgrate(ax, fs, title):
     top_label(ax, title, fs['annotation'])
 
 
-def panel_held_sms(ax, fs, title):
-    """DeepSeek's setup: k SMs reserved for communication, DeepGEMM's FP8 expert GEMM planned for the
-    rest (left); the copy engine moving 50 GB/s beside it on all SMs; the network throughput
-    GPU-initiated puts reach with k SMs (right, ../gpu-posted)."""
-    ks, d = deepgemm_held()
-    _, c = held_sm_curves(tuple(ks))
-    x = range(len(ks))
-    for M, mk in ((1024, 'o'), (4096, 's')):
-        ax.plot(x, d[M]['held'], color=VARIANTS['gpu-initiated'][1], marker=mk, markersize=14, linewidth=4,
-                markeredgecolor='k', alpha=0.9)
-    ax.plot(x, [100 * (132 - k) / 132 for k in ks], color='black', linewidth=2, linestyle=':')
-    ce = d[1024]['ce50']
-    ax.axhline(ce, color=VARIANTS['loom'][1], linewidth=3, linestyle='-.')
-    ax.fill_between(x, d[1024]['held'], ce, color=PASTEL[2], alpha=0.5)
-    gain = ce - d[1024]['held'][-1]
-    ax.annotate(f'+{gain:.0f} pts', xy=(x[-1], d[1024]['held'][-1] + gain * 0.5), xytext=(-14, 0),
-                textcoords='offset points', ha='right', va='center', fontsize=fs['annotation'])
-    ax.set_xticks(list(x))
-    ax.set_xticklabels([str(k) for k in ks], fontsize=fs['tick'])
-    ax.tick_params(axis='y', labelsize=fs['tick'])
-    ax.set_ylim(75, 140)          # headroom so the legend sits above the curves
-    ax.set_yticks([80, 90, 100])
-    ax.set_xlabel('SMs reserved for communication (of 132)', fontsize=fs['label'])
-    ax.set_ylabel('GEMM throughput [%]', fontsize=fs['label'])
-    ax.grid(True, alpha=0.3)
-    ax2 = ax.twinx()
-    ax2.plot(x, c['gpu-initiated-GBps'], color=VARIANTS['gpu-initiated'][1], marker='o', markersize=10,
-             markerfacecolor='white', linewidth=2, linestyle='--')
-    ax2.set_ylim(0, 26)
-    ax2.set_yticks([0, 5, 10, 15])
-    ax2.set_ylabel('Network [GB/s]', fontsize=fs['label'])
-    ax2.tick_params(axis='y', labelsize=fs['tick'])
-    handles = [Line2D([0], [0], color=VARIANTS['gpu-initiated'][1], linewidth=4, marker='o', markersize=14, markeredgecolor='k'),
-               Line2D([0], [0], color=VARIANTS['gpu-initiated'][1], linewidth=4, marker='s', markersize=14, markeredgecolor='k'),
-               Line2D([0], [0], color='black', linewidth=2, linestyle=':'),
-               Line2D([0], [0], color=VARIANTS['loom'][1], linewidth=3, linestyle='-.'),
-               plt.Rectangle((0, 0), 1, 1, color=PASTEL[2], alpha=0.5),
-               Line2D([0], [0], color=VARIANTS['gpu-initiated'][1], marker='o', markersize=10, markerfacecolor='white',
-                      linewidth=2, linestyle='--')]
-    labels = ['held, 1K tok/expert', 'held, 4K tok/expert', 'share of SMs left', 'copy engine',
-              'reclaimed', 'GB/s (right)']
-    ax.legend(handles, labels, loc='upper left', ncol=2, frameon=True, fontsize=fs['legend'] - 6,
-              columnspacing=0.6, handlelength=1.3)
-    top_label(ax, title, fs['annotation'])
 
 
 def panel_dispatch_time(ax, fs, title, H=1024, T=16):
@@ -386,31 +343,36 @@ def panel_dispatch_time(ax, fs, title, H=1024, T=16):
 
 
 
-def panel_dispatch_rate(ax, fs, title, sizes=((1024, 16, 'o'), (7168, 128, 's'))):
-    """Expert GEMM throughput lost vs the dispatch rate achieved beside it, per path and size."""
-    d = dispatch_rate()
-    for p, (lab, color) in BD_PATHS.items():
-        for H, T, mk in sizes:
-            s_ = d[(d.path == p) & (d.H == H) & (d.tokens == T)].sort_values('rate_per_ms')
-            ax.plot(s_.rate_per_ms, s_.lost_pct, color=color, marker=mk, markersize=14, linewidth=3,
-                    markeredgecolor='k', alpha=0.9)
-    ax.set_xlim(0, 4.5)
-    ax.set_ylim(-0.5, 25)         # headroom so the legend sits above the curves
-    ax.set_yticks([0, 5, 10])
-    ax.tick_params(axis='both', labelsize=fs['tick'])
-    ax.set_xlabel('Dispatches per ms', fontsize=fs['label'])
-    ax.set_ylabel('GEMM lost [%]', fontsize=fs['label'])
-    ax.grid(True, alpha=0.3)
+
+
+
+
+def panel_dispatch_sm(ax, fs, title, H=1024):
+    """SM time per dispatch (CTA-us) vs tokens, 20 CTAs, idle; dashed: the part flush spends waiting."""
+    d = dispatch_breakdown()
+    d = d[d.H == H]
+    toks = sorted(d.tokens.unique())
+    x = {t: i for i, t in enumerate(toks)}
     short = {'local': 'local', 'ordered-destL24': 'remote: ordered', 'flush-warpL24': 'remote: flush'}
-    handles = [Line2D([0], [0], color=c, linewidth=3) for _, c in BD_PATHS.values()]
-    labels = [short[p] for p in BD_PATHS]
-    handles += [Line2D([0], [0], color='gray', linestyle='', marker=mk, markersize=14, markeredgecolor='k') for _, _, mk in sizes]
-    labels += [f'{T}×{H // 1024} KiB' for H, T, _ in sizes]
-    ax.legend(handles, labels, loc='upper left', ncol=2, frameon=True, fontsize=fs['legend'] - 2,
-              columnspacing=0.8, handlelength=1.4)
+    for p, (_, color) in BD_PATHS.items():
+        s_ = d[d.path == p].sort_values('tokens')
+        ax.plot([x[t] for t in s_.tokens], s_.cta_total_us, color=color, marker='o', markersize=12, linewidth=3,
+                markeredgecolor='k', alpha=0.9, label=short[p])
+    s_ = d[d.path == 'flush-warpL24'].sort_values('tokens')
+    ax.plot([x[t] for t in s_.tokens], s_.cta_drain_us, color=BD_PATHS['flush-warpL24'][1], marker='o', markersize=10,
+            markerfacecolor='white', linewidth=2, linestyle='--', label='flush: waiting')
+    ax.set_yscale('log')
+    ax.set_ylim(10, 1e8)          # headroom so the legend sits above the curves
+    ax.set_xticks(range(len(toks)))
+    ax.set_xticklabels([str(t) for t in toks], fontsize=fs['tick'])
+    ax.tick_params(axis='y', labelsize=fs['tick'])
+    ax.yaxis.set_major_locator(mticker.LogLocator(base=10, numticks=10))
+    ax.yaxis.set_major_formatter(mticker.LogFormatterMathtext())
+    ax.set_xlabel('Tokens dispatched (1 KiB, top-8)', fontsize=fs['label'])
+    ax.set_ylabel('SM time [SM-us]', fontsize=fs['label'])
+    ax.grid(True, alpha=0.3)
+    ax.legend(loc='upper left', ncol=2, frameon=True, fontsize=fs['legend'] - 2, columnspacing=0.8, handlelength=1.4)
     top_label(ax, title, fs['annotation'])
-
-
 
 
 def figure_intro(out_dir):
@@ -424,16 +386,14 @@ def figure_intro(out_dir):
 
 
 def figure_costs(out_dir):
-    """Section 2 (one row): message rate; a dispatch until the receiver sees the signal; the expert
-    GEMM beside dispatches (SMs shared); the GEMM next to held SMs (SMs reserved)."""
-    # four across: fonts ~1.3x the three-panel sizes, so the printed text stays ~5 pt
-    fs = {'label': 50, 'tick': 46, 'legend': 42, 'annotation': 46}
-    fig, axes = plt.subplots(1, 4, figsize=(64, 9))
-    panel_msgrate(axes[0], fs, '(a) Message rate (higher ↑)')
-    panel_dispatch_time(axes[1], fs, '(b) 16 × 1 KiB dispatch (lower ↓)')
-    panel_dispatch_rate(axes[2], fs, '(c) GEMM, SMs shared (lower ↓)')
-    panel_held_sms(axes[3], fs, '(d) GEMM, SMs reserved (higher ↑)')
-    fig.subplots_adjust(left=0.04, right=0.96, top=0.88, bottom=0.2, wspace=0.38)
+    """Section 2 (one row): message rate; a dispatch until the receiver sees the signal; SM time per
+    dispatch."""
+    fs = MOTIVATION_COMBINED_FONT_SIZES
+    fig, axes = plt.subplots(1, 3, figsize=E2E_COMBINED_FIGURE_SIZE)
+    panel_msgrate(axes[0], fs, '(a) Message rate (higher is better ↑)')
+    panel_dispatch_time(axes[1], fs, '(b) 16 × 1 KiB dispatch (lower is better ↓)')
+    panel_dispatch_sm(axes[2], fs, '(c) SM time per dispatch (lower is better ↓)')
+    fig.subplots_adjust(left=0.05, right=0.98, top=0.88, bottom=0.18, wspace=0.28)
     save(fig, out_dir, 'loom-costs')
     plt.close(fig)
 
