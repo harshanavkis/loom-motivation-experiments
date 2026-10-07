@@ -281,6 +281,20 @@ def staging_buffers():
     return pd.DataFrame(rows, columns=['series', 'ep', 'staging_gib'])
 
 
+def loom_gpu_state():
+    """Loom's GPU-side state per GPU (MiB), rough estimate from buffers.out: one pointer + page-table entries
+    over every peer's receive window (see buffers.py loom_gpu_state)."""
+    rows, on = [], False
+    for line in open(os.path.join(M2, 'buffers.out')):
+        if line.startswith('Loom, GPU side'):
+            on = True
+            continue
+        m = re.match(r'^\s+(\d+)\s+[\d.]+ (?:MiB|GiB)\s+[\d,]+\s+[\d,]+ B\s+([\d.]+) (MiB|GiB)', line)
+        if on and m:
+            rows.append([int(m.group(1)), float(m.group(2)) * (1024 if m.group(3) == 'GiB' else 1)])
+    return pd.DataFrame(rows, columns=['ep', 'mib'])
+
+
 def dispatch_rate():
     """--d3 --d3-filler gemm-up interval sweep (bd_v2/d3rate_<variant>_H*.csv): per (path, H, tokens,
     requested period) the medians over 3 repetitions of the ACHIEVED rate (dispatches / measured
@@ -465,12 +479,12 @@ def panel_transport_state(ax, fs, title):
     series = (('v1-ll', 'DeepEP V1 low-latency', 'lightskyblue'),
               ('v1-normal', 'DeepEP V1 normal (max EP160)', 'white'),
               ('v2.5', 'DeepEP V2.5', 'tab:blue'))
-    w = 0.27
+    w = 0.21
     for j, (k, lab, color) in enumerate(series):
         s_ = d[d.series == k].set_index('ep')
         st = b[b.series == k].set_index('ep')
         have = [e for e in eps if e in s_.index and e in st.index]
-        xs = np.array([eps.index(e) for e in have]) + (j - 1) * w
+        xs = np.array([eps.index(e) for e in have]) + (j - 1.5) * w
         q = np.array([s_.loc[e, 'mib'] / 1024 for e in have])
         g = np.array([st.loc[e, 'staging_gib'] for e in have])
         ax.bar(xs, q, w, color=color, edgecolor='black', linewidth=1, label=lab)
@@ -478,6 +492,14 @@ def panel_transport_state(ax, fs, title):
         for xi, e, top in zip(xs, have, q + g):
             ax.text(xi, top + 0.1, f"{s_.loc[e, 'qps']:,}", ha='center', va='bottom', rotation=90,
                     fontsize=fs['annotation'] - 12)
+    lm = loom_gpu_state().set_index('ep')   # Loom: pointers + page-table entries, no queues, no staging
+    xs = np.arange(len(eps)) + 1.5 * w
+    vals = np.array([lm.loc[e, 'mib'] / 1024 for e in eps])
+    ax.bar(xs, vals, w, color=VARIANTS['loom'][1], edgecolor='black', linewidth=1, label='Loom (pointers + page tables)')
+    for xi, e in zip(xs, eps):
+        v = lm.loc[e, 'mib']
+        ax.text(xi, 0.1, f"{v:.1f} MiB" if v >= 1 else f"{v * 1024:.0f} KiB", ha='center', va='bottom', rotation=90,
+                fontsize=fs['annotation'] - 12, color=VARIANTS['loom'][1])
     ax.bar([0], [0], 0, color='white', hatch='xx', edgecolor='black', label='+ pinned staging buffers')
     ax.set_xticks(range(len(eps)))
     ax.set_xticklabels([f'{e}' for e in eps], fontsize=fs['tick'])
@@ -489,8 +511,6 @@ def panel_transport_state(ax, fs, title):
     ax.grid(True, alpha=0.3, axis='y')
     ax.legend(loc='upper left', ncol=1, frameon=True, fontsize=fs['legend'] - 8, handlelength=1.4,
               labelspacing=0.3, borderpad=0.3)
-    ax.text(0.03, 0.47, 'Loom: no queue pairs,\nno staging on the GPU', transform=ax.transAxes, ha='left', va='center',
-            fontsize=fs['legend'] - 10, color='#a04040', bbox=dict(facecolor=LOOMGONE, edgecolor='#a04040', boxstyle='round,pad=0.3'))
     top_label(ax, title, fs['annotation'])
 
 
@@ -586,6 +606,8 @@ def main():
     print('message rate (text only):', m.groupby('transport').mops.max().round(1).to_dict())
     print('transport state (Fig 3c):')
     print(transport_state().to_string(index=False))
+    print('Loom GPU-side state (Fig 3c, green), MiB:')
+    print(loom_gpu_state().to_string(index=False))
     print('pinned staging buffers (Fig 3c, hatched):')
     print(staging_buffers().to_string(index=False))
     print(dispatch_rate().sort_values(['H', 'tokens', 'path', 'rate_per_ms']).to_string(index=False))

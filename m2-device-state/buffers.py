@@ -508,5 +508,35 @@ def main():
     sens("T=128,  flat load/store domain (direct, is_scaleup_nvlink)", T=128, force_flat_nvlink=True)
 
 
+# --------------------------------------------------------------------------------------------------
+# Loom, GPU side (rough estimate, owner 2026-10-07: "based on pointers and destinations"). With Loom a
+# GPU reaches a peer through an ordinary mapping of the peer's window (paper design.tex "XPU MMU:
+# virtual address -> aperture"; design-sw.tex peer mapping engine): no queue pairs, doorbells, or
+# staging. What remains per GPU, for each other GPU in the EP group: one pointer (8 B) and the
+# last-level page-table entries (8 B per 2 MiB page) covering that peer's receive window. The window is
+# sized as DeepEP V1 low-latency's receive buffer (worst case: experts x tokens x message), an upper
+# bound. Upper page-table levels (one 4 KiB page per 1 GiB of windows), the receive buffer itself (every
+# design needs it, excluded for all bars) and the switch's per-binding state (not on the GPU) are left out.
+PAGE = 2 * 1024 * 1024
+PTE = 8
+PTR = 8
+
+
+def loom_gpu_state(ep, tokens=128):
+    window = v1_low_latency(ep, tokens)["b_rdma_recv"]
+    pages = -(-window // PAGE)
+    per_peer = PTR + pages * PTE
+    return dict(window=window, pages_per_peer=pages, per_peer=per_peer, total=(ep - 1) * per_peer)
+
+
+def print_loom():
+    header("Loom, GPU side (rough estimate): per peer one 8 B pointer + 8 B PTEs (2 MiB pages) over its receive window")
+    print("   EP  window per peer   pages/peer   bytes/peer        total")
+    for ep in (16, 128, 256, 512, 1024):
+        r = loom_gpu_state(ep)
+        print(f"{ep:5d}  {fmt(r['window']):>15}  {r['pages_per_peer']:>10,}  {r['per_peer']:>10,} B  {fmt(r['total']):>11}")
+
+
 if __name__ == "__main__":
     main()
+    print_loom()

@@ -124,3 +124,13 @@ T=4096, flat load/store domain (direct, is_scaleup_nvlink) total    528.0 MiB   
    of which (a) send/staging                                          0.0 MiB      0.0 MiB      0.0 MiB      0.0 MiB
 T=128,  flat load/store domain (direct, is_scaleup_nvlink) total     32.0 MiB    144.0 MiB    272.0 MiB     1.02 GiB
    of which (a) send/staging                                          0.0 MiB      0.0 MiB      0.0 MiB      0.0 MiB
+
+======================================================================================================================
+Loom, GPU side (rough estimate): per peer one 8 B pointer + 8 B PTEs (2 MiB pages) over its receive window
+======================================================================================================================
+   EP  window per peer   pages/peer   bytes/peer        total
+   16        910.0 MiB         455       3,648 B       0.1 MiB
+  128        910.0 MiB         455       3,648 B       0.4 MiB
+  256        910.0 MiB         455       3,648 B       0.9 MiB
+  512         1.78 GiB         910       7,288 B       3.6 MiB
+ 1024         3.55 GiB       1,820      14,568 B      14.2 MiB
