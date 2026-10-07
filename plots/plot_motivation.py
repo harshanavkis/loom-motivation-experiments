@@ -79,7 +79,7 @@ def top_label(ax, text, size):
 
 def save(fig, out_dir, name):
     for ext in ('png', 'pdf'):
-        kw = {'dpi': 300} if ext == 'png' else {}
+        kw = {'dpi': 300} if ext == 'png' else {'metadata': {'CreationDate': None}}   # reproducible PDF bytes
         fig.savefig(os.path.join(out_dir, f'{name}.{ext}'), bbox_inches='tight', **kw)
 
 
