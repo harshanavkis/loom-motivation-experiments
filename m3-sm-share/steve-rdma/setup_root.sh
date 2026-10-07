@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
-# Run on steve as root, once after every reboot (nothing here persists):
-#   sudo ~/loom-experiments/steve-rdma/setup_root.sh
+# Run on the GPU host as root, once after every reboot (nothing here persists):
+#   sudo ~/loom-experiments/steve-rdma/setup_root.sh          (other hosts: sudo GPU=... NICS="... ..." ...)
 # 1. NVIDIA driver option PeerMappingOverride=1: lets the GPU map the NIC doorbell (IBGDA).
 # 2. IOMMU passthrough (identity) for the GPU and both CX-7 functions: GPUDirect RDMA
 #    (NIC <-> HBM) and GPU -> NIC doorbell writes otherwise fault in the IOMMU (DMAR).
 # Undo: reboot (or write DMA-FQ back to each group and remove /run/modprobe.d/nvidia-peermapping.conf).
 set -euo pipefail
-NICS="0000:95:00.0 0000:95:00.1"; GPU=0000:15:00.0
+# PCI addresses of the GPU and of the two NIC ports cabled back to back (steve's defaults; find yours
+# with `lspci -D | grep -i -e nvidia -e mellanox` and `nvidia-smi topo -m`)
+GPU=${GPU:-0000:15:00.0}; NICS=${NICS:-"0000:95:00.0 0000:95:00.1"}
 grp() { basename "$(readlink /sys/bus/pci/devices/$1/iommu_group)"; }
 typ() { cat /sys/kernel/iommu_groups/$(grp $1)/type; }
 
@@ -42,4 +44,4 @@ done
 
 systemctl start ollama || true
 sleep 5   # links come back up after the mlx5 rebind
-sudo -u harshanavkis /home/harshanavkis/loom-experiments/steve-rdma/check.sh
+sudo -u "${SUDO_USER:-$(logname)}" GPU="$GPU" NICS="$NICS" "$(dirname "$(readlink -f "$0")")/check.sh"

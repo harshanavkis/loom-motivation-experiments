@@ -4,3 +4,4 @@ m2-device-state/sizes_gdaki
 m3-sm-share/gpu-interference/interfere
 m3-sm-share/gpu-interference/ce_streams
 __pycache__/
+plots/out/

@@ -3,11 +3,12 @@
 # Root: unlimited locked memory for IBGDA.
 # Usage on steve: sudo ~/loom-experiments/gpu-posted/run_dispatch_bd.sh [extra dispatch_bd args, e.g. --ctas 2,4,8,20]
 set -uo pipefail
-D=/home/harshanavkis/loom-experiments/gpu-posted
-MPI=$(sudo -u harshanavkis nix build --no-link --print-out-paths nixpkgs#mpich | head -1)
-NUMA=$(sudo -u harshanavkis nix build --no-link --print-out-paths nixpkgs#numactl | grep -v -- -man | head -1)/bin/numactl
+U=${SUDO_USER:-$(logname)}; UH=$(getent passwd "$U" | cut -d: -f6)   # the invoking user: runs nix, owns the outputs
+D=$UH/loom-experiments/gpu-posted
+MPI=$(sudo -u "$U" nix build --no-link --print-out-paths nixpkgs#mpich | head -1)
+NUMA=$(sudo -u "$U" nix build --no-link --print-out-paths nixpkgs#numactl | grep -v -- -man | head -1)/bin/numactl
 ulimit -l unlimited
-export HOME=/home/harshanavkis
+export HOME=$UH
 source $HOME/loom-experiments/nvshmem-loopback/env.sh
 export NVSHMEM_REMOTE_TRANSPORT=none       # pure IBGDA, no host proxy
 export NVSHMEM_IBGDA_NUM_RC_PER_PE=24      # as run_dispatch.sh (DeepEP V1's setting)
@@ -23,5 +24,5 @@ for H in 1024 7168; do for LOAD in 0 1; do for V in $VARIANTS; do
   F=${OUT}_${NAME}_H${H}_load${LOAD}.csv
   timeout 1800 $MPI/bin/mpiexec -n 2 $NUMA --cpunodebind=0 --membind=0 $D/dispatch_bd $ARGS --H $H $X "$@" < /dev/null > $F 2> ${F%.csv}.err
   echo "variant=$NAME H=$H load=$LOAD exit=$?  output: $F"
-  chown harshanavkis $F ${F%.csv}.err
+  chown "$U" $F ${F%.csv}.err
 done; done; done

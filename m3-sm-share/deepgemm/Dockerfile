@@ -8,7 +8,7 @@ RUN python3 -m venv /opt/venv
 ENV PATH=/opt/venv/bin:$PATH
 RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cu129
 RUN pip install --no-cache-dir numpy ninja setuptools wheel
-ARG DEEPGEMM_REF=main
+ARG DEEPGEMM_REF=057ca5964aae0879ff2e0eb71ee05a3cb0ba3df7   # the commit every committed result used (main moves)
 RUN git clone --recursive https://github.com/deepseek-ai/DeepGEMM /opt/DeepGEMM && cd /opt/DeepGEMM \
  && git checkout $DEEPGEMM_REF && git submodule update --init --recursive && git rev-parse HEAD > /opt/DeepGEMM.commit \
  && pip install --no-cache-dir --no-build-isolation .

@@ -2,16 +2,17 @@
 # Run on steve (no root). Prints whether every prerequisite for the GPU RDMA
 # experiments is in place; see README.md for how to fix each one.
 set -uo pipefail
-NIC0=0000:95:00.0; NIC1=0000:95:00.1; GPU=0000:15:00.0
+GPU=${GPU:-0000:15:00.0}; NICS=${NICS:-"0000:95:00.0 0000:95:00.1"}   # as setup_root.sh
+IBDEVS=${IBDEVS:-"mlx5_0 mlx5_1"}; GID=${GID:-3}
 ok() { printf '  %-44s %s\n' "$1" "$2"; }
 grp() { basename "$(readlink /sys/bus/pci/devices/$1/iommu_group)"; }
 
 echo "links (CX-7 port0 <-> port1 loopback cable):"
-for d in mlx5_0 mlx5_1; do ok "$d state" "$(cat /sys/class/infiniband/$d/ports/1/state) $(cat /sys/class/infiniband/$d/ports/1/rate)"; done
-for d in mlx5_0 mlx5_1; do ok "$d GID 3" "$(cat /sys/class/infiniband/$d/ports/1/gids/3)"; done
+for d in $IBDEVS; do ok "$d state" "$(cat /sys/class/infiniband/$d/ports/1/state) $(cat /sys/class/infiniband/$d/ports/1/rate)"; done
+for d in $IBDEVS; do ok "$d GID $GID" "$(cat /sys/class/infiniband/$d/ports/1/gids/$GID)"; done
 
 echo "IOMMU groups (want: identity for all three):"
-for d in $NIC0 $NIC1 $GPU; do ok "$d group $(grp $d)" "$(cat /sys/kernel/iommu_groups/$(grp $d)/type)"; done
+for d in $NICS $GPU; do ok "$d group $(grp $d)" "$(cat /sys/kernel/iommu_groups/$(grp $d)/type)"; done
 
 echo "NVIDIA driver (want: PeerMappingOverride=1):"
 ok "RegistryDwords" "$(grep -o '"[^"]*"' <(grep '^RegistryDwords:' /proc/driver/nvidia/params))"

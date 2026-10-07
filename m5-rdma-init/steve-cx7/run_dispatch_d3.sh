@@ -2,11 +2,12 @@
 # D3 on steve (see dispatch_bd.cu --d3): compute lost per dispatch, local / ordered / flush (per-lane puts).
 # Root: unlimited locked memory for IBGDA. Usage on steve: sudo ~/loom-experiments/gpu-posted/run_dispatch_d3.sh
 set -uo pipefail
-D=/home/harshanavkis/loom-experiments/gpu-posted
-MPI=$(sudo -u harshanavkis nix build --no-link --print-out-paths nixpkgs#mpich | head -1)
-NUMA=$(sudo -u harshanavkis nix build --no-link --print-out-paths nixpkgs#numactl | grep -v -- -man | head -1)/bin/numactl
+U=${SUDO_USER:-$(logname)}; UH=$(getent passwd "$U" | cut -d: -f6)   # the invoking user: runs nix, owns the outputs
+D=$UH/loom-experiments/gpu-posted
+MPI=$(sudo -u "$U" nix build --no-link --print-out-paths nixpkgs#mpich | head -1)
+NUMA=$(sudo -u "$U" nix build --no-link --print-out-paths nixpkgs#numactl | grep -v -- -man | head -1)/bin/numactl
 ulimit -l unlimited
-export HOME=/home/harshanavkis
+export HOME=$UH
 source $HOME/loom-experiments/nvshmem-loopback/env.sh
 export NVSHMEM_REMOTE_TRANSPORT=none NVSHMEM_IBGDA_NUM_RC_PER_PE=24 NVSHMEM_QP_DEPTH=8192 NVSHMEM_DISABLE_CUDA_VMM=1
 FILLER=${FILLER:-fma}                     # fma | gemm-up (expert up/gate GEMM, cuBLAS batched)
@@ -28,5 +29,5 @@ for H in 1024 7168; do for V in $VARIANTS; do
       --ctas 20 --d3 ${TP#*:} --d3-filler $FILLER --reps ${REPS:-5} --window-ms $WINDOW_MS "$@" < /dev/null >> $F 2>> ${F%.csv}.err
     echo "variant=$NAME H=$H tokens=${TP%%:*} exit=$?  output: $F"
   done
-  chown harshanavkis $F ${F%.csv}.err
+  chown "$U" $F ${F%.csv}.err
 done; done

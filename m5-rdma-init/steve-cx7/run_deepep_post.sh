@@ -3,11 +3,12 @@
 # latency, then the per-token dispatch, both modes. Root: unlimited locked memory for IBGDA.
 # Usage on steve: sudo ~/loom-experiments/gpu-posted/run_deepep_post.sh
 set -uo pipefail
-D=/home/harshanavkis/loom-experiments/gpu-posted
-MPI=$(sudo -u harshanavkis nix build --no-link --print-out-paths nixpkgs#mpich | head -1)
-NUMA=$(sudo -u harshanavkis nix build --no-link --print-out-paths nixpkgs#numactl | grep -v -- -man | head -1)/bin/numactl
+U=${SUDO_USER:-$(logname)}; UH=$(getent passwd "$U" | cut -d: -f6)   # the invoking user: runs nix, owns the outputs
+D=$UH/loom-experiments/gpu-posted
+MPI=$(sudo -u "$U" nix build --no-link --print-out-paths nixpkgs#mpich | head -1)
+NUMA=$(sudo -u "$U" nix build --no-link --print-out-paths nixpkgs#numactl | grep -v -- -man | head -1)/bin/numactl
 ulimit -l unlimited
-export HOME=/home/harshanavkis
+export HOME=$UH
 source $HOME/loom-experiments/nvshmem-loopback/env.sh
 export NVSHMEM_REMOTE_TRANSPORT=none       # pure IBGDA, no host proxy
 export NVSHMEM_QP_DEPTH=1024               # DeepEP's default (deep_ep/buffers/legacy.py)
@@ -23,4 +24,4 @@ for H in 1024 7168; do
   { for m in nvshmem deepep; do run --test dispatch --mode $m --H $H; done; } > $OUT 2> ${OUT%.csv}.err
   echo "dispatch H=$H exit=$?  output: $OUT"
 done
-chown harshanavkis $D/deepep_post_*
+chown "$U" $D/deepep_post_*

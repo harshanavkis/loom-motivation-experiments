@@ -5,10 +5,11 @@
 #   shmem_put_bw: block puts, one thread per CTA, 8 B - 64 KiB
 # Root (memlock), MPS (2 PEs on one GPU). Usage on steve: sudo .../run_msgrate.sh
 set -uo pipefail
-D=/home/harshanavkis/loom-experiments/nvshmem-loopback
-MPI=$(sudo -u harshanavkis nix build --no-link --print-out-paths nixpkgs#mpich | head -1)
+U=${SUDO_USER:-$(logname)}; UH=$(getent passwd "$U" | cut -d: -f6)   # the invoking user: runs nix, owns the outputs
+D=$UH/loom-experiments/nvshmem-loopback
+MPI=$(sudo -u "$U" nix build --no-link --print-out-paths nixpkgs#mpich | head -1)
 ulimit -l unlimited
-export HOME=/home/harshanavkis
+export HOME=$UH
 source $D/env.sh
 export CUDA_MPS_PIPE_DIRECTORY=/tmp/loom-mps-pipe CUDA_MPS_LOG_DIRECTORY=/tmp/loom-mps-log
 mkdir -p $CUDA_MPS_PIPE_DIRECTORY $CUDA_MPS_LOG_DIRECTORY
@@ -33,4 +34,4 @@ OUT=$D/msgrate_steve.csv
     done
   done
 } > $OUT
-echo "exit=$?  output: $OUT"; chown harshanavkis $OUT
+echo "exit=$?  output: $OUT"; chown "$U" $OUT

@@ -9,10 +9,11 @@
 #   load: a BF16 GEMM runs continuously in another MPS client (really concurrent) during
 #         the pure-IBGDA tests; output put_lat_steve_load.txt
 set -uo pipefail
-D=/home/harshanavkis/loom-experiments/nvshmem-loopback
-MPI=$(sudo -u harshanavkis nix build --no-link --print-out-paths nixpkgs#mpich | head -1)
+U=${SUDO_USER:-$(logname)}; UH=$(getent passwd "$U" | cut -d: -f6)   # the invoking user: runs nix, owns the outputs
+D=$UH/loom-experiments/nvshmem-loopback
+MPI=$(sudo -u "$U" nix build --no-link --print-out-paths nixpkgs#mpich | head -1)
 ulimit -l unlimited
-export HOME=/home/harshanavkis
+export HOME=$UH
 source $D/env.sh
 # host ibrc transport stays ON: signal ops need it (with it off, the ping-pong kernels read NULL, Xid 31)
 # 2 PEs on one GPU must run their kernels CONCURRENTLY (ping-pong spins on the peer).
@@ -24,7 +25,7 @@ trap 'echo quit | nvidia-cuda-mps-control' EXIT
 MODE=${1:-idle}
 OUT=$D/put_lat_steve.txt; [ "$MODE" = load ] && OUT=$D/put_lat_steve_load.txt
 if [ "$MODE" = load ]; then
-  /home/harshanavkis/loom-experiments/gpu-interference/interfere --load-seconds 400 > $D/load.log 2>&1 &
+  $UH/loom-experiments/gpu-interference/interfere --load-seconds 400 > $D/load.log 2>&1 &
   LOADPID=$!
   trap 'kill $LOADPID 2>/dev/null; wait $LOADPID 2>/dev/null; echo quit | nvidia-cuda-mps-control' EXIT
   sleep 10
@@ -46,4 +47,4 @@ fi
   done
 } > $OUT 2>&1
 echo "exit=$?  output: $OUT"
-chown harshanavkis $OUT
+chown "$U" $OUT

@@ -4,10 +4,11 @@
 # host memory; the default 8 MiB limit makes ibv_create_cq fail), hence sudo.
 # Usage on steve:  sudo ~/loom-experiments/nvshmem-loopback/run_put_bw.sh
 set -uo pipefail
-D=/home/harshanavkis/loom-experiments/nvshmem-loopback
-MPI=$(sudo -u harshanavkis nix build --no-link --print-out-paths nixpkgs#mpich | head -1)
+U=${SUDO_USER:-$(logname)}; UH=$(getent passwd "$U" | cut -d: -f6)   # the invoking user: runs nix, owns the outputs
+D=$UH/loom-experiments/nvshmem-loopback
+MPI=$(sudo -u "$U" nix build --no-link --print-out-paths nixpkgs#mpich | head -1)
 ulimit -l unlimited
-export HOME=/home/harshanavkis
+export HOME=$UH
 source $D/env.sh
 export NVSHMEM_REMOTE_TRANSPORT=none      # device-side puts only: IBGDA, no host ibrc
 OUT=$D/put_bw_steve.txt
@@ -18,4 +19,4 @@ OUT=$D/put_bw_steve.txt
     $NVSHMEM_HOME/bin/perftest/device/pt-to-pt/shmem_put_bw -b 4096 -e 4194304 -f 4
 } > $OUT 2>&1
 echo "exit=$?  output: $OUT"
-chown harshanavkis $OUT
+chown "$U" $OUT

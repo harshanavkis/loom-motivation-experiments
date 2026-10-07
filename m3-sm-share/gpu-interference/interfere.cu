@@ -319,7 +319,7 @@ static void ce_sizes(Ctx& c, FILE* out, int reps) {
 int main(int argc, char** argv) {
   int reps = 5; std::string out_path = "results.csv"; std::vector<int> ks = {4, 8, 16, 20, 32};
   std::vector<double> rates = {50, 100, 0};  // GB/s; 0 = unpaced
-  bool quick = false, diag = false, only_none = false;  // --only-none: workloads alone (external traffic runs beside)
+  bool quick = false, diag = false, only_none = false; double load_s = 0;  // --load-seconds N: just run the GEMM for N s (background load)  // --only-none: workloads alone (external traffic runs beside)
   for (int i = 1; i < argc; i++) {
     std::string a = argv[i];
     if (a == "--reps") reps = atoi(argv[++i]);
@@ -328,6 +328,7 @@ int main(int argc, char** argv) {
     else if (a == "--occ-cluster") g_occ_cluster = atoi(argv[++i]);
     else if (a == "--diag") { diag = true; }
     else if (a == "--only-none") only_none = true;
+    else if (a == "--load-seconds") load_s = atof(argv[++i]);
   }
   if (quick) { reps = 1; ks = {8, 20}; rates = {50}; }
 
@@ -355,6 +356,12 @@ int main(int argc, char** argv) {
   CK(cudaMalloc(&c.bytes_dev, MAX_CTAS * 8)); CK(cudaMalloc(&c.smids_dev, MAX_CTAS * 4));
   if (*std::max_element(ks.begin(), ks.end()) * REGION > COPY_BYTES) { fprintf(stderr, "k too large for buffers\n"); return 1; }
 
+  if (load_s > 0) {
+    double t0 = now_s(); long n = 0;
+    while (now_s() - t0 < load_s) { run_workload(c, "gemm"); CK(cudaStreamSynchronize(c.work)); n++; }
+    printf("load: %ld x %d GEMMs in %.1f s\n", n, c.gemm_iters, now_s() - t0);
+    return 0;
+  }
   if (diag) {
     for (int k : ks) { CB(cublasSetSmCountTarget(c.blas, c.nsm - k)); run_workload(c, "gemm"); }
     CB(cublasSetSmCountTarget(c.blas, 0)); run_workload(c, "gemm"); CK(cudaDeviceSynchronize());

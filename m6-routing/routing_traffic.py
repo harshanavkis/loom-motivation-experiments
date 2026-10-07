@@ -11,7 +11,7 @@ one of its experts (DeepEP sends one copy per destination GPU).
 Per token: destination GPUs, of which outside the source's scale-up domain, and the number of
 distinct remote domains (one copy per domain if a GPU there forwards it, as DeepEP V1 normal /
 V2.5 hybrid do). Output: routing_traffic.csv (means over N tokens).
-Usage: python3 routing_traffic.py [N]
+Usage: python3 routing_traffic.py [N]   (default 50000 tokens, seed 1: reproduces routing_traffic.csv)
 """
 import csv
 import sys
@@ -38,7 +38,7 @@ def sample(ep, d, n, rng):
 
 
 def main():
-    n = int(sys.argv[1]) if len(sys.argv) > 1 else 200000
+    n = int(sys.argv[1]) if len(sys.argv) > 1 else 50000   # the committed CSV
     rng = np.random.default_rng(1)
     rows = []
     for d, name in ((8, 'HGX (8 GPUs)'), (64, 'NVL72 (64 GPUs for EP)')):
