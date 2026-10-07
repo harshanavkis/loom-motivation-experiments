@@ -135,15 +135,19 @@ if __name__ == "__main__":
         show(f"NVSHMEM default, {nodes} nodes x 8 GPUs", nvshmem_ibgda(8 * nodes, 2))
 
     # DeepEP V1 (a56d615) low-latency: all EP ranks are NVSHMEM PEs; NUM_RC_PER_PE = num_experts // num_ranks
-    # ASSUMPTION: 256 routed experts (DeepSeek-V3); docs/legacy.md:256
-    print("\n## DeepEP V1 low-latency (PEs = all ranks; RC/peer = 256 experts / EP; depth 1024)")
-    for nodes in (2, 16, 32):
+    # ASSUMPTION: 256 routed experts (DeepSeek-V3; docs/legacy.md:256) up to EP256; EP cannot exceed the
+    # expert count, so EP512 / EP1024 assume 512 / 1024 experts (one per GPU)
+    print("\n## DeepEP V1 low-latency (PEs = all ranks; RC/peer = experts / EP; depth 1024)")
+    for nodes, experts in ((2, 256), (16, 256), (32, 256), (64, 512), (128, 1024)):
         ep = 8 * nodes
-        show(f"DeepEP-V1 LL EP{ep}", nvshmem_ibgda(ep, 256 // ep))
+        show(f"DeepEP-V1 LL EP{ep} ({experts} experts)", nvshmem_ibgda(ep, experts // ep))
 
-    # DeepEP V1 normal: NVSHMEM PEs = RDMA ranks (one per node, same local GPU index); default num_qps_per_rank=24
-    print("\n## DeepEP V1 normal (PEs = nodes; RC/peer = 24 default; depth 1024)")
-    for nodes in (2, 16, 32):
+    # DeepEP V1 normal: NVSHMEM PEs = RDMA ranks (one per node, same local GPU index); default num_qps_per_rank=24.
+    # At most 20 nodes = EP160 (LEGACY_NUM_MAX_RDMA_PEERS, csrc/kernels/legacy/compiled.cuh:6; checked in
+    # csrc/legacy/buffer.hpp:113 unless low-latency mode). EP256 (32 nodes) was listed here before 2026-10-07:
+    # DeepEP V1 refuses that configuration.
+    print("\n## DeepEP V1 normal (PEs = nodes; RC/peer = 24 default; depth 1024; at most 20 nodes = EP160)")
+    for nodes in (2, 16, 20):
         show(f"DeepEP-V1 normal {nodes} nodes (EP{8 * nodes})", nvshmem_ibgda(nodes, 24))
 
     print("\n## NCCL GIN GDAKI per-QP (depth 1024 as set by DeepEP; NCCL default 128)")
@@ -154,7 +158,9 @@ if __name__ == "__main__":
     print("\n## DeepEP V2.5 EPBuffer on NCCL GIN GDAKI (depth 1024; contexts = num_allocated_qps; no counters)")
     for label, ctx, rail in (("hybrid, CX-7 (129 ctx)", 129, True), ("hybrid, CX-8 (65 ctx)", 65, True),
                              ("direct (17 ctx)", 17, False)):
-        for nodes in (2, 16, 32):
+        # kNumMaxRanks = 1024 (deep_ep/include/deep_ep/common/compiled.cuh:74); EP512 / EP1024 for the default
+        # CX-7 hybrid mode only (need 512 / 1024 experts)
+        for nodes in ((2, 16, 32, 64, 128) if ctx == 129 else (2, 16, 32)):
             n = 8 * nodes
             r = nccl_gdaki(n, ctx, nodes if rail else n)
             print(f"\n### DeepEP-V2.5 {label}, EP{n}: QPs={r['n_qp']}  UAR doorbells mapped={r['uar']}")

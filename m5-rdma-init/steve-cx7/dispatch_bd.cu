@@ -33,6 +33,13 @@
 // warp: route, load (TMA load wait), smem (wait for the previous token's stores to free shared
 // memory), stage (store into the send buffer and wait), post (DeepEP put calls), store (TMA
 // store issue). --load runs a cuBLAS GEMM on the SMs the dispatch does not use.
+// --combine: the return trip (DeepEP V2.5 impls/ep/combine.cuh, non-expanded send): each message
+// is one token's expert output (already summed over this GPU's experts), BF16 (--H 14336 for
+// DeepSeek-V3), loaded on its own and sent to the one GPU the token came from: a TMA store for a
+// local peer, staging + put for a remote one, then the same end (flush / ordered / release signal).
+// The message list is the dispatch's (token, destination) list for the same token count, so each
+// destination gets as many messages as in the dispatch. The reduction at the token's GPU that
+// follows is the same on every path and is not timed. Paths print as c-local / c-flush / c-ordered.
 // Output: one CSV row per run; summarize_bd.py takes medians and prints the breakdown.
 #include <cstdio>
 #include <cstdlib>
@@ -60,8 +67,7 @@ namespace dl = deep_ep::legacy;
 #define CU(x) do { CUresult r_ = (x); if (r_ != CUDA_SUCCESS) { const char* m; cuGetErrorString(r_, &m); \
   fprintf(stderr, "%s:%d %s: %s\n", __FILE__, __LINE__, #x, m); exit(1); } } while (0)
 
-static const int R = 8, E = 256, TOPK = 8, HMAX = 7168, TMAX = 4096, WARPS = 8, MAXCTA = 64;
-static const int SMEM = WARPS * HMAX;   // one token buffer per warp
+static const int R = 8, E = 256, TOPK = 8, HMAX = 14336, TMAX = 4096, WARPS = 8, MAXCTA = 64;
 enum { LOCAL = 0, FLUSH = 1, ORDERED = 2 };
 static const char* PATH_NAME[] = {"local", "flush", "ordered"};
 enum { A_ROUTE, A_LOAD, A_SMEM, A_STAGE, A_POST, A_STORE, NACT };
@@ -146,7 +152,7 @@ struct Stamps {
 template <int kPath>
 __global__ void __launch_bounds__(256, 1)
 dispatch(const char* tok, char* send, char* recv, int* sig, int T, int H, int* counters, int* ctas_done, Stamps st,
-         int qp_warp, int nq, int nqp, int post_lane) {
+         int qp_warp, int nq, int nqp, int post_lane, const unsigned char* cdest) {
   extern __shared__ __align__(128) char smem[];
   __shared__ __align__(8) unsigned long long bar[WARPS];
   __shared__ int last, fence_dep;   // fence_dep: a word to load after a fence, so the timer waits for it
@@ -159,7 +165,7 @@ dispatch(const char* tok, char* send, char* recv, int* sig, int T, int H, int* c
     if (st.span_start) atomicMin(st.span_start, t_start);
   }
   __syncthreads();
-  char* buf = smem + (size_t)w * HMAX;
+  char* buf = smem + (size_t)w * H;    // one token buffer per warp (H is a multiple of 128)
   if (lane == 0) mbar_init(&bar[w]);
   asm volatile("fence.mbarrier_init.release.cluster;" ::: "memory");
   __syncwarp();
@@ -172,7 +178,7 @@ dispatch(const char* tok, char* send, char* recv, int* sig, int T, int H, int* c
     const unsigned long long b = gtimer(); acc[A_SMEM] += b - a;
     if (lane == 0) tma_load(buf, tok + (size_t)t * H, H, &bar[w]);
     unsigned mask = 0;
-    if (lane == 0) mask = rank_mask(t);
+    if (lane == 0) mask = cdest ? 1u << cdest[t] : rank_mask(t);   // combine: one destination per message
     mask = __shfl_sync(0xffffffff, mask, 0);
     int slot = -1;                   // lane r < R: this token's slot at destination r
     if (lane < R && (mask >> lane & 1)) slot = atomicAdd(&counters[lane], 1);
@@ -361,7 +367,7 @@ static std::vector<int> parse_list(const char* s) {
 }
 
 int main(int argc, char** argv) {
-  int H = 7168, path = LOCAL, iters = 20, qp_warp = 0, nq = 1, post_lane = 0, reps = 3; bool load = false;
+  int H = 7168, path = LOCAL, iters = 20, qp_warp = 0, nq = 1, post_lane = 0, reps = 3; bool load = false, combine = false;
   double window_us = 500000;
   std::vector<int> d3_periods;   // --d3: dispatch periods (us), see filler()
   std::string d3_filler = "fma";   // --d3-filler fma | gemm-up | gemm-down
@@ -369,6 +375,7 @@ int main(int argc, char** argv) {
   for (int i = 1; i < argc; i++) {
     if (!strcmp(argv[i], "--H")) H = atoi(argv[++i]);
     else if (!strcmp(argv[i], "--load")) load = true;
+    else if (!strcmp(argv[i], "--combine")) combine = true;
     else if (!strcmp(argv[i], "--iters")) iters = atoi(argv[++i]);
     else if (!strcmp(argv[i], "--tokens")) Ts = parse_list(argv[++i]);
     else if (!strcmp(argv[i], "--ctas")) CTAs = parse_list(argv[++i]);
@@ -382,6 +389,8 @@ int main(int argc, char** argv) {
     else if (!strcmp(argv[i], "--path")) { const char* p = argv[++i]; path = !strcmp(p, "flush") ? FLUSH : !strcmp(p, "ordered") ? ORDERED : LOCAL; }
   }
   setenv("CUDA_MODULE_LOADING", "EAGER", 1);   // no lazy kernel load while the receiver spins
+  if (H > HMAX || H % 128) { fprintf(stderr, "H must be a multiple of 128 and <= %d\n", HMAX); exit(1); }
+  if (combine && !d3_periods.empty()) { fprintf(stderr, "--combine has no --d3 mode\n"); exit(1); }
   nvshmem_init();
   const int nqp = qp_warp ? (getenv("NVSHMEM_IBGDA_NUM_RC_PER_PE") ? atoi(getenv("NVSHMEM_IBGDA_NUM_RC_PER_PE")) : 2) : R * nq;
   const int ns = path == ORDERED ? R * nq : R;   // signal words
@@ -430,11 +439,12 @@ int main(int argc, char** argv) {
   CK(cudaMalloc(&st.post, (size_t)R * TMAX * 8)); CK(cudaMalloc(&st.who, (size_t)R * TMAX * 4)); CK(cudaMalloc(&st.wend, MAXCTA * WARPS * 8)); CK(cudaMalloc(&arr, (size_t)R * TMAX * 8)); CK(cudaMalloc(&sig_ts, 32 * 8));
   CK(cudaMalloc(&counters, R * 4)); CK(cudaMalloc(&ctas_done, 4)); CK(cudaMalloc(&cnt_d, R * 4));
   CK(cudaMalloc(&missing, 32 * 4)); CK(cudaMalloc(&timed_out, 4));
+  unsigned char* cdest_d = nullptr; if (combine) CK(cudaMalloc(&cdest_d, (size_t)R * TMAX));
   int *ready_h, *ready_d; CK(cudaHostAlloc((void**)&ready_h, 64, cudaHostAllocMapped)); CK(cudaHostGetDevicePointer((void**)&ready_d, ready_h, 0));
   *ready_h = 0;
-  CK(cudaFuncSetAttribute(dispatch<LOCAL>, cudaFuncAttributeMaxDynamicSharedMemorySize, SMEM));
-  CK(cudaFuncSetAttribute(dispatch<FLUSH>, cudaFuncAttributeMaxDynamicSharedMemorySize, SMEM));
-  CK(cudaFuncSetAttribute(dispatch<ORDERED>, cudaFuncAttributeMaxDynamicSharedMemorySize, SMEM));
+  CK(cudaFuncSetAttribute(dispatch<LOCAL>, cudaFuncAttributeMaxDynamicSharedMemorySize, WARPS * HMAX));
+  CK(cudaFuncSetAttribute(dispatch<FLUSH>, cudaFuncAttributeMaxDynamicSharedMemorySize, WARPS * HMAX));
+  CK(cudaFuncSetAttribute(dispatch<ORDERED>, cudaFuncAttributeMaxDynamicSharedMemorySize, WARPS * HMAX));
   cudaStream_t ks, rs; CK(cudaStreamCreateWithFlags(&ks, cudaStreamNonBlocking)); CK(cudaStreamCreateWithFlags(&rs, cudaStreamNonBlocking));
   cudaEvent_t ea, eb; CK(cudaEventCreate(&ea)); CK(cudaEventCreate(&eb));
   CK(cudaDeviceSynchronize());
@@ -460,9 +470,9 @@ int main(int argc, char** argv) {
     // a dispatch spins there until the NIC drains (+300 SM-us per ordered dispatch at 128 x 7 KiB,
     // a cost of the harness, not of the path).
     auto launch = [&](int T, int ctas) {
-      if (path == LOCAL) dispatch<LOCAL><<<ctas, 256, SMEM_X, ds>>>(tok, send, recv_tx, sig_tx, T, H, counters, ctas_done, sx, qp_warp, nq, nqp, post_lane);
-      else if (path == FLUSH) dispatch<FLUSH><<<ctas, 256, SMEM_X, ds>>>(tok, send, recv_tx, sig_tx, T, H, counters, ctas_done, sx, qp_warp, nq, nqp, post_lane);
-      else dispatch<ORDERED><<<ctas, 256, SMEM_X, ds>>>(tok, send, recv_tx, sig_tx, T, H, counters, ctas_done, sx, qp_warp, nq, nqp, post_lane);
+      if (path == LOCAL) dispatch<LOCAL><<<ctas, 256, SMEM_X, ds>>>(tok, send, recv_tx, sig_tx, T, H, counters, ctas_done, sx, qp_warp, nq, nqp, post_lane, nullptr);
+      else if (path == FLUSH) dispatch<FLUSH><<<ctas, 256, SMEM_X, ds>>>(tok, send, recv_tx, sig_tx, T, H, counters, ctas_done, sx, qp_warp, nq, nqp, post_lane, nullptr);
+      else dispatch<ORDERED><<<ctas, 256, SMEM_X, ds>>>(tok, send, recv_tx, sig_tx, T, H, counters, ctas_done, sx, qp_warp, nq, nqp, post_lane, nullptr);
     };
     const bool gemm = d3_filler != "fma", up = d3_filler == "gemm-up";
     unsigned* gdone; CK(cudaMalloc(&gdone, 128)); CK(cudaMemset(gdone, 0, 128));
@@ -580,42 +590,45 @@ int main(int argc, char** argv) {
   }
   Load L; if (load) { for (int c : CTAs) L.warm.push_back(c + 1); L.start(); while (!L.ready) usleep(1000); usleep(500000); }
 
-  printf("# dispatch breakdown, path=%s H=%d E=%d R=%d topk=%d load=%d, 256-thread CTAs, QPs: %s (%d), %d signals; times in us from the sender's first CTA start\n",
-         PATH_NAME[path], H, E, R, TOPK, (int)load, path == LOCAL ? "none" : qp_warp ? "per warp" : "per destination", path == LOCAL ? 0 : nqp, ns);
+  printf("# %s breakdown, path=%s H=%d E=%d R=%d topk=%d load=%d, 256-thread CTAs, QPs: %s (%d), %d signals; times in us from the sender's first CTA start\n",
+         combine ? "combine" : "dispatch", PATH_NAME[path], H, E, R, TOPK, (int)load, path == LOCAL ? "none" : qp_warp ? "per warp" : "per destination", path == LOCAL ? 0 : nqp, ns);
   printf("path,qp,nqp,H,load,tokens,ctas,run,msgs,event_us,loop_end_us,post_last_us,arr_first_us,arr_last_us,drain_end_us,signal_us,"
          "seen_us,oneway_med_us,oneway_p90_us,missing,cta_loop_us,cta_drain_us,cta_tail_us,"
          "w_route_us,w_load_us,w_smem_us,w_stage_us,w_post_us,w_store_us\n");
   unsigned long long nonce = 0; int ready_val = 0;
   for (int T : Ts) {
     int cnt[R] = {0}, M = 0;
-    for (int t = 0; t < T; t++) for (unsigned m = rank_mask(t); m; m &= m - 1) { cnt[__builtin_ctz(m)]++; M++; }
+    std::vector<unsigned char> cd_h;   // combine: the dispatch's (token, destination) list, one message each
+    for (int t = 0; t < T; t++) for (unsigned m = rank_mask(t); m; m &= m - 1) { cnt[__builtin_ctz(m)]++; M++; cd_h.push_back(__builtin_ctz(m)); }
     CK(cudaMemcpy(cnt_d, cnt, sizeof cnt, cudaMemcpyHostToDevice));
+    const int TT = combine ? M : T;    // units the kernel walks: tokens (dispatch) or messages (combine)
+    if (combine) CK(cudaMemcpy(cdest_d, cd_h.data(), M, cudaMemcpyHostToDevice));
     for (int ctas : CTAs) {
       L.reserve = ctas + 1;   // the dispatch and the receiver
       for (int it = 0; it < iters + 3; it++) {
         nonce++; ready_val++;
         CK(cudaMemset(counters, 0, R * 4)); CK(cudaMemset(ctas_done, 0, 4)); CK(cudaMemset(sig_obs, 0, 256));
         CK(cudaMemset(timed_out, 0, 4)); CK(cudaMemset(arr, 0, (size_t)R * TMAX * 8)); CK(cudaMemset(sig_ts, 0, 32 * 8));
-        set_nonce<<<(T + 255) / 256, 256, 0, ks>>>(tok, T, H, nonce);
+        set_nonce<<<(TT + 255) / 256, 256, 0, ks>>>(tok, TT, H, nonce);
         CK(cudaDeviceSynchronize());
-        receiver<<<1, 1024, 0, rs>>>(recv_obs, sig_obs, ns, T, H, cnt_d, nonce, arr, sig_ts, missing, timed_out, ready_d, ready_val);
+        receiver<<<1, 1024, 0, rs>>>(recv_obs, sig_obs, ns, TT, H, cnt_d, nonce, arr, sig_ts, missing, timed_out, ready_d, ready_val);
         for (long spin = 0; *(volatile int*)ready_h != ready_val; spin++)
           if (spin > 2000000000L) { fprintf(stderr, "receiver did not start\n"); return 1; }
         CK(cudaEventRecord(ea, ks));
-        if (path == LOCAL) dispatch<LOCAL><<<ctas, 256, SMEM, ks>>>(tok, send, recv_tx, sig_tx, T, H, counters, ctas_done, st, qp_warp, nq, nqp, post_lane);
-        else if (path == FLUSH) dispatch<FLUSH><<<ctas, 256, SMEM, ks>>>(tok, send, recv_tx, sig_tx, T, H, counters, ctas_done, st, qp_warp, nq, nqp, post_lane);
-        else dispatch<ORDERED><<<ctas, 256, SMEM, ks>>>(tok, send, recv_tx, sig_tx, T, H, counters, ctas_done, st, qp_warp, nq, nqp, post_lane);
+        if (path == LOCAL) dispatch<LOCAL><<<ctas, 256, WARPS * H, ks>>>(tok, send, recv_tx, sig_tx, TT, H, counters, ctas_done, st, qp_warp, nq, nqp, post_lane, cdest_d);
+        else if (path == FLUSH) dispatch<FLUSH><<<ctas, 256, WARPS * H, ks>>>(tok, send, recv_tx, sig_tx, TT, H, counters, ctas_done, st, qp_warp, nq, nqp, post_lane, cdest_d);
+        else dispatch<ORDERED><<<ctas, 256, WARPS * H, ks>>>(tok, send, recv_tx, sig_tx, TT, H, counters, ctas_done, st, qp_warp, nq, nqp, post_lane, cdest_d);
         CK(cudaEventRecord(eb, ks));
         CK(cudaStreamSynchronize(ks)); CK(cudaStreamSynchronize(rs)); CK(cudaGetLastError());
         if (path != LOCAL) { reap<<<1, 32, 0, ks>>>(nqp); CK(cudaStreamSynchronize(ks)); }
         int to; CK(cudaMemcpy(&to, timed_out, 4, cudaMemcpyDeviceToHost));
-        if (to) { fprintf(stderr, "receiver timed out (path %s T %d ctas %d run %d)\n", PATH_NAME[path], T, ctas, it); return 1; }
+        if (to) { fprintf(stderr, "receiver timed out (path %s T %d ctas %d run %d)\n", PATH_NAME[path], TT, ctas, it); return 1; }
         int got[R]; CK(cudaMemcpy(got, counters, sizeof got, cudaMemcpyDeviceToHost));
         for (int r = 0; r < R; r++) if (got[r] != cnt[r]) { fprintf(stderr, "destination %d got %d messages, expected %d\n", r, got[r], cnt[r]); return 1; }
         if (it < 3) continue;
         // copy the stamps back and reduce them
         std::vector<unsigned long long> cs(ctas), cl(ctas), cd(ctas), ce(ctas), wa((size_t)ctas * WARPS * NACT),
-            P((size_t)R * T), A((size_t)R * T), Z(ns);
+            P((size_t)R * TT), A((size_t)R * TT), Z(ns);
         unsigned long long sg; int miss[32];
         CK(cudaMemcpy(cs.data(), st.cta_start, ctas * 8, cudaMemcpyDeviceToHost)); CK(cudaMemcpy(cl.data(), st.cta_loop, ctas * 8, cudaMemcpyDeviceToHost));
         CK(cudaMemcpy(cd.data(), st.cta_drain, ctas * 8, cudaMemcpyDeviceToHost)); CK(cudaMemcpy(ce.data(), st.cta_exit, ctas * 8, cudaMemcpyDeviceToHost));
@@ -628,17 +641,17 @@ int main(int argc, char** argv) {
         unsigned long long p_last = 0, a_first = ~0ull, a_last = 0; std::vector<double> ow; ow.reserve(M);
         for (int r = 0; r < R; r++)
           for (int s = 0; s < cnt[r]; s++) {
-            const size_t i = (size_t)r * T + s;
+            const size_t i = (size_t)r * TT + s;
             p_last = std::max(p_last, P[i]); a_first = std::min(a_first, A[i]); a_last = std::max(a_last, A[i]);
             ow.push_back(((double)A[i] - (double)P[i]) / 1e3);
           }
         std::sort(ow.begin(), ow.end());
         if (getenv("BD_DEBUG") && it == 3) {
-          std::vector<int> who((size_t)R * T); CK(cudaMemcpy(who.data(), st.who, who.size() * 4, cudaMemcpyDeviceToHost));
+          std::vector<int> who((size_t)R * TT); CK(cudaMemcpy(who.data(), st.who, who.size() * 4, cudaMemcpyDeviceToHost));
           for (int c = 0; c < ctas; c++) fprintf(stderr, "cta %d start %.2f loop %.2f drain %.2f exit %.2f\n", c, us(cs[c]), us(cl[c]), us(cd[c]), us(ce[c]));
           std::vector<unsigned long long> we((size_t)ctas * WARPS); CK(cudaMemcpy(we.data(), st.wend, we.size() * 8, cudaMemcpyDeviceToHost));
           for (size_t g = 0; g < we.size(); g++) fprintf(stderr, "warp %zu cta %zu end %.2f\n", g, g / WARPS, us(we[g]));
-          for (int r = 0; r < R; r++) for (int s2 = 0; s2 < cnt[r]; s2++) { size_t i = (size_t)r * T + s2;
+          for (int r = 0; r < R; r++) for (int s2 = 0; s2 < cnt[r]; s2++) { size_t i = (size_t)r * TT + s2;
             fprintf(stderr, "msg r%d s%d warp %d post %.2f arr %.2f\n", r, s2, who[i], us(P[i]), us(A[i])); }
         }
         double c_loop = 0, c_drain = 0, c_tail = 0, wsum[NACT] = {0};
@@ -646,7 +659,7 @@ int main(int argc, char** argv) {
         for (size_t i = 0; i < wa.size(); i++) wsum[i % NACT] += wa[i] / 1e3;
         int misses = 0; for (int j = 0; j < ns; j++) misses += miss[j];
         printf("%s,%s,%d,%d,%d,%d,%d,%d,%d,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%d,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f\n",
-               PATH_NAME[path], path == LOCAL ? "none" : qp_warp ? (post_lane ? "warpL" : "warp") : (post_lane ? "destL" : "dest"), path == LOCAL ? 0 : nqp, H, (int)load, T, ctas, it - 3, M, ev * 1e3,
+               (combine ? std::string("c-") : std::string()).append(PATH_NAME[path]).c_str(), path == LOCAL ? "none" : qp_warp ? (post_lane ? "warpL" : "warp") : (post_lane ? "destL" : "dest"), path == LOCAL ? 0 : nqp, H, (int)load, T, ctas, it - 3, M, ev * 1e3,
                us(*std::max_element(cl.begin(), cl.end())), us(p_last), us(a_first), us(a_last),
                us(*std::max_element(cd.begin(), cd.end())), us(sg), us(*std::max_element(Z.begin(), Z.end())),
                ow[ow.size() / 2], ow[ow.size() * 9 / 10], misses, c_loop, c_drain, c_tail,

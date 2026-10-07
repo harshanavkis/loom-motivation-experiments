@@ -41,9 +41,9 @@ Per RC QP (depth 1024):
    TOTAL GPU HBM (struct/ring bytes)   201,532,400 B    192.20 MiB
    + up to   159.37 MiB cudaMalloc alignment slack (5 x (64KiB-1) per RC QP)
 
-## DeepEP V1 low-latency (PEs = all ranks; RC/peer = 256 experts / EP; depth 1024)
+## DeepEP V1 low-latency (PEs = all ranks; RC/peer = experts / EP; depth 1024)
 
-### DeepEP-V1 LL EP16: PEs=16  RC/peer=16  RC QPs=240  QPs total=241  UAR doorbell pages mapped into GPU=241
+### DeepEP-V1 LL EP16 (256 experts): PEs=16  RC/peer=16  RC QPs=240  QPs total=241  UAR doorbell pages mapped into GPU=241
    per-QP rings+ibuf+dbr (RC+DCI)       94,830,608 B     90.44 MiB
    QP descriptors                           47,288 B      46.2 KiB
    CQ descriptors                           18,504 B      18.1 KiB
@@ -53,7 +53,7 @@ Per RC QP (depth 1024):
    TOTAL GPU HBM (struct/ring bytes)    95,060,240 B     90.66 MiB
    + up to    75.00 MiB cudaMalloc alignment slack (5 x (64KiB-1) per RC QP)
 
-### DeepEP-V1 LL EP128: PEs=128  RC/peer=2  RC QPs=254  QPs total=255  UAR doorbell pages mapped into GPU=255
+### DeepEP-V1 LL EP128 (256 experts): PEs=128  RC/peer=2  RC QPs=254  QPs total=255  UAR doorbell pages mapped into GPU=255
    per-QP rings+ibuf+dbr (RC+DCI)      100,339,440 B     95.69 MiB
    QP descriptors                           47,288 B      46.2 KiB
    CQ descriptors                           18,504 B      18.1 KiB
@@ -63,7 +63,7 @@ Per RC QP (depth 1024):
    TOTAL GPU HBM (struct/ring bytes)   100,582,384 B     95.92 MiB
    + up to    79.37 MiB cudaMalloc alignment slack (5 x (64KiB-1) per RC QP)
 
-### DeepEP-V1 LL EP256: PEs=256  RC/peer=1  RC QPs=255  QPs total=256  UAR doorbell pages mapped into GPU=256
+### DeepEP-V1 LL EP256 (256 experts): PEs=256  RC/peer=1  RC QPs=255  QPs total=256  UAR doorbell pages mapped into GPU=256
    per-QP rings+ibuf+dbr (RC+DCI)      100,732,928 B     96.07 MiB
    QP descriptors                           47,288 B      46.2 KiB
    CQ descriptors                           18,504 B      18.1 KiB
@@ -73,7 +73,27 @@ Per RC QP (depth 1024):
    TOTAL GPU HBM (struct/ring bytes)   100,996,352 B     96.32 MiB
    + up to    79.69 MiB cudaMalloc alignment slack (5 x (64KiB-1) per RC QP)
 
-## DeepEP V1 normal (PEs = nodes; RC/peer = 24 default; depth 1024)
+### DeepEP-V1 LL EP512 (512 experts): PEs=512  RC/peer=1  RC QPs=511  QPs total=512  UAR doorbell pages mapped into GPU=512
+   per-QP rings+ibuf+dbr (RC+DCI)      201,465,856 B    192.13 MiB
+   QP descriptors                           94,392 B      92.2 KiB
+   CQ descriptors                           36,936 B      36.1 KiB
+   DCT AV table (global part)               43,008 B      42.0 KiB
+   rkey table (global part)                 31,744 B      31.0 KiB
+   batch-RMA pending bitmap (3.8)          294,912 B     288.0 KiB
+   TOTAL GPU HBM (struct/ring bytes)   201,966,848 B    192.61 MiB
+   + up to   159.69 MiB cudaMalloc alignment slack (5 x (64KiB-1) per RC QP)
+
+### DeepEP-V1 LL EP1024 (1024 experts): PEs=1024  RC/peer=1  RC QPs=1023  QPs total=1024  UAR doorbell pages mapped into GPU=1024
+   per-QP rings+ibuf+dbr (RC+DCI)      402,931,712 B    384.27 MiB
+   QP descriptors                          188,600 B     184.2 KiB
+   CQ descriptors                           73,800 B      72.1 KiB
+   DCT AV table (global part)               92,160 B      90.0 KiB
+   rkey table (global part)                 64,512 B      63.0 KiB
+   batch-RMA pending bitmap (3.8)          573,440 B     560.0 KiB
+   TOTAL GPU HBM (struct/ring bytes)   403,924,224 B    385.21 MiB
+   + up to   319.68 MiB cudaMalloc alignment slack (5 x (64KiB-1) per RC QP)
+
+## DeepEP V1 normal (PEs = nodes; RC/peer = 24 default; depth 1024; at most 20 nodes = EP160)
 
 ### DeepEP-V1 normal 2 nodes (EP16): PEs=2  RC/peer=24  RC QPs=24  QPs total=25  UAR doorbell pages mapped into GPU=25
    per-QP rings+ibuf+dbr (RC+DCI)        9,837,200 B      9.38 MiB
@@ -95,15 +115,15 @@ Per RC QP (depth 1024):
    TOTAL GPU HBM (struct/ring bytes)   142,377,104 B    135.78 MiB
    + up to   112.50 MiB cudaMalloc alignment slack (5 x (64KiB-1) per RC QP)
 
-### DeepEP-V1 normal 32 nodes (EP256): PEs=32  RC/peer=24  RC QPs=744  QPs total=745  UAR doorbell pages mapped into GPU=745
-   per-QP rings+ibuf+dbr (RC+DCI)      293,148,560 B    279.57 MiB
-   QP descriptors                          141,496 B     138.2 KiB
-   CQ descriptors                           55,368 B      54.1 KiB
+### DeepEP-V1 normal 20 nodes (EP160): PEs=20  RC/peer=24  RC QPs=456  QPs total=457  UAR doorbell pages mapped into GPU=457
+   per-QP rings+ibuf+dbr (RC+DCI)      179,824,016 B    171.49 MiB
+   QP descriptors                           88,504 B      86.4 KiB
+   CQ descriptors                           34,632 B      33.8 KiB
    DCT AV table (global part)                    0 B       0.0 KiB
-   rkey table (global part)                  1,024 B       1.0 KiB
-   batch-RMA pending bitmap (3.8)          425,984 B     416.0 KiB
-   TOTAL GPU HBM (struct/ring bytes)   293,772,432 B    280.16 MiB
-   + up to   232.50 MiB cudaMalloc alignment slack (5 x (64KiB-1) per RC QP)
+   rkey table (global part)                    256 B       0.2 KiB
+   batch-RMA pending bitmap (3.8)          278,528 B     272.0 KiB
+   TOTAL GPU HBM (struct/ring bytes)   180,225,936 B    171.88 MiB
+   + up to   142.50 MiB cudaMalloc alignment slack (5 x (64KiB-1) per RC QP)
 
 ## NCCL GIN GDAKI per-QP (depth 1024 as set by DeepEP; NCCL default 128)
    depth 1024: SQ WQE ring=65,536, CQ ring (+8 B DBR)=69,632, CQ DBR slab slice=4,096, SQ DBR slab slice=4,096  sum=143,360 B
@@ -137,6 +157,24 @@ Per RC QP (depth 1024):
    last_issued/visible_get                       528,384 B     516.0 KiB
    rkey arrays (signals, counters)                 2,048 B       2.0 KiB
    TOTAL GPU HBM                             621,137,048 B    592.36 MiB
+
+### DeepEP-V2.5 hybrid, CX-7 (129 ctx), EP512: QPs=8385  UAR doorbells mapped=8385
+   per-QP SQ/CQ rings + DBRs                1,202,073,600 B   1146.39 MiB
+   device QP descriptors (nranks slots/ctx)   19,550,208 B     18.64 MiB
+   GIN GDAKI GPU contexts                         11,352 B      11.1 KiB
+   signal table + signal shadows               1,065,024 B      1.02 MiB
+   last_issued/visible_get                     1,056,768 B      1.01 MiB
+   rkey arrays (signals, counters)                 4,096 B       4.0 KiB
+   TOTAL GPU HBM                            1,223,761,048 B   1167.07 MiB
+
+### DeepEP-V2.5 hybrid, CX-7 (129 ctx), EP1024: QPs=16641  UAR doorbells mapped=16641
+   per-QP SQ/CQ rings + DBRs                2,385,653,760 B   2275.14 MiB
+   device QP descriptors (nranks slots/ctx)   39,100,416 B     37.29 MiB
+   GIN GDAKI GPU contexts                         11,352 B      11.1 KiB
+   signal table + signal shadows               2,121,792 B      2.02 MiB
+   last_issued/visible_get                     2,113,536 B      2.02 MiB
+   rkey arrays (signals, counters)                 8,192 B       8.0 KiB
+   TOTAL GPU HBM                            2,429,009,048 B   2316.48 MiB
 
 ### DeepEP-V2.5 hybrid, CX-8 (65 ctx), EP16: QPs=195  UAR doorbells mapped=195
    per-QP SQ/CQ rings + DBRs                  27,955,200 B     26.66 MiB
