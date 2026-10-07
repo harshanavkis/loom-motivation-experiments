@@ -22,6 +22,7 @@ from collections import defaultdict
 NUM = ["msgs", "event_us", "loop_end_us", "post_last_us", "arr_first_us", "arr_last_us", "drain_end_us",
        "signal_us", "seen_us", "oneway_med_us", "oneway_p90_us", "missing", "cta_loop_us", "cta_drain_us",
        "cta_tail_us", "w_route_us", "w_load_us", "w_smem_us", "w_stage_us", "w_post_us", "w_store_us"]
+OPT = ["reaped_us"]   # dispatch_bd --reap-inline only
 PATHS = ["local", "ordered", "flush"]   # plus QP variants, e.g. "flush-warp24", "ordered-dest24"
 
 
@@ -33,10 +34,12 @@ def load(files):
             for row in csv.DictReader(l for l in fh if l.strip() and not l.startswith(("#", "WARN"))):
                 path = row["path"] if row.get("qp", "none") == "none" else f'{row["path"]}-{row["qp"]}{row["nqp"]}'
                 key = (path, int(row["H"]), int(row["load"]), int(row["tokens"]), int(row["ctas"]))
-                runs[key].append({k: float(row[k]) for k in NUM})
+                runs[key].append({k: float(row[k]) for k in NUM + [c for c in OPT if row.get(c)]})
     med = {}
     for key, rs in runs.items():
-        m = {k: statistics.median(r[k] for r in rs) for k in NUM}
+        m = {k: statistics.median(r[k] for r in rs) for k in NUM + [c for c in OPT if c in rs[0]]}
+        if "reaped_us" in rs[0]:   # completions collected after the signal (median of per-run differences)
+            m["reap"] = statistics.median(r["reaped_us"] - r["signal_us"] for r in rs)
         m["runs"] = len(rs)
         m["missing_max"] = max(r["missing"] for r in rs)
         m["seen_p90_us"] = sorted(r["seen_us"] for r in rs)[int(len(rs) * 0.9)]
@@ -61,11 +64,13 @@ def main():
                     "seen_p90_us", "arr_last_us", "oneway_med_us", "cta_loop_us", "cta_drain_us", "cta_tail_us",
                     "cta_total_us", "w_route_us", "w_load_us", "w_smem_us", "w_stage_us", "w_post_us", "w_store_us",
                     "missing_max"]
+            if any("reap" in m for m in med.values()):   # --reap-inline runs only (keeps other summaries unchanged)
+                cols.append("reap")
             w = csv.writer(fh)
             w.writerow(cols)
             for key in sorted(med):
                 m = med[key]
-                w.writerow(list(key) + [m["runs"]] + [round(m[c], 2) for c in cols[6:]])
+                w.writerow(list(key) + [m["runs"]] + [round(m[c], 2) if c in m else "" for c in cols[6:]])
     groups = sorted({(k[1], k[2], k[3], k[4]) for k in med})
     for H, ld, T, ctas in groups:
         have = sorted({k[0] for k in med if k[1:] == (H, ld, T, ctas)}, key=lambda p: (p != "local", p))

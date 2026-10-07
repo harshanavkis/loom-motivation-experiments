@@ -235,6 +235,14 @@ def dispatch_breakdown():
     return d[(d.ctas == 20) & (d.load == 0) & d.path.isin(list(BD_PATHS))]
 
 
+def reap_t3(kind):
+    """The ordered sender's deferred cost: collecting every completion after it has posted the signal
+    (dispatch_bd --reap-inline, bd_v2/summary_t3reap.csv / summary_combine_t3reap.csv): median us per token count."""
+    f = 'summary_t3reap.csv' if kind == 'dispatch' else 'summary_combine_t3reap.csv'
+    d = pd.read_csv(os.path.join(BD, f))
+    return d[(d.ctas == 20) & (d.load == 0)].set_index('tokens').reap
+
+
 def breakdown_t3(kind):
     """dispatch_bd.cu, 1 / 16 / 128 tokens in one session per kind, 20 CTAs, idle: kind 'dispatch' =
     7 KiB FP8 tokens (bd_v2/summary_t3.csv), 'combine' = 14 KiB BF16 expert outputs sent back
@@ -402,22 +410,31 @@ def panel_breakdown(axes, fs, title, kind, H, tokens=(1, 16, 128), legend=True):
             vals = np.array([t.loc[p, col] for p in BD_PATHS])
             ax.bar(x, vals, 0.65, bottom=bottom, color=color, hatch=hatch, edgecolor='black', linewidth=1, label=lab)
             bottom += vals
-        top = max(t.sender_us)
+        # the ordered sender collects its completions later (before it reuses its send buffer and queue slots)
+        reap = float(reap_t3(kind).loc[T])
+        io = list(BD_PATHS).index('ordered-destL24')
+        ax.bar(x[io], reap, 0.65, bottom=t.loc['ordered-destL24', 'sender_us'], color='white', hatch='++',
+               edgecolor='gray', linewidth=1, label='completions\ncollected later')
+        t = t.assign(total_us=t.sender_us)
+        t.loc['ordered-destL24', 'total_us'] += reap
+        top = max(t.total_us)
         for i, p in enumerate(BD_PATHS):
-            ax.text(x[i], t.loc[p, 'sender_us'] + 0.04 * top, f"{t.loc[p, 'sender_us']:.0f}", ha='center',
+            ax.text(x[i], t.loc[p, 'total_us'] + 0.04 * top, f"{t.loc[p, 'total_us']:.0f}", ha='center',
                     va='bottom', fontsize=fs['annotation'] - 6)
-        link_us = nic_payload_us(kind, H, T)
+        link_us = nic_payload_us(kind, H, T)   # what a flushing sender waits out: drawn over the flush bar only
+        ifl = list(BD_PATHS).index('flush-warpL24')
         if link_us < top * 1.3:
-            ax.plot([0.6, 2.4], [link_us, link_us], color='black', linewidth=4, linestyle='--', label='payload through NIC')
+            ax.plot([x[ifl] - 0.4, x[ifl] + 0.4], [link_us, link_us], color='black', linewidth=4, linestyle='--',
+                    label='payload through NIC')
         floor = t.loc['local', 'sender_us']
         for i, p in enumerate(BD_PATHS):
             if p == 'local':
                 continue
-            extra = t.loc[p, 'sender_us'] - floor
+            extra = t.loc[p, 'total_us'] - floor
             if extra > 0:
                 ax.bar(x[i] + 0.43, extra, 0.16, bottom=floor, color=LOOMGONE, edgecolor='#a04040', linewidth=1.5,
                        label='removed by a\nload/store contract' if i == 1 else None)
-            ax.text(x[i] + 0.43, max(t.loc[p, 'sender_us'], floor) + 0.16 * top, f"{t.loc[p, 'sender_us'] / floor:.1f}x",
+            ax.text(x[i] + 0.43, max(t.loc[p, 'total_us'], floor) + 0.16 * top, f"{t.loc[p, 'total_us'] / floor:.1f}x",
                     ha='center', va='bottom', fontsize=fs['annotation'] - 12, color='#a04040')
         ax.set_xticks(x)
         ax.set_xlim(-0.55, 2.75)

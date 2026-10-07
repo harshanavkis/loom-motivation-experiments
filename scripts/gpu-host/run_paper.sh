@@ -26,6 +26,12 @@ fig3() {
     say "combine $N";   F=$H/gpu-posted/bd_v2/combine_bd_t3_${N}_H14336_load0.csv
     sudo bash $H/gpu-posted/bd_one.sh $A --combine --H 14336 --tokens 1,16,128 --iters 20 > $F 2> ${F%.csv}.err
   done
+  # the ordered sender's deferred cost: collect every completion after the signal (hatched in Fig 3a/b)
+  A="--path ordered --qp dest --nq 3 --post lane --reap-inline"
+  say "dispatch ordered, completions collected"; F=$H/gpu-posted/bd_v2/dispatch_bd_t3reap_ordered-destL3_H7168_load0.csv
+  sudo bash $H/gpu-posted/bd_one.sh $A --H 7168 --tokens 1,16,128 --iters 20 > $F 2> ${F%.csv}.err
+  say "combine ordered, completions collected";  F=$H/gpu-posted/bd_v2/combine_bd_t3reap_ordered-destL3_H14336_load0.csv
+  sudo bash $H/gpu-posted/bd_one.sh $A --combine --H 14336 --tokens 1,16,128 --iters 20 > $F 2> ${F%.csv}.err
 }
 
 text() {

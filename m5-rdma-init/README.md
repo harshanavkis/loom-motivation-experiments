@@ -380,6 +380,8 @@ The payload alone needs 2.9 µs (1 token) and 331 µs (128 tokens) through the N
 
 The 1/128-token dispatch reproduces the 2026-10-06 run within 2-3%. The sender is busy until it has issued the signal: 4.6 / 8.7 / 26.2 µs at 1 token and 12.3 / 25.6 / 355.6 µs at 128 tokens for the dispatch; a flush keeps its sender for the whole drain. The ordered path's completions are reaped after the timed window (`reap`), so its bars exclude that cost (up to ~300 SM-µs at 128 x 7 KiB when reaped right away, D3).
 
+**The ordered sender's deferred cost (`--reap-inline`, 2026-10-07).** An ordered sender leaves after posting its signal, but before it reuses its send buffer and queue slots it must collect every completion. With `--reap-inline` the signalling CTA does that right after the signal and stamps `reaped_us` (summary column `reap` = reaped - signal). Sender + collection, ordered vs flush sender: dispatch 19.6 vs 26.1 µs (1 token), 58.1 vs 57.1 (16), 347.7 vs 354.2 (128); combine 22.8 vs 26.1, 99.2 vs 97.2, 649.0 vs 682.2. The ordered path defers the wait; it does not avoid it. Raw `bd_v2/{dispatch,combine}_bd_t3reap_*`, summaries `summary_t3reap.csv`, `summary_combine_t3reap.csv`.
+
 ### Compute lost per dispatch (D3, `dispatch_bd.cu --d3`, 2026-10-06)
 
 **Question.** Is a dispatch's SM time (above) compute that other work loses, and how much per path?

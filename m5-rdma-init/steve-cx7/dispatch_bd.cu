@@ -40,6 +40,9 @@
 // The message list is the dispatch's (token, destination) list for the same token count, so each
 // destination gets as many messages as in the dispatch. The reduction at the token's GPU that
 // follows is the same on every path and is not timed. Paths print as c-local / c-flush / c-ordered.
+// --reap-inline (ordered only): after posting the signal, the signalling CTA collects the completions of
+// every QP before it exits (the cost an ordered sender pays later, before it reuses its send buffer and
+// queue slots; DeepEP V1 low latency defers it); the CSV's reaped_us column stamps when that is done.
 // Output: one CSV row per run; summarize_bd.py takes medians and prints the breakdown.
 #include <cstdio>
 #include <cstdlib>
@@ -144,6 +147,7 @@ __device__ __forceinline__ void put_nbi_thread(uint64_t rptr, uint64_t lptr, siz
 
 struct Stamps {
   unsigned long long *cta_start, *cta_loop, *cta_drain, *cta_exit, *signal, *warp, *post, *wend; int* who;
+  unsigned long long* reaped;   // --reap-inline: when the signalling CTA has collected every completion
   // --d3 only (null otherwise): summed CTA residency, summed span (first CTA start -> signal issued),
   // the span's start (atomicMin), and reset: the last CTA clears the counters for the next dispatch
   unsigned long long *resid, *span, *span_start; int reset;
@@ -152,7 +156,7 @@ struct Stamps {
 template <int kPath>
 __global__ void __launch_bounds__(256, 1)
 dispatch(const char* tok, char* send, char* recv, int* sig, int T, int H, int* counters, int* ctas_done, Stamps st,
-         int qp_warp, int nq, int nqp, int post_lane, const unsigned char* cdest) {
+         int qp_warp, int nq, int nqp, int post_lane, const unsigned char* cdest, int reap_inline) {
   extern __shared__ __align__(128) char smem[];
   __shared__ __align__(8) unsigned long long bar[WARPS];
   __shared__ int last, fence_dep;   // fence_dep: a word to load after a fence, so the timer waits for it
@@ -250,6 +254,15 @@ dispatch(const char* tok, char* send, char* recv, int* sig, int T, int H, int* c
     }
     t = sync_gtimer();
     if (threadIdx.x == 0) *st.signal = t;
+    if (kPath == ORDERED && reap_inline) {   // collect every QP's completions (data and signals)
+      for (int q = threadIdx.x; q < nqp; q += blockDim.x) {
+        auto qp = dl::ibgda_get_rc(1, q);
+        dl::ibgda_post_send(qp, dl::ld_na_relaxed(&qp->mvars.tx_wq.ready_head));
+        dl::nvshmemi_ibgda_quiet(1, q);
+      }
+      t = sync_gtimer();
+      if (threadIdx.x == 0) *st.reaped = t;
+    }
     if (st.span && threadIdx.x == 0) { atomicAdd(st.span, t - *st.span_start); *st.span_start = ~0ull; }
     if (st.reset) { if (threadIdx.x < R) counters[threadIdx.x] = 0; if (threadIdx.x == 0) *ctas_done = 0; }
   }
@@ -367,7 +380,7 @@ static std::vector<int> parse_list(const char* s) {
 }
 
 int main(int argc, char** argv) {
-  int H = 7168, path = LOCAL, iters = 20, qp_warp = 0, nq = 1, post_lane = 0, reps = 3; bool load = false, combine = false;
+  int H = 7168, path = LOCAL, iters = 20, qp_warp = 0, nq = 1, post_lane = 0, reps = 3; bool load = false, combine = false; int reap_inline = 0;
   double window_us = 500000;
   std::vector<int> d3_periods;   // --d3: dispatch periods (us), see filler()
   std::string d3_filler = "fma";   // --d3-filler fma | gemm-up | gemm-down
@@ -376,6 +389,7 @@ int main(int argc, char** argv) {
     if (!strcmp(argv[i], "--H")) H = atoi(argv[++i]);
     else if (!strcmp(argv[i], "--load")) load = true;
     else if (!strcmp(argv[i], "--combine")) combine = true;
+    else if (!strcmp(argv[i], "--reap-inline")) reap_inline = 1;
     else if (!strcmp(argv[i], "--iters")) iters = atoi(argv[++i]);
     else if (!strcmp(argv[i], "--tokens")) Ts = parse_list(argv[++i]);
     else if (!strcmp(argv[i], "--ctas")) CTAs = parse_list(argv[++i]);
@@ -390,6 +404,7 @@ int main(int argc, char** argv) {
   }
   setenv("CUDA_MODULE_LOADING", "EAGER", 1);   // no lazy kernel load while the receiver spins
   if (H > HMAX || H % 128) { fprintf(stderr, "H must be a multiple of 128 and <= %d\n", HMAX); exit(1); }
+  if (reap_inline && path != ORDERED) { fprintf(stderr, "--reap-inline is for --path ordered\n"); exit(1); }
   if (combine && !d3_periods.empty()) { fprintf(stderr, "--combine has no --d3 mode\n"); exit(1); }
   nvshmem_init();
   const int nqp = qp_warp ? (getenv("NVSHMEM_IBGDA_NUM_RC_PER_PE") ? atoi(getenv("NVSHMEM_IBGDA_NUM_RC_PER_PE")) : 2) : R * nq;
@@ -435,7 +450,7 @@ int main(int argc, char** argv) {
 
   Stamps st = {}; unsigned long long *arr, *sig_ts; int *counters, *ctas_done, *cnt_d, *missing, *timed_out;
   CK(cudaMalloc(&st.cta_start, MAXCTA * 8)); CK(cudaMalloc(&st.cta_loop, MAXCTA * 8)); CK(cudaMalloc(&st.cta_drain, MAXCTA * 8));
-  CK(cudaMalloc(&st.cta_exit, MAXCTA * 8)); CK(cudaMalloc(&st.signal, 8)); CK(cudaMalloc(&st.warp, MAXCTA * WARPS * NACT * 8));
+  CK(cudaMalloc(&st.cta_exit, MAXCTA * 8)); CK(cudaMalloc(&st.signal, 8)); CK(cudaMalloc(&st.reaped, 8)); CK(cudaMalloc(&st.warp, MAXCTA * WARPS * NACT * 8));
   CK(cudaMalloc(&st.post, (size_t)R * TMAX * 8)); CK(cudaMalloc(&st.who, (size_t)R * TMAX * 4)); CK(cudaMalloc(&st.wend, MAXCTA * WARPS * 8)); CK(cudaMalloc(&arr, (size_t)R * TMAX * 8)); CK(cudaMalloc(&sig_ts, 32 * 8));
   CK(cudaMalloc(&counters, R * 4)); CK(cudaMalloc(&ctas_done, 4)); CK(cudaMalloc(&cnt_d, R * 4));
   CK(cudaMalloc(&missing, 32 * 4)); CK(cudaMalloc(&timed_out, 4));
@@ -470,9 +485,9 @@ int main(int argc, char** argv) {
     // a dispatch spins there until the NIC drains (+300 SM-us per ordered dispatch at 128 x 7 KiB,
     // a cost of the harness, not of the path).
     auto launch = [&](int T, int ctas) {
-      if (path == LOCAL) dispatch<LOCAL><<<ctas, 256, SMEM_X, ds>>>(tok, send, recv_tx, sig_tx, T, H, counters, ctas_done, sx, qp_warp, nq, nqp, post_lane, nullptr);
-      else if (path == FLUSH) dispatch<FLUSH><<<ctas, 256, SMEM_X, ds>>>(tok, send, recv_tx, sig_tx, T, H, counters, ctas_done, sx, qp_warp, nq, nqp, post_lane, nullptr);
-      else dispatch<ORDERED><<<ctas, 256, SMEM_X, ds>>>(tok, send, recv_tx, sig_tx, T, H, counters, ctas_done, sx, qp_warp, nq, nqp, post_lane, nullptr);
+      if (path == LOCAL) dispatch<LOCAL><<<ctas, 256, SMEM_X, ds>>>(tok, send, recv_tx, sig_tx, T, H, counters, ctas_done, sx, qp_warp, nq, nqp, post_lane, nullptr, 0);
+      else if (path == FLUSH) dispatch<FLUSH><<<ctas, 256, SMEM_X, ds>>>(tok, send, recv_tx, sig_tx, T, H, counters, ctas_done, sx, qp_warp, nq, nqp, post_lane, nullptr, 0);
+      else dispatch<ORDERED><<<ctas, 256, SMEM_X, ds>>>(tok, send, recv_tx, sig_tx, T, H, counters, ctas_done, sx, qp_warp, nq, nqp, post_lane, nullptr, 0);
     };
     const bool gemm = d3_filler != "fma", up = d3_filler == "gemm-up";
     unsigned* gdone; CK(cudaMalloc(&gdone, 128)); CK(cudaMemset(gdone, 0, 128));
@@ -594,7 +609,7 @@ int main(int argc, char** argv) {
          combine ? "combine" : "dispatch", PATH_NAME[path], H, E, R, TOPK, (int)load, path == LOCAL ? "none" : qp_warp ? "per warp" : "per destination", path == LOCAL ? 0 : nqp, ns);
   printf("path,qp,nqp,H,load,tokens,ctas,run,msgs,event_us,loop_end_us,post_last_us,arr_first_us,arr_last_us,drain_end_us,signal_us,"
          "seen_us,oneway_med_us,oneway_p90_us,missing,cta_loop_us,cta_drain_us,cta_tail_us,"
-         "w_route_us,w_load_us,w_smem_us,w_stage_us,w_post_us,w_store_us\n");
+         "w_route_us,w_load_us,w_smem_us,w_stage_us,w_post_us,w_store_us%s\n", reap_inline ? ",reaped_us" : "");
   unsigned long long nonce = 0; int ready_val = 0;
   for (int T : Ts) {
     int cnt[R] = {0}, M = 0;
@@ -615,9 +630,9 @@ int main(int argc, char** argv) {
         for (long spin = 0; *(volatile int*)ready_h != ready_val; spin++)
           if (spin > 2000000000L) { fprintf(stderr, "receiver did not start\n"); return 1; }
         CK(cudaEventRecord(ea, ks));
-        if (path == LOCAL) dispatch<LOCAL><<<ctas, 256, WARPS * H, ks>>>(tok, send, recv_tx, sig_tx, TT, H, counters, ctas_done, st, qp_warp, nq, nqp, post_lane, cdest_d);
-        else if (path == FLUSH) dispatch<FLUSH><<<ctas, 256, WARPS * H, ks>>>(tok, send, recv_tx, sig_tx, TT, H, counters, ctas_done, st, qp_warp, nq, nqp, post_lane, cdest_d);
-        else dispatch<ORDERED><<<ctas, 256, WARPS * H, ks>>>(tok, send, recv_tx, sig_tx, TT, H, counters, ctas_done, st, qp_warp, nq, nqp, post_lane, cdest_d);
+        if (path == LOCAL) dispatch<LOCAL><<<ctas, 256, WARPS * H, ks>>>(tok, send, recv_tx, sig_tx, TT, H, counters, ctas_done, st, qp_warp, nq, nqp, post_lane, cdest_d, reap_inline);
+        else if (path == FLUSH) dispatch<FLUSH><<<ctas, 256, WARPS * H, ks>>>(tok, send, recv_tx, sig_tx, TT, H, counters, ctas_done, st, qp_warp, nq, nqp, post_lane, cdest_d, reap_inline);
+        else dispatch<ORDERED><<<ctas, 256, WARPS * H, ks>>>(tok, send, recv_tx, sig_tx, TT, H, counters, ctas_done, st, qp_warp, nq, nqp, post_lane, cdest_d, reap_inline);
         CK(cudaEventRecord(eb, ks));
         CK(cudaStreamSynchronize(ks)); CK(cudaStreamSynchronize(rs)); CK(cudaGetLastError());
         if (path != LOCAL) { reap<<<1, 32, 0, ks>>>(nqp); CK(cudaStreamSynchronize(ks)); }
@@ -629,10 +644,11 @@ int main(int argc, char** argv) {
         // copy the stamps back and reduce them
         std::vector<unsigned long long> cs(ctas), cl(ctas), cd(ctas), ce(ctas), wa((size_t)ctas * WARPS * NACT),
             P((size_t)R * TT), A((size_t)R * TT), Z(ns);
-        unsigned long long sg; int miss[32];
+        unsigned long long sg, rp = 0; int miss[32];
         CK(cudaMemcpy(cs.data(), st.cta_start, ctas * 8, cudaMemcpyDeviceToHost)); CK(cudaMemcpy(cl.data(), st.cta_loop, ctas * 8, cudaMemcpyDeviceToHost));
         CK(cudaMemcpy(cd.data(), st.cta_drain, ctas * 8, cudaMemcpyDeviceToHost)); CK(cudaMemcpy(ce.data(), st.cta_exit, ctas * 8, cudaMemcpyDeviceToHost));
         CK(cudaMemcpy(wa.data(), st.warp, wa.size() * 8, cudaMemcpyDeviceToHost)); CK(cudaMemcpy(&sg, st.signal, 8, cudaMemcpyDeviceToHost));
+        if (reap_inline) CK(cudaMemcpy(&rp, st.reaped, 8, cudaMemcpyDeviceToHost));
         CK(cudaMemcpy(P.data(), st.post, P.size() * 8, cudaMemcpyDeviceToHost)); CK(cudaMemcpy(A.data(), arr, A.size() * 8, cudaMemcpyDeviceToHost));
         CK(cudaMemcpy(Z.data(), sig_ts, ns * 8, cudaMemcpyDeviceToHost)); CK(cudaMemcpy(miss, missing, ns * 4, cudaMemcpyDeviceToHost));
         float ev; CK(cudaEventElapsedTime(&ev, ea, eb));
@@ -658,12 +674,14 @@ int main(int argc, char** argv) {
         for (int c = 0; c < ctas; c++) { c_loop += (cl[c] - cs[c]) / 1e3; c_drain += (cd[c] - cl[c]) / 1e3; c_tail += (ce[c] - cd[c]) / 1e3; }
         for (size_t i = 0; i < wa.size(); i++) wsum[i % NACT] += wa[i] / 1e3;
         int misses = 0; for (int j = 0; j < ns; j++) misses += miss[j];
-        printf("%s,%s,%d,%d,%d,%d,%d,%d,%d,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%d,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f\n",
+        printf("%s,%s,%d,%d,%d,%d,%d,%d,%d,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%d,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f",
                (combine ? std::string("c-") : std::string()).append(PATH_NAME[path]).c_str(), path == LOCAL ? "none" : qp_warp ? (post_lane ? "warpL" : "warp") : (post_lane ? "destL" : "dest"), path == LOCAL ? 0 : nqp, H, (int)load, T, ctas, it - 3, M, ev * 1e3,
                us(*std::max_element(cl.begin(), cl.end())), us(p_last), us(a_first), us(a_last),
                us(*std::max_element(cd.begin(), cd.end())), us(sg), us(*std::max_element(Z.begin(), Z.end())),
                ow[ow.size() / 2], ow[ow.size() * 9 / 10], misses, c_loop, c_drain, c_tail,
                wsum[A_ROUTE], wsum[A_LOAD], wsum[A_SMEM], wsum[A_STAGE], wsum[A_POST], wsum[A_STORE]);
+        if (reap_inline) printf(",%.2f", us(rp));
+        printf("\n");
         fflush(stdout);
       }
     }

@@ -54,6 +54,7 @@ cite the same files.
 | Table 1: work per token, SMs held | `m2-device-state/results.md` sections 3.3 and 5; `m3-sm-share/deepep-0sm.md` | source |
 | Table 1: GPU state at EP256 | `m2-device-state/totals.out` | local (`totals.py`) |
 | Fig 3a (`loom-costs`): dispatch initiation (sender busy until it has issued the signal), 7 KiB, 1/16/128 tokens | `m5-rdma-init/steve-cx7/bd_v2/dispatch_bd_t3_*.csv` -> `summary_t3.csv` | GPU [`fig3`], `summarize_bd.py` |
+| Fig 3a/b hatched: completions an ordered sender collects later | `bd_v2/{dispatch,combine}_bd_t3reap_*.csv` -> `summary_t3reap.csv`, `summary_combine_t3reap.csv` | GPU [`fig3`] (`dispatch_bd --reap-inline`) |
 | Fig 3b: combine initiation, 14 KiB | `bd_v2/combine_bd_t3_*.csv` -> `summary_combine_t3.csv` | GPU [`fig3`] (`dispatch_bd --combine`) |
 | Fig 3a/b dashed line: payload through the NIC | message counts from the runs above x size / the NIC -> GPU-memory rate | the rate (14.6 GB/s on steve) is derived from `m5-rdma-init/steve-cx7/dispatch_sweep_all.csv`, the fastest 4096-token dispatch (`plot_motivation.nic_to_hbm_gbps`) |
 | Fig 3c: transport state per GPU, EP16-EP1024 (queue pairs + pinned staging buffers) | `m2-device-state/totals.out` (struct sizes from `sizes.out`), `m2-device-state/buffers.out` | local (`totals.py`, `run_sizes.sh`, `buffers.py`) |

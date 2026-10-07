@@ -31,6 +31,8 @@ python3 summarize_bd.py $(ls bd_v2/dispatch_bd_*.csv | grep -v -e _t1_ -e _t3_) 
 python3 summarize_bd.py bd_v2/dispatch_bd_t1_*.csv --csv bd_v2/summary_t1.csv > /dev/null
 python3 summarize_bd.py bd_v2/dispatch_bd_t3_*.csv --csv bd_v2/summary_t3.csv > /dev/null
 python3 summarize_bd.py bd_v2/combine_bd_t3_*.csv --csv bd_v2/summary_combine_t3.csv > /dev/null
+python3 summarize_bd.py bd_v2/dispatch_bd_t3reap_*.csv --csv bd_v2/summary_t3reap.csv > /dev/null
+python3 summarize_bd.py bd_v2/combine_bd_t3reap_*.csv --csv bd_v2/summary_combine_t3reap.csv > /dev/null
 python3 summarize_d3.py bd_v2/d3gemm_*.csv --csv bd_v2/d3gemm_summary.csv > bd_v2/d3gemm_summary.txt
 
 if [ "${1:-}" = --traces ]; then

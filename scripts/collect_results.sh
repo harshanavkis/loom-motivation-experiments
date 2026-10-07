@@ -11,7 +11,7 @@ RS=(rsync -ai --ignore-missing-args "$@")
 get() { local dst=$1; shift; local src=(); for f in "$@"; do src+=("$HOST:loom-experiments/$f"); done; "${RS[@]}" "${src[@]}" "$dst/"; }
 
 # Fig 3a/b and the dispatch breakdown sweeps (raw CSVs; summaries are rebuilt by scripts/analyze_local.sh)
-get $CX/bd_v2 'gpu-posted/bd_v2/*.csv' 'gpu-posted/bd_v2/*_t[13]_*.err'   # stderr kept for the Fig 3 runs only
+get $CX/bd_v2 'gpu-posted/bd_v2/*.csv' 'gpu-posted/bd_v2/*_t[13]_*.err' 'gpu-posted/bd_v2/*_t3reap_*.err'   # stderr kept for the Fig 3 runs only
 # text numbers (Sections 1-2)
 get $CX nvshmem-loopback/msgrate_steve.csv 'nvshmem-loopback/put_lat_steve*.txt' \
         'gpu-posted/deepep_post_*.csv' 'gpu-posted/dispatch_ibgda_block_H*.csv' paper/dispatch_sweep_all.csv \
