@@ -1,0 +1,126 @@
+DeepEP communication-buffer memory per GPU (bytes requested from the allocator)
+hidden=7168, top-8, experts=max(256, EP), 8 GPUs per NVLink domain, FP8 dispatch, BF16 combine
+MiB = 2^20 B, GiB = 2^30 B. 'only-RDMA (a)' = send/staging bytes the NIC reads as RDMA source;
+a load/store fabric stores directly into the peer's receive buffer (as DeepEP does for NVLink peers).
+
+======================================================================================================================
+DeepEP V1 low-latency (decode), NVSHMEM IBGDA, 128 tokens/rank (config.hpp:122-188; docs/legacy.md:246-256)
+======================================================================================================================
+   EP  (a) send/staging   (b) RDMA recv  (c) NVLink side  (d) signal/meta         total  NIC-registered  only-RDMA (a)
+    8         910.0 MiB       910.0 MiB          0.0 MiB          0.0 MiB      1.78 GiB        1.78 GiB      910.0 MiB
+   16         910.0 MiB       910.0 MiB          0.0 MiB          0.0 MiB      1.78 GiB        1.78 GiB      910.0 MiB
+  128         910.0 MiB       910.0 MiB          0.0 MiB          0.0 MiB      1.78 GiB        1.78 GiB      910.0 MiB
+  256         910.0 MiB       910.0 MiB          0.0 MiB          0.0 MiB      1.78 GiB        1.78 GiB      910.0 MiB
+  512          1.78 GiB        1.78 GiB          0.0 MiB          0.0 MiB      3.55 GiB        3.55 GiB       1.78 GiB
+ 1024          3.55 GiB        3.55 GiB          0.0 MiB          0.0 MiB      7.11 GiB        7.11 GiB       3.55 GiB
+  per-msg bytes: dispatch 14352 B (BF16-sized, config.hpp:143), combine 14560 B (config.hpp:144)
+  send buffer (each of 2 odd/even) = max(dispatch_send, combine_send); experts=256:
+    dispatch_send = 128 * 14352 = 1,837,056 B; combine_send = 256*128*14560 = 477,102,080 B
+  recv buffer (each of 2) = max(dispatch_recv 470,286,336, combine_recv 477,102,080) B
+  EP16: 2*send = 954,204,160 B (954.2 MB), 2*recv = 954,204,160 B, signals+pad = 2,176 B, hint = 1,908,410,496 B (1.908 GB); NVSHMEM heap backing (512 MiB chunks) >= 2.00 GiB
+  EP256: 2*send = 954,204,160 B (954.2 MB), 2*recv = 954,204,160 B, signals+pad = 2,176 B, hint = 1,908,410,496 B (1.908 GB); NVSHMEM heap backing (512 MiB chunks) >= 2.00 GiB
+  EP512: 2*send = 1,908,408,320 B (1908.4 MB), 2*recv = 1,908,408,320 B, signals+pad = 4,224 B, hint = 3,816,820,864 B (3.817 GB); NVSHMEM heap backing (512 MiB chunks) >= 4.00 GiB
+  EP1024: 2*send = 3,816,816,640 B (3816.8 MB), 2*recv = 3,816,816,640 B, signals+pad = 8,320 B, hint = 7,633,641,600 B (7.634 GB); NVSHMEM heap backing (512 MiB chunks) >= 7.50 GiB
+  experts = 256 for EP<=256 so V1 LL size is independent of EP there; it scales with experts beyond.
+  Of (a), 2*dispatch_send = 3,674,112 B is the FP8-cast copy that is also read for NVLink peers (internode_ll.cu:259-270);
+  the rest is combine staging used only for non-P2P peers (internode_ll.cu:843-853,910-911).
+
+======================================================================================================================
+DeepEP V1 normal (training/prefill), NVSHMEM, num_sms=24, hint = max(dispatch, combine config) (config.hpp:53-100; legacy.py:233-290; docs/legacy.md:136-147)
+======================================================================================================================
+  (sizes do not depend on tokens/rank; ring buffers of num_max_*_chunked_recv_tokens per channel)
+   EP  (a) send/staging   (b) RDMA recv  (c) NVLink side  (d) signal/meta         total  NIC-registered  only-RDMA (a)
+    8           0.0 MiB         0.0 MiB        384.2 MiB          0.0 MiB     384.2 MiB         0.0 MiB        0.0 MiB
+   16          52.5 MiB        52.5 MiB        432.2 MiB          0.1 MiB     537.4 MiB       105.2 MiB       52.5 MiB
+  128         396.2 MiB       396.2 MiB        840.4 MiB          0.8 MiB      1.60 GiB       793.2 MiB      396.2 MiB
+  160         495.2 MiB       495.2 MiB         1.06 GiB          1.0 MiB      2.02 GiB       991.5 MiB      495.2 MiB
+  EP16: RDMA hint 110,265,216 B = send half 55,077,120 + recv half 55,077,120 + meta 3,456 + int4 slack 107,520 + pad 0; NVL hint 453,208,704 B; NVSHMEM heap backing >= 512.0 MiB
+  EP128: RDMA hint 831,716,352 B = send half 415,438,848 + recv half 415,438,848 + meta 27,648 + int4 slack 811,008 + pad 0; NVL hint 881,247,360 B; NVSHMEM heap backing >= 1.00 GiB
+  (a)/(b) per-token terms use kNumMaxTopK=128, kNumMaxScales=128, int64 topk idx (config.hpp:82-83):
+  real tokens use far less of each slot, but the allocation is what is pinned/registered.
+  V1 normal supports at most 20 nodes (compiled.cuh:6; legacy.py config_map up to 160): EP256+ n/a.
+  NVL buffer: cudaMalloc + CUDA IPC (buffer.hpp:132-136), NOT NIC-registered. Workspace 32 MiB cudaMalloc (buffer.hpp:149) not counted.
+  with Buffer.num_sms default 20 (legacy.py:31): EP16 total 447.8 MiB, NIC 87.6 MiB, (a) 43.8 MiB; EP128 total 1.33 GiB, NIC 661.0 MiB, (a) 330.2 MiB
+
+======================================================================================================================
+DeepEP V2.5 EPBuffer, NCCL GIN, hybrid mode (default), allow_multiple_reduction, FP8 dispatch, num_topk=8, 128 tokens/rank (decode)
+======================================================================================================================
+  (a)/(b)/(c) = the phase whose layout sets the buffer size (dispatch and combine reuse the same bytes, ep.hpp:282); (d) = 16 MiB workspace
+   EP  (a) send/staging   (b) RDMA recv  (c) NVLink side  (d) signal/meta         total  NIC-registered  only-RDMA (a)
+    8           0.0 MiB         0.0 MiB         14.1 MiB         16.0 MiB      32.0 MiB        32.0 MiB        0.0 MiB
+   16          38.7 MiB         3.5 MiB         28.1 MiB         16.0 MiB      88.0 MiB        88.0 MiB       38.7 MiB
+  128         309.4 MiB        14.1 MiB        225.0 MiB         16.0 MiB     566.0 MiB       566.0 MiB      309.4 MiB
+  256         618.8 MiB        14.1 MiB        450.0 MiB         16.0 MiB      1.07 GiB        1.07 GiB      618.8 MiB
+  512          1.21 GiB        14.1 MiB        900.0 MiB         16.0 MiB      2.12 GiB        2.12 GiB       1.21 GiB
+ 1024          2.42 GiB        14.1 MiB         1.76 GiB         16.0 MiB      4.21 GiB        4.21 GiB       2.42 GiB
+  per phase (dispatch | combine), S=scale-out ranks (nodes), U=scale-up ranks (8):
+   EP8     S=1   dispatch[tok 8192 B]: send      0.0 MiB rdma-recv      0.0 MiB nvl-recv      8.0 MiB =      8.0 MiB | combine[tok 14400 B]: send      0.0 MiB rdma-recv      0.0 MiB nvl-recv     14.1 MiB =     14.1 MiB
+   EP16    S=2   dispatch[tok 8192 B]: send      1.0 MiB rdma-recv     22.0 MiB nvl-recv     16.0 MiB =     39.0 MiB | combine[tok 14400 B]: send     38.7 MiB rdma-recv      3.5 MiB nvl-recv     28.1 MiB =     70.3 MiB
+   EP128   S=16  dispatch[tok 8192 B]: send      1.0 MiB rdma-recv    176.0 MiB nvl-recv    128.0 MiB =    305.0 MiB | combine[tok 14400 B]: send    309.4 MiB rdma-recv     14.1 MiB nvl-recv    225.0 MiB =    548.4 MiB
+   EP256   S=32  dispatch[tok 8192 B]: send      1.0 MiB rdma-recv    352.0 MiB nvl-recv    256.0 MiB =    609.0 MiB | combine[tok 14400 B]: send    618.8 MiB rdma-recv     14.1 MiB nvl-recv    450.0 MiB =     1.06 GiB
+   EP512   S=64  dispatch[tok 8192 B]: send      1.0 MiB rdma-recv    704.0 MiB nvl-recv    512.0 MiB =     1.19 GiB | combine[tok 14400 B]: send     1.21 GiB rdma-recv     14.1 MiB nvl-recv    900.0 MiB =     2.10 GiB
+   EP1024  S=128 dispatch[tok 8192 B]: send      1.0 MiB rdma-recv     1.38 GiB nvl-recv     1.00 GiB =     2.38 GiB | combine[tok 14400 B]: send     2.42 GiB rdma-recv     14.1 MiB nvl-recv     1.76 GiB =     4.19 GiB
+  allocation attributable to RDMA (buffer minus the same formula with the regions removed):
+   EP8     buffer     16.0 MiB; strict (send/staging only)      0.0 MiB; broad (+ 2-hop RDMA landing zone)      0.0 MiB; flat load/store counterfactual (direct, is_scaleup_nvlink) buffer     16.0 MiB (gap      0.0 MiB)
+   EP16    buffer     72.0 MiB; strict (send/staging only)     34.0 MiB; broad (+ 2-hop RDMA landing zone)     42.0 MiB; flat load/store counterfactual (direct, is_scaleup_nvlink) buffer     16.0 MiB (gap     56.0 MiB)
+   EP128   buffer    550.0 MiB; strict (send/staging only)    246.0 MiB; broad (+ 2-hop RDMA landing zone)    324.0 MiB; flat load/store counterfactual (direct, is_scaleup_nvlink) buffer    128.0 MiB (gap    422.0 MiB)
+   EP256   buffer     1.06 GiB; strict (send/staging only)    476.0 MiB; broad (+ 2-hop RDMA landing zone)    634.0 MiB; flat load/store counterfactual (direct, is_scaleup_nvlink) buffer    256.0 MiB (gap    828.0 MiB)
+   EP512   buffer     2.10 GiB; strict (send/staging only)    936.0 MiB; broad (+ 2-hop RDMA landing zone)     1.22 GiB; flat load/store counterfactual (direct, is_scaleup_nvlink) buffer    512.0 MiB (gap     1.60 GiB)
+   EP1024  buffer     4.19 GiB; strict (send/staging only)     1.81 GiB; broad (+ 2-hop RDMA landing zone)     2.43 GiB; flat load/store counterfactual (direct, is_scaleup_nvlink) buffer     1.00 GiB (gap     3.19 GiB)
+
+======================================================================================================================
+DeepEP V2.5 EPBuffer, NCCL GIN, hybrid mode (default), allow_multiple_reduction, FP8 dispatch, num_topk=8, 4096 tokens/rank (training/prefill)
+======================================================================================================================
+  (a)/(b)/(c) = the phase whose layout sets the buffer size (dispatch and combine reuse the same bytes, ep.hpp:282); (d) = 16 MiB workspace
+   EP  (a) send/staging   (b) RDMA recv  (c) NVLink side  (d) signal/meta         total  NIC-registered  only-RDMA (a)
+    8           0.0 MiB         0.0 MiB        450.0 MiB         16.0 MiB     466.0 MiB       466.0 MiB        0.0 MiB
+   16         147.7 MiB       112.5 MiB        900.0 MiB         16.0 MiB      1.15 GiB        1.15 GiB      147.7 MiB
+  128          1.15 GiB       450.0 MiB         7.03 GiB         16.0 MiB      8.64 GiB        8.64 GiB       1.15 GiB
+  256          2.31 GiB       450.0 MiB        14.06 GiB         16.0 MiB     16.83 GiB       16.83 GiB       2.31 GiB
+  512          4.61 GiB       450.0 MiB        28.12 GiB         16.0 MiB     33.20 GiB       33.20 GiB       4.61 GiB
+ 1024          9.23 GiB       450.0 MiB        56.25 GiB         16.0 MiB     65.93 GiB       65.93 GiB       9.23 GiB
+  per phase (dispatch | combine), S=scale-out ranks (nodes), U=scale-up ranks (8):
+   EP8     S=1   dispatch[tok 8192 B]: send      0.0 MiB rdma-recv      0.0 MiB nvl-recv    256.0 MiB =    256.0 MiB | combine[tok 14400 B]: send      0.0 MiB rdma-recv      0.0 MiB nvl-recv    450.0 MiB =    450.0 MiB
+   EP16    S=2   dispatch[tok 8192 B]: send     32.0 MiB rdma-recv     84.0 MiB nvl-recv    512.0 MiB =    628.0 MiB | combine[tok 14400 B]: send    147.7 MiB rdma-recv    112.5 MiB nvl-recv    900.0 MiB =     1.13 GiB
+   EP128   S=16  dispatch[tok 8192 B]: send     32.0 MiB rdma-recv    672.0 MiB nvl-recv     4.00 GiB =     4.69 GiB | combine[tok 14400 B]: send     1.15 GiB rdma-recv    450.0 MiB nvl-recv     7.03 GiB =     8.62 GiB
+   EP256   S=32  dispatch[tok 8192 B]: send     32.0 MiB rdma-recv     1.31 GiB nvl-recv     8.00 GiB =     9.34 GiB | combine[tok 14400 B]: send     2.31 GiB rdma-recv    450.0 MiB nvl-recv    14.06 GiB =    16.81 GiB
+   EP512   S=64  dispatch[tok 8192 B]: send     32.0 MiB rdma-recv     2.62 GiB nvl-recv    16.00 GiB =    18.66 GiB | combine[tok 14400 B]: send     4.61 GiB rdma-recv    450.0 MiB nvl-recv    28.12 GiB =    33.18 GiB
+   EP1024  S=128 dispatch[tok 8192 B]: send     32.0 MiB rdma-recv     5.25 GiB nvl-recv    32.00 GiB =    37.28 GiB | combine[tok 14400 B]: send     9.23 GiB rdma-recv    450.0 MiB nvl-recv    56.25 GiB =    65.92 GiB
+  allocation attributable to RDMA (buffer minus the same formula with the regions removed):
+   EP8     buffer    450.0 MiB; strict (send/staging only)      0.0 MiB; broad (+ 2-hop RDMA landing zone)      0.0 MiB; flat load/store counterfactual (direct, is_scaleup_nvlink) buffer    450.0 MiB (gap      0.0 MiB)
+   EP16    buffer     1.13 GiB; strict (send/staging only)    148.0 MiB; broad (+ 2-hop RDMA landing zone)    262.0 MiB; flat load/store counterfactual (direct, is_scaleup_nvlink) buffer    512.0 MiB (gap    650.0 MiB)
+   EP128   buffer     8.62 GiB; strict (send/staging only)     1.15 GiB; broad (+ 2-hop RDMA landing zone)     1.59 GiB; flat load/store counterfactual (direct, is_scaleup_nvlink) buffer     4.00 GiB (gap     4.62 GiB)
+   EP256   buffer    16.81 GiB; strict (send/staging only)     2.31 GiB; broad (+ 2-hop RDMA landing zone)     2.75 GiB; flat load/store counterfactual (direct, is_scaleup_nvlink) buffer     8.00 GiB (gap     8.81 GiB)
+   EP512   buffer    33.18 GiB; strict (send/staging only)     4.62 GiB; broad (+ 2-hop RDMA landing zone)     5.05 GiB; flat load/store counterfactual (direct, is_scaleup_nvlink) buffer    16.00 GiB (gap    17.18 GiB)
+   EP1024  buffer    65.92 GiB; strict (send/staging only)     9.23 GiB; broad (+ 2-hop RDMA landing zone)     9.67 GiB; flat load/store counterfactual (direct, is_scaleup_nvlink) buffer    32.00 GiB (gap    33.92 GiB)
+
+  workspace: sizeof(EPSignals) = 15,831,168 B -> aligned 16,777,216 B (workspace.cuh:9-22, ep.hpp:70-71); constant, independent of EP/tokens:
+     barrier_signals                            64 B  written by nvl
+     notify_reduction                       24,576 B  written by other
+     scaleup_rank_expert_count              49,152 B  written by nvl
+     scaleup_atomic_sender_count             4,096 B  written by nvl
+     scaleout_rank_expert_count             24,576 B  written by rdma
+     scaleout_channel_signaled_tail     10,485,760 B  written by rdma
+     channel_scaleup_tail                5,242,880 B  written by nvl
+     lb_chunk_idx_counter                        4 B  written by other
+
+======================================================================================================================
+V2.5 sensitivity
+======================================================================================================================
+config                                                                   EP16        EP128        EP256       EP1024
+T=8192 (V2 README perf: 8K tokens), hybrid total                     2.25 GiB    16.99 GiB    33.09 GiB   129.65 GiB
+   of which (a) send/staging                                        260.2 MiB     2.03 GiB     4.06 GiB    16.26 GiB
+T=4096, num_topk=0 (sized as 32; tests/ep/test_ep.py:531-539) total     1.16 GiB     9.20 GiB    18.38 GiB    68.15 GiB
+   of which (a) send/staging                                        149.6 MiB     1.17 GiB     2.34 GiB     9.35 GiB
+T=4096, BF16 dispatch (use_fp8_dispatch=False default) total         1.15 GiB     8.64 GiB    16.83 GiB    65.93 GiB
+   of which (a) send/staging                                        147.7 MiB     1.15 GiB     2.31 GiB     9.23 GiB
+T=4096, allow_multiple_reduction=False total                         2.49 GiB    16.71 GiB    32.97 GiB   130.53 GiB
+   of which (a) send/staging                                         1.15 GiB     9.23 GiB    18.46 GiB    73.83 GiB
+T=4096, allow_hybrid_mode=False (direct RDMA, FULL conn.) total      1.33 GiB     7.49 GiB    14.52 GiB    56.71 GiB
+   of which (a) send/staging                                        900.0 MiB     7.03 GiB    14.06 GiB    56.25 GiB
+T=128,  allow_hybrid_mode=False (direct RDMA, FULL conn.) total      60.0 MiB    256.0 MiB    482.0 MiB     1.79 GiB
+   of which (a) send/staging                                         28.1 MiB    225.0 MiB    450.0 MiB     1.76 GiB
+T=4096, flat load/store domain (direct, is_scaleup_nvlink) total    528.0 MiB     4.02 GiB     8.02 GiB    32.02 GiB
+   of which (a) send/staging                                          0.0 MiB      0.0 MiB      0.0 MiB      0.0 MiB
+T=128,  flat load/store domain (direct, is_scaleup_nvlink) total     32.0 MiB    144.0 MiB    272.0 MiB     1.02 GiB
+   of which (a) send/staging                                          0.0 MiB      0.0 MiB      0.0 MiB      0.0 MiB

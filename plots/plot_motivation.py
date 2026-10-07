@@ -262,6 +262,25 @@ def transport_state():
     return pd.DataFrame(rows, columns=['series', 'ep', 'qps', 'mib'])
 
 
+def staging_buffers():
+    """Pinned send/staging buffers per GPU (GiB) that exist only because peers are reached by RDMA (the NIC
+    reads the payload from registered memory): column (a) of m2-device-state/buffers.out, the strict reading
+    (receive buffers, two-hop landing zones and V2.5's hierarchy inflation are left out). V1 LL and V2.5 at
+    128 tokens per rank (decode), V1 normal is token-independent."""
+    sec = {'DeepEP V1 low-latency': 'v1-ll', 'DeepEP V1 normal': 'v1-normal'}
+    rows, cur = [], None
+    for line in open(os.path.join(M2, 'buffers.out')):
+        if line.startswith('DeepEP '):
+            cur = next((v for k, v in sec.items() if line.startswith(k)), None)
+            if line.startswith('DeepEP V2.5') and '128 tokens/rank' in line:
+                cur = 'v2.5'
+            continue
+        m = re.match(r'^\s+(\d+)\s+([\d.]+) (MiB|GiB)', line)
+        if cur and m:
+            rows.append([cur, int(m.group(1)), float(m.group(2)) / (1024 if m.group(3) == 'MiB' else 1)])
+    return pd.DataFrame(rows, columns=['series', 'ep', 'staging_gib'])
+
+
 def dispatch_rate():
     """--d3 --d3-filler gemm-up interval sweep (bd_v2/d3rate_<variant>_H*.csv): per (path, H, tokens,
     requested period) the medians over 3 repetitions of the ACHIEVED rate (dispatches / measured
@@ -430,37 +449,42 @@ def msgs_per_dispatch(kind, T):
 
 
 def panel_transport_state(ax, fs, title):
-    """HBM each GPU holds for GPU-initiated RDMA transport state vs EP size (m2-device-state/totals.out);
-    labels: QPs, each with a NIC doorbell page mapped into the GPU. 256 experts up to EP256, 512 / 1024
-    experts at EP512 / EP1024 (EP cannot exceed the expert count). DeepEP V1 normal runs on at most 20
-    nodes (EP160), so it has no bar beyond EP128."""
+    """GPU memory each GPU holds for GPU-initiated RDMA vs EP size, stacked: queue-pair state (rings, doorbell
+    records, descriptors; m2-device-state/totals.out) and the pinned staging buffers the NIC reads payloads
+    from (buffers.out, decode: 128 tokens per rank). Labels: QPs, each with a NIC doorbell page mapped into the
+    GPU. 256 experts up to EP256, 512 / 1024 at EP512 / EP1024; DeepEP V1 normal runs on at most EP160."""
     d = transport_state()
+    b = staging_buffers()
     eps = [16, 128, 256, 512, 1024]
-    series = (('v1-ll', 'DeepEP V1 low-latency', 'lightskyblue', ''),
-              ('v1-normal', 'DeepEP V1 normal (max EP160)', 'white', '//'),
-              ('v2.5', 'DeepEP V2.5', 'tab:blue', ''))
+    series = (('v1-ll', 'DeepEP V1 low-latency', 'lightskyblue'),
+              ('v1-normal', 'DeepEP V1 normal (max EP160)', 'white'),
+              ('v2.5', 'DeepEP V2.5', 'tab:blue'))
     w = 0.27
-    for j, (k, lab, color, hatch) in enumerate(series):
+    for j, (k, lab, color) in enumerate(series):
         s_ = d[d.series == k].set_index('ep')
-        have = [e for e in eps if e in s_.index]
+        st = b[b.series == k].set_index('ep')
+        have = [e for e in eps if e in s_.index and e in st.index]
         xs = np.array([eps.index(e) for e in have]) + (j - 1) * w
-        ax.bar(xs, [s_.loc[e, 'mib'] / 1024 for e in have], w, color=color, hatch=hatch, edgecolor='black',
-               linewidth=1, label=lab)
-        for xi, e in zip(xs, have):
-            ax.text(xi, s_.loc[e, 'mib'] / 1024 + 0.04, f"{s_.loc[e, 'qps']:,}", ha='center', va='bottom', rotation=90,
+        q = np.array([s_.loc[e, 'mib'] / 1024 for e in have])
+        g = np.array([st.loc[e, 'staging_gib'] for e in have])
+        ax.bar(xs, q, w, color=color, edgecolor='black', linewidth=1, label=lab)
+        ax.bar(xs, g, w, bottom=q, color=color, hatch='xx', edgecolor='black', linewidth=1, alpha=0.55)
+        for xi, e, top in zip(xs, have, q + g):
+            ax.text(xi, top + 0.1, f"{s_.loc[e, 'qps']:,}", ha='center', va='bottom', rotation=90,
                     fontsize=fs['annotation'] - 12)
+    ax.bar([0], [0], 0, color='white', hatch='xx', edgecolor='black', label='+ pinned staging buffers')
     ax.set_xticks(range(len(eps)))
     ax.set_xticklabels([f'{e}' for e in eps], fontsize=fs['tick'])
     ax.tick_params(axis='y', labelsize=fs['tick'])
-    ax.set_ylim(0, 4.6)           # headroom so the legend sits above the bars
-    ax.set_yticks([0, 1, 2])
+    ax.set_ylim(0, 11)            # headroom so the legend sits above the bars
+    ax.set_yticks([0, 2, 4])
     ax.set_xlabel('GPUs in the expert-parallel group', fontsize=fs['label'])
-    ax.set_ylabel('HBM per GPU [GiB]', fontsize=fs['label'])
+    ax.set_ylabel('Memory per GPU [GiB]', fontsize=fs['label'] - 6)
     ax.grid(True, alpha=0.3, axis='y')
     ax.legend(loc='upper left', ncol=1, frameon=True, fontsize=fs['legend'] - 8, handlelength=1.4,
               labelspacing=0.3, borderpad=0.3)
-    ax.text(0.03, 0.5, 'Loom: no queue pairs on the GPU', transform=ax.transAxes, ha='left', va='center',
-            fontsize=fs['legend'] - 8, color='#a04040', bbox=dict(facecolor=LOOMGONE, edgecolor='#a04040', boxstyle='round,pad=0.3'))
+    ax.text(0.03, 0.47, 'Loom: no queue pairs,\nno staging on the GPU', transform=ax.transAxes, ha='left', va='center',
+            fontsize=fs['legend'] - 10, color='#a04040', bbox=dict(facecolor=LOOMGONE, edgecolor='#a04040', boxstyle='round,pad=0.3'))
     top_label(ax, title, fs['annotation'])
 
 
@@ -555,6 +579,8 @@ def main():
     print('message rate (text only):', m.groupby('transport').mops.max().round(1).to_dict())
     print('transport state (Fig 3c):')
     print(transport_state().to_string(index=False))
+    print('pinned staging buffers (Fig 3c, hatched):')
+    print(staging_buffers().to_string(index=False))
     print(dispatch_rate().sort_values(['H', 'tokens', 'path', 'rate_per_ms']).to_string(index=False))
 
 
