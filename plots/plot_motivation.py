@@ -372,37 +372,38 @@ BD_SEGS = (('send', 'send loop', PASTEL[0], ''),
 
 
 def panel_breakdown(axes, fs, title, kind, H, tokens=(1, 16, 128), legend=True):
-    """Where the time of one dispatch (or combine) goes, until the receiver sees the signal, stacked,
-    one sub-axis per batch size; dashed: the payload's time through the NIC at the testbed's NIC -> HBM
-    rate. On the remote bars, 'waiting for own writes' (flush) and 'signal in flight' (ordered) are
-    the NIC's work."""
+    """Initiation: how long the SENDER of one dispatch (or combine) is busy until it is done, i.e. has issued
+    the arrival signal (send loop + waiting for its own writes + issuing the signal), stacked, one sub-axis per
+    batch size (owner 2026-10-07: show initiation, not delivery; the receiver-side 'signal in flight' is left
+    out and printed for the text). Dashed: the payload's time through the NIC, what a flushing sender waits
+    out. Narrow bars: what a remote sender spends beyond the local sender (labels: remote / local). The
+    ordered path reaps its completions after the dispatch (not in its bar)."""
     d = breakdown_t3(kind)
+    d = d.assign(sender_us=d.send + d.drain + d.signal)
     x = np.arange(len(BD_PATHS))
     for ax, T in zip(axes, tokens):
         t = d[(d.H == H) & (d.tokens == T)].set_index('path')
         bottom = np.zeros(len(x))
-        for col, lab, color, hatch in BD_SEGS:
+        for col, lab, color, hatch in BD_SEGS[:3]:
             vals = np.array([t.loc[p, col] for p in BD_PATHS])
             ax.bar(x, vals, 0.65, bottom=bottom, color=color, hatch=hatch, edgecolor='black', linewidth=1, label=lab)
             bottom += vals
-        top = max(t.seen_us)
+        top = max(t.sender_us)
         for i, p in enumerate(BD_PATHS):
-            ax.text(x[i], t.loc[p, 'seen_us'] + 0.04 * top, f"{t.loc[p, 'seen_us']:.0f}", ha='center',
+            ax.text(x[i], t.loc[p, 'sender_us'] + 0.04 * top, f"{t.loc[p, 'sender_us']:.0f}", ha='center',
                     va='bottom', fontsize=fs['annotation'] - 6)
-        link_us = nic_payload_us(kind, H, T)   # remote bars only
-        ax.plot([0.6, 2.4], [link_us, link_us], color='black', linewidth=4, linestyle='--', label='payload through NIC')
-        # opportunity: the part of a remote bar above max(local, payload through the NIC), i.e. what only the
-        # remote branch adds beyond the link time every transport pays (an ideal bound: it leaves out the
-        # forwarding time of whatever replaces the NIC)
-        floor = max(t.loc['local', 'seen_us'], link_us)
+        link_us = nic_payload_us(kind, H, T)
+        if link_us < top * 1.3:
+            ax.plot([0.6, 2.4], [link_us, link_us], color='black', linewidth=4, linestyle='--', label='payload through NIC')
+        floor = t.loc['local', 'sender_us']
         for i, p in enumerate(BD_PATHS):
             if p == 'local':
                 continue
-            extra = t.loc[p, 'seen_us'] - floor
+            extra = t.loc[p, 'sender_us'] - floor
             if extra > 0:
                 ax.bar(x[i] + 0.43, extra, 0.16, bottom=floor, color=LOOMGONE, edgecolor='#a04040', linewidth=1.5,
                        label='remote only' if i == 1 else None)
-            ax.text(x[i] + 0.43, max(t.loc[p, 'seen_us'], floor) + 0.16 * top, f"{t.loc[p, 'seen_us'] / floor:.1f}x",
+            ax.text(x[i] + 0.43, max(t.loc[p, 'sender_us'], floor) + 0.16 * top, f"{t.loc[p, 'sender_us'] / floor:.1f}x",
                     ha='center', va='bottom', fontsize=fs['annotation'] - 12, color='#a04040')
         ax.set_xticks(x)
         ax.set_xlim(-0.55, 2.75)
@@ -412,9 +413,14 @@ def panel_breakdown(axes, fs, title, kind, H, tokens=(1, 16, 128), legend=True):
         ax.yaxis.set_major_locator(mticker.MaxNLocator(3))
         ax.grid(True, alpha=0.3, axis='y')
         ax.set_xlabel(f'{T} token{"s" if T > 1 else ""}', fontsize=fs['label'] - 4)
-    axes[0].set_ylabel('Latency [us]', fontsize=fs['label'])
+    axes[0].set_ylabel('Sender busy [us]', fontsize=fs['label'])
     if legend:
-        axes[0].legend(loc='upper left', ncol=1, frameon=True, fontsize=fs['legend'] - 10, handlelength=1.4,
+        h, l = axes[0].get_legend_handles_labels()
+        for ax in axes[1:]:   # the payload line may be drawn only in the larger panels
+            for hh, ll in zip(*ax.get_legend_handles_labels()):
+                if ll not in l:
+                    h.append(hh); l.append(ll)
+        axes[0].legend(h, l, loc='upper left', ncol=1, frameon=True, fontsize=fs['legend'] - 10, handlelength=1.4,
                        labelspacing=0.25, borderpad=0.3)
     mid = axes[len(axes) // 2]
     mid.text(0.5, 1.0, title, transform=mid.transAxes, ha='center', va='bottom',
@@ -541,8 +547,8 @@ def figure_costs(out_dir):
     gs = fig.add_gridspec(1, 3, left=0.04, right=0.99, top=0.88, bottom=0.2, wspace=0.16, width_ratios=[1.3, 1.3, 1])
     axd = [fig.add_subplot(c) for c in gs[0, 0].subgridspec(1, 3, wspace=0.42)]
     axc = [fig.add_subplot(c) for c in gs[0, 1].subgridspec(1, 3, wspace=0.42)]
-    panel_breakdown(axd, fs, '(a) Dispatch, 7 KiB tokens (lower ↓)', 'dispatch', 7168)
-    panel_breakdown(axc, fs, '(b) Combine, 14 KiB tokens (lower ↓)', 'combine', 14336, legend=False)
+    panel_breakdown(axd, fs, '(a) Dispatch initiation, 7 KiB tokens (lower ↓)', 'dispatch', 7168)
+    panel_breakdown(axc, fs, '(b) Combine initiation, 14 KiB tokens (lower ↓)', 'combine', 14336, legend=False)
     panel_transport_state(fig.add_subplot(gs[0, 2]), fs, '(c) Transport state per GPU (lower ↓)')
     save(fig, out_dir, 'loom-costs')
     plt.close(fig)
@@ -572,8 +578,9 @@ def main():
           .sort_values(['path', 'H', 'tokens']).to_string(index=False))
     for kind, H in (('dispatch', 7168), ('combine', 14336)):
         print(f'{kind} 1 / 16 / 128 tokens, one session (Fig 3a/b):')
-        print(breakdown_t3(kind)[['path', 'tokens', 'send', 'drain', 'signal', 'flight', 'seen_us', 'cta_total_us',
-                                  'cta_drain_us']].sort_values(['tokens', 'path']).to_string(index=False))
+        bk = breakdown_t3(kind); bk = bk.assign(sender_us=bk.send + bk.drain + bk.signal)
+        print(bk[['path', 'tokens', 'send', 'drain', 'signal', 'sender_us', 'flight', 'seen_us', 'cta_total_us',
+                  'cta_drain_us']].sort_values(['tokens', 'path']).to_string(index=False))
         print('  payload through the NIC us:', {T: round(nic_payload_us(kind, H, T), 1) for T in (1, 16, 128)})
     m = message_rate()
     print('message rate (text only):', m.groupby('transport').mops.max().round(1).to_dict())
