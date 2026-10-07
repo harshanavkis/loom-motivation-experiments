@@ -20,6 +20,7 @@ cd $R/m2-device-state
 nix build --no-link 'nixpkgs#rdma-core^dev'   # run_sizes.sh needs mlx5dv.h in the local store
 ./run_sizes.sh > sizes.out && rm -f sizes sizes_gdaki
 python3 totals.py > totals.out
+python3 buffers.py > buffers.out
 
 say "M6: DeepSeek-V3 routing, copies leaving the scale-up domain (Section 2.3 #2)"
 cd $R/m6-routing && NP numpy routing_traffic.py 50000 > /dev/null

@@ -53,10 +53,10 @@ cite the same files.
 | Table 1 (`tables/code-state.tex`): NCCL lines, growth, plugin APIs | `m1-nccl-loc/summary_v2.{32.3,18.5}-1.txt`, `split_*.csv` | local (`categorize.py`) |
 | Table 1: work per token, SMs held | `m2-device-state/results.md` sections 3.3 and 5; `m3-sm-share/deepep-0sm.md` | source |
 | Table 1: GPU state at EP256 | `m2-device-state/totals.out` | local (`totals.py`) |
-| Fig 3a (`loom-costs`): dispatch breakdown, 7 KiB, 1/16/128 tokens | `m5-rdma-init/steve-cx7/bd_v2/dispatch_bd_t3_*.csv` -> `summary_t3.csv` | GPU [`fig3`], `summarize_bd.py` |
-| Fig 3b: combine breakdown, 14 KiB | `bd_v2/combine_bd_t3_*.csv` -> `summary_combine_t3.csv` | GPU [`fig3`] (`dispatch_bd --combine`) |
+| Fig 3a (`loom-costs`): dispatch initiation (sender busy until it has issued the signal), 7 KiB, 1/16/128 tokens | `m5-rdma-init/steve-cx7/bd_v2/dispatch_bd_t3_*.csv` -> `summary_t3.csv` | GPU [`fig3`], `summarize_bd.py` |
+| Fig 3b: combine initiation, 14 KiB | `bd_v2/combine_bd_t3_*.csv` -> `summary_combine_t3.csv` | GPU [`fig3`] (`dispatch_bd --combine`) |
 | Fig 3a/b dashed line: payload through the NIC | message counts from the runs above x size / the NIC -> GPU-memory rate | the rate (14.6 GB/s on steve) is derived from `m5-rdma-init/steve-cx7/dispatch_sweep_all.csv`, the fastest 4096-token dispatch (`plot_motivation.nic_to_hbm_gbps`) |
-| Fig 3c: transport state per GPU, EP16-EP1024 | `m2-device-state/totals.out` (struct sizes from `sizes.out`) | local (`totals.py`, `run_sizes.sh`) |
+| Fig 3c: transport state per GPU, EP16-EP1024 (queue pairs + pinned staging buffers) | `m2-device-state/totals.out` (struct sizes from `sizes.out`), `m2-device-state/buffers.out` | local (`totals.py`, `run_sizes.sh`, `buffers.py`) |
 | Table 2 (`tables/comparison.tex`) | qualitative | - |
 
 ### Numbers in the text
@@ -83,6 +83,7 @@ cite the same files.
 | 2.3 #2 | DeepGEMM keeps 81-94% beside 20 reserved SMs | `m3-sm-share/deepgemm/held_m*.csv`, `locked_m*.csv` | GPU [`text`] (docker) |
 | 2.3 #2 | a single message by stores would take 3.9-5.4 µs | `fence_cost_numa0.csv`, `nic_post_numa0.csv` | GPU [`text`] |
 | 2.3 #3 | 384.5 KiB per NVSHMEM QP, 140 KiB per GIN QP | `m2-device-state/sizes.out`, `totals.out` | local |
+| 2.3 #2, #3 | 0.95 GB pinned send buffers (DeepEP V1, decode); 0.6 / 2.4 GiB (V2.5, EP256 / EP1024) | `m2-device-state/buffers.out` | local (`buffers.py`) |
 
 Numbers that only appear in the paper's `% ARGUMENT` comments (GEMM lost per dispatch, cuBLAS next to
 held SMs, CPU-posted RDMA beside the GEMM, copy-engine latency) come from the `extra` stage:
