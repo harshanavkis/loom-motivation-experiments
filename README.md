@@ -55,7 +55,7 @@ cite the same files.
 | Table 1: GPU state at EP256 | `m2-device-state/totals.out` | local (`totals.py`) |
 | Fig 3a (`loom-costs`): dispatch breakdown, 7 KiB, 1/16/128 tokens | `m5-rdma-init/steve-cx7/bd_v2/dispatch_bd_t3_*.csv` -> `summary_t3.csv` | GPU [`fig3`], `summarize_bd.py` |
 | Fig 3b: combine breakdown, 14 KiB | `bd_v2/combine_bd_t3_*.csv` -> `summary_combine_t3.csv` | GPU [`fig3`] (`dispatch_bd --combine`) |
-| Fig 3a/b dashed line: payload through the NIC | message counts from the runs above x size / 14.8 GB/s | the 14.8 GB/s is `m3-sm-share/steve-rdma/perftest-cuda/loopback_steve_identity.txt` (GPU->GPU) |
+| Fig 3a/b dashed line: payload through the NIC | message counts from the runs above x size / the NIC -> GPU-memory rate | the rate (14.6 GB/s on steve) is derived from `m5-rdma-init/steve-cx7/dispatch_sweep_all.csv`, the fastest 4096-token dispatch (`plot_motivation.nic_to_hbm_gbps`) |
 | Fig 3c: transport state per GPU, EP16-EP1024 | `m2-device-state/totals.out` (struct sizes from `sizes.out`) | local (`totals.py`, `run_sizes.sh`) |
 | Table 2 (`tables/comparison.tex`) | qualitative | - |
 
@@ -75,7 +75,7 @@ cite the same files.
 | 2.1 | a kernel cannot start a copy engine | `dev_ce_check.csv` | GPU [`text`] |
 | 2.1 | copy-engine collective 17 µs + 2 µs per rank | `src/nccl/src/tuning/ce_model.cc` | source |
 | 2.1 | Mixtral-8x7B: 83% before the last rank starts, a2a 94 µs, 1.7x NVLink bound | `m3-sm-share/chakra/out_skew_Mixtral-8x7B.txt`, `out_moe_Mixtral-8x7B.txt` | local (`--traces`) |
-| 2.1 | NIC writes GPU memory at 14.8 GB/s | `m3-sm-share/steve-rdma/perftest-cuda/loopback_steve_identity.txt` | GPU (`test_loopback.sh`) |
+| 2.1 | NIC writes GPU memory at 14.6 GB/s | `m5-rdma-init/steve-cx7/dispatch_sweep_all.csv` (printed by `make_plots.sh`; perftest's GPU->GPU loopback, `m3-sm-share/steve-rdma/perftest-cuda/loopback_steve_identity.txt`, gives 15.7 GB/s) | GPU [`text`] |
 | 2.3 #2 | NVSHMEM puts 10-22% slower beside a GEMM | `put_lat_steve.txt` vs `put_lat_steve_load.txt` | GPU [`text`] `run_put_lat.sh` |
 | 2.3 #2 | 88-97% of a token's copies leave an 8-GPU domain from EP64 | `m6-routing/routing_traffic.csv` | local (`routing_traffic.py`) |
 | 2.3 #2 | 1-token and 128-token breakdown numbers | `bd_v2/summary_t3.csv`, `summary_combine_t3.csv` | GPU [`fig3`] |
@@ -105,7 +105,7 @@ held SMs, CPU-posted RDMA beside the GEMM, copy-engine latency) come from the `e
 
 **Testbed caveat.** On steve the GPU and the NIC sit on different sockets. This inflates the NIC's
 share of every remote transfer (work-request fetch, payload reads, completions) and caps NIC -> GPU
-memory at 14.8 GB/s. It does not inflate the GPU-side costs: `fence_cost.cu` shows the cross-socket
+memory at 14.6 GB/s. It does not inflate the GPU-side costs: `fence_cost.cu` shows the cross-socket
 part of the post chain is 0.06-0.13 µs of 6-8 µs. A host with GPU and NIC on one socket gives the
 same GPU-side numbers and smaller NIC-side ones.
 
@@ -224,6 +224,22 @@ and in `m5-rdma-init/README.md`.
   (access through the MLCommons Chakra working group's Google Drive) in `~/chakra-traces/`:
   `Mixtral-20260930T115950Z-1-00{1,2}.zip`, `Llama3-20260930T120123Z-1-00{1..5}.zip`.
   `extract.sh` unpacks them into `/scratch/$USER/chakra-traces/`.
+
+## After moving the NIC (or any hardware change)
+
+Everything that goes through the NIC must be rerun; nothing else does.
+
+1. Find the new PCI addresses (`lspci -D | grep -i -e nvidia -e mellanox`, `nvidia-smi topo -m`: want
+   `PIX`/`PXB`/`NODE` between GPU and NIC, not `SYS`) and the NIC names (`ibv_devices`).
+2. `sudo GPU=<gpu> NICS="<port0> <port1>" ~/loom-experiments/steve-rdma/setup_root.sh`; if the device names
+   or GID changed, edit `nvshmem-loopback/env.sh` and the perftest scripts (`-d`, `-x`). Make the defaults
+   in `setup_root.sh` / `check.sh` the new addresses and commit.
+3. `~/loom-experiments/perftest-cuda/test_loopback.sh` (link check; GPU->GPU bandwidth).
+4. `~/loom-experiments/paper/run_paper.sh fig3`, then `run_paper.sh text` (~3 h). Not affected: TMA
+   bandwidth, the device copy-engine check, DeepGEMM, and every local analysis.
+5. `scripts/collect_results.sh <host>`, `scripts/analyze_local.sh`, `scripts/make_plots.sh ~/loom-paper/plots`.
+   The NIC -> GPU-memory rate behind the dashed line is recomputed from the new sweep; `make_plots.sh` prints
+   it and every number the text quotes, so update the text from that output.
 
 ## Checking a rerun
 

@@ -42,7 +42,6 @@ DEEPGEMM = os.path.join(ROOT, 'm3-sm-share', 'deepgemm')
 BD = os.path.join(CX7, 'bd_v2')
 M2 = os.path.join(ROOT, 'm2-device-state')
 ROUTING = os.path.join(ROOT, 'm6-routing')
-NIC_TO_HBM_GBPS = 14.8   # best NIC -> HBM rate in steve's RDMA sweeps (m5 README)
 # dispatch_bd variants plotted: summary name -> (label, color). Remote: per-lane DeepEP puts (V2.5's
 # shape); flush = V2.5's normal dispatch (QPs follow the warps), ordered = V1 low latency (3 QPs per
 # destination, a signal behind each QP's data)
@@ -70,6 +69,7 @@ VARIANTS = {
     'partitioned': ('partitioned (no co-run)', 'black'),
 }
 PASTEL = sns.color_palette("pastel")
+LOOMGONE = '#F6D5D3'   # the paper's loomgone (main.tex): what Loom removes
 
 
 def top_label(ax, text, size):
@@ -372,10 +372,24 @@ def panel_breakdown(axes, fs, title, kind, H, tokens=(1, 16, 128), legend=True):
                     va='bottom', fontsize=fs['annotation'] - 6)
         link_us = nic_payload_us(kind, H, T)   # remote bars only
         ax.plot([0.6, 2.4], [link_us, link_us], color='black', linewidth=4, linestyle='--', label='payload through NIC')
+        # opportunity: the part of a remote bar above max(local, payload through the NIC), i.e. what only the
+        # remote branch adds beyond the link time every transport pays (an ideal bound: it leaves out the
+        # forwarding time of whatever replaces the NIC)
+        floor = max(t.loc['local', 'seen_us'], link_us)
+        for i, p in enumerate(BD_PATHS):
+            if p == 'local':
+                continue
+            extra = t.loc[p, 'seen_us'] - floor
+            if extra > 0:
+                ax.bar(x[i] + 0.43, extra, 0.16, bottom=floor, color=LOOMGONE, edgecolor='#a04040', linewidth=1.5,
+                       label='remote only' if i == 1 else None)
+            ax.text(x[i] + 0.43, max(t.loc[p, 'seen_us'], floor) + 0.16 * top, f"{t.loc[p, 'seen_us'] / floor:.1f}x",
+                    ha='center', va='bottom', fontsize=fs['annotation'] - 12, color='#a04040')
         ax.set_xticks(x)
+        ax.set_xlim(-0.55, 2.75)
         ax.set_xticklabels(['local', 'ord.', 'flush'], fontsize=fs['tick'] - 8)
         ax.tick_params(axis='y', labelsize=fs['tick'] - 6)
-        ax.set_ylim(0, top * (3.0 if legend and ax is axes[0] else 1.3))   # headroom for the legend
+        ax.set_ylim(0, top * (4.2 if legend and ax is axes[0] else 1.35))   # headroom for the legend
         ax.yaxis.set_major_locator(mticker.MaxNLocator(3))
         ax.grid(True, alpha=0.3, axis='y')
         ax.set_xlabel(f'{T} token{"s" if T > 1 else ""}', fontsize=fs['label'] - 4)
@@ -388,9 +402,22 @@ def panel_breakdown(axes, fs, title, kind, H, tokens=(1, 16, 128), legend=True):
              fontsize=fs['annotation'], color='navy', fontweight='bold', clip_on=False)
 
 
+def nic_to_hbm_gbps():
+    """The NIC -> GPU memory rate the testbed reaches: the fastest 4096 x 7 KiB dispatch of the GPU vs proxy
+    sweeps (dispatch_sweep_all.csv; every path is NIC-bound there), payload bytes / time. 14.8 GB/s on steve
+    (21,711 messages x 7168 B in 10.53 ms); recomputed after every rerun, e.g. after moving the NIC."""
+    d = dispatch_sweep()
+    us = d[(d.H == 7168) & (d.tokens == 4096)].us.min()
+    for f in sorted(os.listdir(BD)):   # messages in a 4096-token dispatch, from any dispatch_bd run at that size
+        if f.startswith('dispatch_bd_ordered-destL3_H7168_load0') and f.endswith('.csv'):
+            rows = [l for l in open(os.path.join(BD, f)) if l.strip() and not l.startswith(('#', 'WARN'))]
+            r = pd.read_csv(io.StringIO(''.join(rows)))
+            return float(r[r.tokens == 4096].msgs.iloc[0]) * 7168 / (us * 1e3)
+
+
 def nic_payload_us(kind, H, T):
-    """Payload bytes of one dispatch / combine (messages from the run) through the NIC at NIC_TO_HBM_GBPS, in us."""
-    return msgs_per_dispatch(kind, T) * H / (NIC_TO_HBM_GBPS * 1e3)
+    """Payload bytes of one dispatch / combine (messages from the run) through the NIC at nic_to_hbm_gbps(), in us."""
+    return msgs_per_dispatch(kind, T) * H / (NIC_GBPS * 1e3)
 
 
 def msgs_per_dispatch(kind, T):
@@ -432,6 +459,8 @@ def panel_transport_state(ax, fs, title):
     ax.grid(True, alpha=0.3, axis='y')
     ax.legend(loc='upper left', ncol=1, frameon=True, fontsize=fs['legend'] - 8, handlelength=1.4,
               labelspacing=0.3, borderpad=0.3)
+    ax.text(0.03, 0.5, 'Loom: no queue pairs on the GPU', transform=ax.transAxes, ha='left', va='center',
+            fontsize=fs['legend'] - 8, color='#a04040', bbox=dict(facecolor=LOOMGONE, edgecolor='#a04040', boxstyle='round,pad=0.3'))
     top_label(ax, title, fs['annotation'])
 
 
@@ -495,7 +524,13 @@ def figure_costs(out_dir):
     plt.close(fig)
 
 
+NIC_GBPS = None   # set in main() from nic_to_hbm_gbps()
+
+
 def main():
+    global NIC_GBPS
+    NIC_GBPS = nic_to_hbm_gbps()
+    print(f'NIC -> HBM rate (payload line): {NIC_GBPS:.2f} GB/s')
     out_dir = sys.argv[1] if len(sys.argv) > 1 else os.path.join(ROOT, 'plots', 'out')
     os.makedirs(out_dir, exist_ok=True)
     figure_intro(out_dir)

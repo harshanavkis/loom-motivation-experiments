@@ -48,6 +48,8 @@ text() {
   $NUMA -N 0 -m 0 ./tma_bw > tma_bw.csv
   $NUMA -N 0 -m 0 ./dev_ce_check > dev_ce_check.csv
   $NUMA -N 0 -m 0 ./ce_triggered < /dev/null > ce_triggered_idle.csv
+  say "RDMA loopback link check (perftest, GPU->GPU)"
+  $H/perftest-cuda/test_loopback.sh > $H/perftest-cuda/loopback_rerun.txt
   say "dispatch breakdown sweep, 16-4096 tokens, 2-20 CTAs (Section 2.3 #2: training size, SM time)"
   mkdir -p $H/gpu-posted/bd_v2
   sudo env OUT=$H/gpu-posted/bd_v2/dispatch_bd $H/gpu-posted/run_dispatch_bd.sh --ctas 2,4,8,20

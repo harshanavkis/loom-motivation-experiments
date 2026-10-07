@@ -24,5 +24,6 @@ get $M3/gpu-interference 'gpu-interference/results_steve.*' gpu-interference/sum
         'gpu-interference/rdma_*.csv' 'gpu-interference/rdma_cpu*.txt' gpu-interference/rdma_gpu2gpu_7k.cli.txt
 get $M3/gpu-posted gpu-posted/results_steve.csv gpu-posted/results_steve.gpu.txt
 get $M3/steve-rdma/nvshmem-loopback nvshmem-loopback/put_bw_steve.txt
+get $M3/steve-rdma/perftest-cuda perftest-cuda/loopback_rerun.txt
 # the committed copies of these two carry no NVSHMEM "WARN: device irdma..." chatter or blank lines
 [ "${1:-}" = --dry-run ] || sed -i '/^WARN: /d;/^$/d' $CX/deepep_post_*.csv $CX/dispatch_ibgda_block_H*.csv
