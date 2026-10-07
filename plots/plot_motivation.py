@@ -2,14 +2,13 @@
 """Loom motivation figures, in the style of jigsaw-plotting-scripts/plot_hw_exp.py.
 
 Figure 1 (intro, single column, loom-mix): Mixtral-8x22B bytes per MoE layer by fabric and kind
-of traffic (Chakra ET). Figure 3 (Section 2, 1x3, loom-costs): (a) message rate, GPU-initiated vs CPU
-proxy; (b) a dispatch of 1 and of 128 7 KiB tokens to local and remote peers until the receiver sees the
-signal (dispatch_bd.cu), with the time the payload needs through the NIC; (c) transport state each GPU
-holds vs EP size (m2-device-state/totals.out). The CPU proxy appears in (a) only (owner, 2026-10-06).
-Dropped 2026-10-06 (owner): the 16 x 1 KiB breakdown (16 x 1 KiB was our choice, not a standard size;
-128 x 7 KiB is DeepEP's low-latency setting) and the SM-time-per-dispatch panel (its numbers are
-printed for the text). The GEMM panels (shared SMs: GEMM lost vs dispatch rate; reserved SMs: DeepGEMM next to
-held SMs) were dropped from the figure the same day (owner): their numbers are printed for the text.
+of traffic (Chakra ET). Figure 3 (Section 2, 1x3, loom-costs, since 2026-10-07): (a) dispatch and
+(b) combine breakdown until the receiver sees the signal, 1 / 16 / 128 tokens, local vs remote
+(ordered, flush), with the payload's time through the NIC (dispatch_bd.cu, bd_v2/summary_t3.csv and
+summary_combine_t3.csv); (c) transport state per GPU vs EP size (m2-device-state/totals.out).
+Dropped (owner): the message-rate panel (2026-10-07), the 16 x 1 KiB breakdown and the SM-time panel
+(2026-10-06), the GEMM panels; their numbers are printed below for the text. panel_msgrate and
+panel_routing are kept but not drawn.
 Older layout notes follow:
 Figure 1 (intro, 1x3): (a) Mixtral-8x22B bytes per MoE layer by fabric (Chakra ET),
 (b) MoE dispatch latency, GPU-initiated vs CPU proxy, both packed (steve H200 + CX-7),

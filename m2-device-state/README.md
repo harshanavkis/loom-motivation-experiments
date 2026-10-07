@@ -60,13 +60,19 @@ When RDMA is GPU-initiated, how much NIC transport state (queue pairs, WQE and C
 | LL | 32 (EP256) | 256 | 1 | 255 | 256 | 96.3 MiB | 79.7 MiB |
 | Normal | 2 (EP16) | 2 | 24 | 24 | 25 | 9.4 MiB | 7.5 MiB |
 | Normal | 16 (EP128) | 16 | 24 | 360 | 361 | 135.8 MiB | 112.5 MiB |
-| Normal | 32 (EP256) | 32 | 24 | 744 | 745 | 280.2 MiB | 232.5 MiB |
+| Normal | 20 (EP160) | 20 | 24 | 456 | 457 | 171.9 MiB | – |
+
+DeepEP V1's normal kernels run on at most 20 nodes = EP160 (`LEGACY_NUM_MAX_RDMA_PEERS = 20`,
+`csrc/kernels/legacy/compiled.cuh:6`, checked in `csrc/legacy/buffer.hpp:113` unless low-latency mode).
+Until 2026-10-07 this table listed "Normal, 32 (EP256): 744 QPs, 280.2 MiB", a configuration V1 refuses.
+With more experts, LL grows to 511 QPs / 192.6 MiB at EP512 (512 experts) and 1,023 / 385.2 MiB at
+EP1024 (1,024 experts); EP cannot exceed the expert count (`totals.out`).
 
 **DeepEP V2.5 on NCCL GIN GDAKI** (QPs per GPU = C × (P + 1); number of GPU-mapped doorbell UARs = number of QPs):
 
 | Mode (contexts C) | EP16 (2 nodes) | EP128 (16 nodes) | EP256 (32 nodes) |
 |---|---|---|---|
-| hybrid, CX-7 default (129) | 387 QPs, **53.6 MiB** | 2,193 QPs, **305 MiB** | 4,257 QPs, **592 MiB** |
+| hybrid, CX-7 default (129) | 387 QPs, **53.6 MiB** | 2,193 QPs, **305 MiB** | 4,257 QPs, **592 MiB** (EP512: 8,385 QPs, 1.14 GiB; EP1024: 16,641 QPs, 2.26 GiB; DeepEP V2.5 allows up to 1024 ranks, `kNumMaxRanks`) |
 | hybrid, CX-8 default (65) | 195 QPs, 27.0 MiB | 1,105 QPs, 154 MiB | 2,145 QPs, 298 MiB |
 | direct (17) | 289 QPs, 39.6 MiB | 2,193 QPs, 301 MiB | 4,369 QPs, 599 MiB |
 
@@ -101,7 +107,7 @@ Key sources for the headline numbers (paths as in results.md): NVSHMEM per-QP al
 
 1. "In DeepEP's current NCCL-GIN (GDAKI) backend with its default 129 GIN contexts, each GPU of a 256-GPU EP job holds **4,257 RC QPs**. That is **≈592 MiB of HBM** for SQ/CQ rings and doorbell records, plus 4,257 NIC doorbell pages mapped into the GPU, all so SMs can drive the NIC." (§4.1: 129 × 33 QPs × 140 KiB; context.cpp:135-137, ep.py:332, gdaki.cc:618-627, hl.cpp:1400-1402)
 2. "Posting a single RDMA write from an SM in NCCL GIN GDAKI takes 4 global atomics, 3 WQE stores, a doorbell-record write, 2 MMIO doorbell writes and 4–5 memory fences. NVSHMEM IBGDA takes 4–5 atomics, 12 32-bit WQE stores, 1 MMIO doorbell and 3 device-scope `__threadfence`s. The accelerator is literally running the NIC driver's post-send path." (§1.3, §3.3)
-3. "With NVSHMEM IBGDA every RC QP costs the GPU 384 KiB (128 KiB of it WQE/CQ rings). DeepEP V1's normal mode (24 QPs/peer) therefore held **744 QPs ≈ 280 MiB** per GPU at EP256, and even its low-latency mode held ≈ 255 QPs ≈ 96 MiB regardless of EP size." (§2.3)
+3. "With NVSHMEM IBGDA every RC QP costs the GPU 384 KiB (128 KiB of it WQE/CQ rings). DeepEP V1's normal mode (24 QPs/peer) therefore held **361 QPs ≈ 136 MiB** per GPU at EP128 (it runs on at most 20 nodes; the earlier "744 QPs at EP256" was a configuration V1 refuses), and even its low-latency mode held ≈ 255 QPs ≈ 96 MiB regardless of EP size." (§2.3)
 
 ## Reproduce
 

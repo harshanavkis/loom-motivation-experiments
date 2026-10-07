@@ -16,7 +16,7 @@ All scripts run **directly on steve**. `~/loom-experiments` is the NFS home, so 
 | GPU-posted RDMA, NVSHMEM IBGDA, 2 PEs on the H200 | 15.7 GB/s at 1 MiB puts (0.32 GB/s at 4 KiB) |
 | CPU-posted RDMA next to a BF16 GEMM, at 20.5 GB/s | GEMM keeps 100.2% of 809.6 TFLOP/s, triad 99.5%; the poster uses 1.00 CPU core |
 
-Not done yet: GPU-posted RDMA next to the GEMM, i.e. an NVSHMEM put kernel on k CTAs running concurrently with the GEMM. NCCL GIN and DeepEP cannot run here, because NCCL refuses two ranks on one GPU; they need a second Hopper host.
+GPU-posted RDMA next to the GEMM was done afterwards (`../gpu-posted`). NCCL GIN and DeepEP V2.5 still cannot run here, because NCCL refuses two ranks on one GPU; they need a second Hopper host.
 
 ## Hardware facts that matter
 

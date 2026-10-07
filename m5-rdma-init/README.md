@@ -355,7 +355,7 @@ At ≥ 1024 tokens both remote paths are bound by steve's NIC (≈ 5.2 M message
 - Kept: routing, the stores themselves, the store completion and fence before the signal, and the release signal. In total that is the local column: 3.9 µs of sender time and 55 CTA-µs.
 - Added, not measurable here: one physical trip through the fabric for the last data and the signal, and the link's bandwidth.
 
-**1 and 128 tokens of 7 KiB (paper Fig 3b, 2026-10-06).** 7 KiB is DeepSeek-V3's hidden size in FP8, 128 tokens per GPU is DeepEP's low-latency setting, 1 token is the fixed cost of a dispatch. One session, 20 CTAs, idle, medians of 20 runs (`bd_v2/dispatch_bd_t1_*`, `bd_v2/summary_t1.csv`; kept out of `summary.csv` so the 128-token runs are not counted twice). No message was ever missing.
+**1 and 128 tokens of 7 KiB (2026-10-06; superseded in the paper by the 1/16/128 run below).** 7 KiB is DeepSeek-V3's hidden size in FP8, 128 tokens per GPU is DeepEP's low-latency setting, 1 token is the fixed cost of a dispatch. One session, 20 CTAs, idle, medians of 20 runs (`bd_v2/dispatch_bd_t1_*`, `bd_v2/summary_t1.csv`; kept out of `summary.csv` so the 128-token runs are not counted twice). No message was ever missing.
 
 | µs until the receiver sees the signal | local | ordered | flush |
 |---|---|---|---|
@@ -367,6 +367,18 @@ At ≥ 1024 tokens both remote paths are bound by steve's NIC (≈ 5.2 M message
 | SM time (CTA-µs), of it waiting | 207 | 363 | 7138, 6824 (96%) |
 
 The payload alone needs 2.9 µs (1 token) and 331 µs (128 tokens) through the NIC at 14.8 GB/s, so 128 tokens are NIC-bound here. The 128-token numbers reproduce the earlier run: local 12.5 = 12.5, ordered 348.8 vs 348.0, flush 365.2 vs 346.5 (+5%). At one token the ordered path holds the SMs slightly less than local (32 vs 39 CTA-µs): it does not wait, and local's store completion and fence take 1.5 µs.
+
+**Paper Fig 3a/b: dispatch and combine at 1, 16, 128 tokens (2026-10-07).** `dispatch_bd --combine` adds the return trip as DeepEP V2.5 sends it (`impls/ep/combine.cuh`, non-expanded): one message per (token, GPU the token came from), the token's expert output summed over that GPU's experts, BF16 (`--H 14336`), loaded on its own and sent with a TMA store (local) or staged and put (remote), then the same end (release signal / flush / ordered). The message list is the dispatch's, so each destination gets the same number of messages; the reduction at the token's GPU that follows is identical on every path and not timed. Raw: `bd_v2/{dispatch,combine}_bd_t3_*`; summaries `bd_v2/summary_t3.csv`, `summary_combine_t3.csv` (one session each, 20 CTAs, idle, medians of 20, no message ever missing). Until the receiver sees the signal, local / ordered / flush:
+
+| | 1 token | 16 tokens | 128 tokens |
+|---|---|---|---|
+| dispatch, 7 KiB | 4.9 / 18.8 / 32.0 µs | 5.4 / 57.0 / 62.2 µs | 12.8 / 344.1 / 360.7 µs |
+| combine, 14 KiB | 3.8 / 21.0 / 30.1 µs | 6.4 / 97.5 / 101.4 µs | 27.6 / 655.4 / 692.6 µs |
+| payload through the NIC (dispatch / combine) | 2.9 / 5.8 µs | 43.6 / 87.2 µs | 330.8 / 661.6 µs |
+| SM time, dispatch (CTA-µs) | 42 / 32 / 439 | 71 / 101 / 969 | 208 / 364 / 7,047 |
+| SM time, combine (CTA-µs) | 44 / 49 / 385 | 98 / 146 / 1,868 | 516 / 628 / 13,686 |
+
+The 1/128-token dispatch reproduces the 2026-10-06 run within 2-3%. The sender is busy until it has issued the signal: 4.6 / 8.7 / 26.2 µs at 1 token and 12.3 / 25.6 / 355.6 µs at 128 tokens for the dispatch; a flush keeps its sender for the whole drain. The ordered path's completions are reaped after the timed window (`reap`), so its bars exclude that cost (up to ~300 SM-µs at 128 x 7 KiB when reaped right away, D3).
 
 ### Compute lost per dispatch (D3, `dispatch_bd.cu --d3`, 2026-10-06)
 
@@ -434,6 +446,8 @@ At the shorter periods flush loses 1.2 / 4.2 / 2.1 / 10.3%. The noise is ~0.2% (
 
 ## Reproduce (on steve, after `setup_root.sh` from the steve-rdma README)
 
+The top-level README and `scripts/gpu-host/run_paper.sh` run all of this in stages (`fig3`, `text`, `extra`); the commands below are the individual steps.
+
 The runnable copies live in `~/loom-experiments/latency/` and `~/loom-experiments/nvshmem-loopback/`. The files in `steve-cx7/` are the committed copies, and `nvshmem_env.sh` is `nvshmem-loopback/env.sh`.
 
 ```sh
@@ -449,7 +463,7 @@ cd ~/loom-experiments/latency && $NUMA -N 0 -m 0 ./ce_triggered < /dev/null > ce
 ~/loom-experiments/latency/run_nic_post.sh                                           # nic_post_numa0.csv, about 1 min
 ~/loom-experiments/latency/run_dispatch_ce.sh                                        # dispatch_ce_H*_load*.csv + dispatch_sm_H*_load*.csv, about 20 min
 sudo ~/loom-experiments/gpu-posted/run_dispatch.sh < /dev/null                       # B1 sweep: dispatch_ibgda_H{1024,7168}_load{0,1}.csv
-sudo ~/loom-experiments/gpu-posted/run_dispatch_block.sh < /dev/null                 # B1 packed: dispatch_ibgda_block_H*_load*.csv
+sudo ~/loom-experiments/gpu-posted/run_dispatch_block.sh < /dev/null                 # B1 packed: dispatch_ibgda_block_H*_load*.csv (needs gpu-posted/build.sh = build_gpu_posted.sh first)
 ~/loom-experiments/gpu-posted/build_deepep_post.sh && sudo ~/loom-experiments/gpu-posted/run_deepep_post.sh   # deepep_post_*.csv
 sudo ~/loom-experiments/nvshmem-loopback/run_msgrate.sh                              # msgrate_steve.csv
 cd ~/loom-experiments/latency && $NUMA -N 0 -m 0 ./dev_ce_check > dev_ce_check.csv          # kernel-started copies vs copy engine
@@ -464,11 +478,17 @@ sudo bash ~/loom-experiments/gpu-posted/bd_one.sh --path flush --qp warp --post 
 mkdir -p ~/loom-experiments/gpu-posted/bd_v2
 sudo env OUT=$HOME/loom-experiments/gpu-posted/bd_v2/dispatch_bd ~/loom-experiments/gpu-posted/run_dispatch_bd.sh --ctas 2,4,8,20   # 5 variants, about 25 min
 sudo env OUT=$HOME/loom-experiments/gpu-posted/bd_v2/dispatch_bd VARIANTS="flush-warpL:--path_flush_--qp_warp_--post_lane ordered-destL3:--path_ordered_--qp_dest_--nq_3_--post_lane flush-destL3:--path_flush_--qp_dest_--nq_3_--post_lane" ~/loom-experiments/gpu-posted/run_dispatch_bd.sh --ctas 2,4,8,20
-python3 summarize_bd.py $(ls bd_v2/dispatch_bd_*.csv | grep -v _t1_) --csv bd_v2/summary.csv > bd_v2/summary.txt   # here, in steve-cx7/
+python3 summarize_bd.py $(ls bd_v2/dispatch_bd_*.csv | grep -v -e _t1_ -e _t3_) --csv bd_v2/summary.csv > bd_v2/summary.txt   # here, in steve-cx7/
 # Fig 3b (1 and 128 x 7 KiB, one session): on steve, for each of --path local | --path ordered --qp dest --nq 3 --post lane |
 #   --path flush --qp warp --post lane: sudo bash ~/loom-experiments/gpu-posted/bd_one.sh <path args> --H 7168 --tokens 1,128 --iters 20
 #   > ~/loom-experiments/gpu-posted/bd_v2/dispatch_bd_t1_{local,ordered-destL3,flush-warpL}_H7168_load0.csv; scp them to bd_v2/, then
 python3 summarize_bd.py bd_v2/dispatch_bd_t1_*.csv --csv bd_v2/summary_t1.csv
+# Fig 3a/b (2026-10-07): ~/loom-experiments/paper/run_paper.sh fig3 runs, for each path P in --path local |
+#   --path ordered --qp dest --nq 3 --post lane | --path flush --qp warp --post lane:
+#   sudo bash ~/loom-experiments/gpu-posted/bd_one.sh P --H 7168 --tokens 1,16,128 --iters 20 > bd_v2/dispatch_bd_t3_<path>_H7168_load0.csv
+#   sudo bash ~/loom-experiments/gpu-posted/bd_one.sh P --combine --H 14336 --tokens 1,16,128 --iters 20 > bd_v2/combine_bd_t3_<path>_H14336_load0.csv
+python3 summarize_bd.py bd_v2/dispatch_bd_t3_*.csv --csv bd_v2/summary_t3.csv
+python3 summarize_bd.py bd_v2/combine_bd_t3_*.csv --csv bd_v2/summary_combine_t3.csv
 sudo ~/loom-experiments/gpu-posted/run_dispatch_d3.sh                                  # D3: bd_v2/d3_<variant>_H*.csv, about 12 min
 python3 summarize_d3.py bd_v2/d3_*.csv --csv bd_v2/d3_summary.csv > bd_v2/d3_summary.txt         # here, in steve-cx7/
 sudo env FILLER=gemm-up WINDOW_MS=1000 OUT=$HOME/loom-experiments/gpu-posted/bd_v2/d3gemm ~/loom-experiments/gpu-posted/run_dispatch_d3.sh   # about 10 min

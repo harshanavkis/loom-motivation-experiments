@@ -4,7 +4,7 @@
 
 When a GPU moves communication bytes with its own SMs (as DeepEP-style kernels do: they hold *k* SMs for the whole transfer), how much throughput does concurrent compute lose? And how much does it lose if an engine outside the SMs moves the **same bytes at the same rate**? On the GPU, that engine is the copy engine (CE), which stands in here for an off-accelerator engine such as Loom's. The CE→host case is closest to a NIC or Loom engine DMA-reading HBM over PCIe.
 
-Single GPU, no network. The real-RDMA version (GPU-posted vs. CPU-posted WQEs) needs a GPU host with a cabled ConnectX NIC; none exists yet (see "Not covered").
+Single GPU, no network. The real-RDMA versions were done afterwards on steve's CX-7 loopback: CPU-posted (`rdma_cpu_posted*.sh` here) and GPU-posted (`../gpu-posted`).
 
 ## Methodology
 
@@ -139,7 +139,7 @@ The posting thread used 1.00 CPU core in both directions: perftest busy-polls it
 - PCIe on steve trains at ×8, so every D2H number is capped at 29 GB/s.
 - The H100 on jamie was not used: it is in Confidential Compute mode and passed through to a SEV-SNP VM (see `~/doctor-cluster-config/hosts/jamie.nix`).
 
-## Not covered yet, and what it needs
+## Not covered yet, and what it needs (written 2026-09-30; since then the loopback, IOMMU and PeerMappingOverride steps are automated by `../steve-rdma/setup_root.sh`, and GPU-posted RDMA is measured in `../gpu-posted`)
 
 - **Two hosts are needed only for NCCL GIN and DeepEP.** NCCL refuses two ranks on one GPU, and DeepEP V2.5 runs on NCCL GIN (it also needs Hopper or newer on both ends, which rules out jack's A40). Everything else runs on steve alone over its CX-7 port-0 ↔ port-1 loopback cable:
   - CPU-posted RDMA from GPU memory (`perftest --use_cuda_dmabuf`);
@@ -154,7 +154,7 @@ The posting thread used 1.00 CPU core in both directions: perftest busy-polls it
 
 ## Reproduce
 
-steve cannot see jamie's `/scratch`, but `/home` is NFS-shared. From jamie:
+Now: `scripts/deploy_gpu_host.sh steve` from the repo root copies this folder (and everything else) to `~/loom-experiments/`; do NOT `cp -r` the folder over the host copy by hand. The original steps were (steve cannot see jamie's `/scratch`, but `/home` is NFS-shared; from jamie):
 
 ```sh
 mkdir -p ~/loom-experiments && cp -r /scratch/harshanavkis/loom-proj/motivation-experiments/m3-sm-share/gpu-interference ~/loom-experiments/

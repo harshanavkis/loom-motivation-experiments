@@ -66,6 +66,7 @@ docker run --rm --device nvidia.com/gpu=all --ipc=host -v $PWD:/work -w /work lo
   python dg_compare.py --profile --reps 5 > compare.csv   # cuBLAS vs DeepGEMM in one harness, with kernel profiles
 ```
 The image is built on steve (`docker build -t loom-deepgemm .`, ~18 GB); the user is in the docker group and GPUs are reached through CDI (`--device nvidia.com/gpu=all`).
+The `Dockerfile` pins DeepGEMM to `057ca5964aae` (`ARG DEEPGEMM_REF`; before 2026-10-07 it defaulted to `main`), the commit every committed CSV records on its first lines; PyTorch (cu129 index) is not pinned. To check an existing image: `docker run --rm loom-deepgemm cat /opt/DeepGEMM.commit`.
 
 ## Files
 

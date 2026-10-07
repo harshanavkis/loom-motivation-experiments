@@ -65,7 +65,7 @@ Reading:
 The runnable copy is `~/loom-experiments/gpu-posted/`.
 
 ```sh
-~/loom-experiments/gpu-posted/build.sh
+~/loom-experiments/gpu-posted/build.sh   # = ../../m5-rdma-init/steve-cx7/build_gpu_posted.sh (deployed under this name by scripts/deploy_gpu_host.sh)
 sudo ~/loom-experiments/gpu-posted/run.sh 3      # results_steve.csv, about 5 min
 ```
 
