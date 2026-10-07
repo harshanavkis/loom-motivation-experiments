@@ -27,7 +27,7 @@ cd $R/m6-routing && NP numpy routing_traffic.py 50000 > /dev/null
 
 say "M5: dispatch / combine breakdown summaries (Fig 3a/b, Section 2.3 #2)"
 cd $R/m5-rdma-init/steve-cx7
-python3 summarize_bd.py $(ls bd_v2/dispatch_bd_*.csv | grep -v -e _t1_ -e _t3_) --csv bd_v2/summary.csv > bd_v2/summary.txt
+python3 summarize_bd.py $(ls bd_v2/dispatch_bd_*.csv | grep -v -e _t1_ -e _t3_ -e _t3reap_) --csv bd_v2/summary.csv > bd_v2/summary.txt
 python3 summarize_bd.py bd_v2/dispatch_bd_t1_*.csv --csv bd_v2/summary_t1.csv > /dev/null
 python3 summarize_bd.py bd_v2/dispatch_bd_t3_*.csv --csv bd_v2/summary_t3.csv > /dev/null
 python3 summarize_bd.py bd_v2/combine_bd_t3_*.csv --csv bd_v2/summary_combine_t3.csv > /dev/null

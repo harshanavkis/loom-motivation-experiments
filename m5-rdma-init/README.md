@@ -480,7 +480,7 @@ sudo bash ~/loom-experiments/gpu-posted/bd_one.sh --path flush --qp warp --post 
 mkdir -p ~/loom-experiments/gpu-posted/bd_v2
 sudo env OUT=$HOME/loom-experiments/gpu-posted/bd_v2/dispatch_bd ~/loom-experiments/gpu-posted/run_dispatch_bd.sh --ctas 2,4,8,20   # 5 variants, about 25 min
 sudo env OUT=$HOME/loom-experiments/gpu-posted/bd_v2/dispatch_bd VARIANTS="flush-warpL:--path_flush_--qp_warp_--post_lane ordered-destL3:--path_ordered_--qp_dest_--nq_3_--post_lane flush-destL3:--path_flush_--qp_dest_--nq_3_--post_lane" ~/loom-experiments/gpu-posted/run_dispatch_bd.sh --ctas 2,4,8,20
-python3 summarize_bd.py $(ls bd_v2/dispatch_bd_*.csv | grep -v -e _t1_ -e _t3_) --csv bd_v2/summary.csv > bd_v2/summary.txt   # here, in steve-cx7/
+python3 summarize_bd.py $(ls bd_v2/dispatch_bd_*.csv | grep -v -e _t1_ -e _t3_ -e _t3reap_) --csv bd_v2/summary.csv > bd_v2/summary.txt   # here, in steve-cx7/
 # Fig 3b (1 and 128 x 7 KiB, one session): on steve, for each of --path local | --path ordered --qp dest --nq 3 --post lane |
 #   --path flush --qp warp --post lane: sudo bash ~/loom-experiments/gpu-posted/bd_one.sh <path args> --H 7168 --tokens 1,128 --iters 20
 #   > ~/loom-experiments/gpu-posted/bd_v2/dispatch_bd_t1_{local,ordered-destL3,flush-warpL}_H7168_load0.csv; scp them to bd_v2/, then
