@@ -29,7 +29,7 @@ rm ~/loom-paper/plots/*.png                # the paper uses the PDFs
 scripts/deploy_gpu_host.sh steve                          # repo host: sources and scripts -> steve:~/loom-experiments/
 ssh steve ~/loom-experiments/paper/build_all.sh           # GPU host, once (~30 min, ~25 GB of nix + docker)
 ssh -t steve sudo ~/loom-experiments/steve-rdma/setup_root.sh   # GPU host, after EVERY reboot
-ssh steve ~/loom-experiments/paper/run_paper.sh fig3      # Fig 3a/b (~15 min); `text` (~3 h), `extra`, `all`
+ssh steve ~/loom-experiments/paper/run_paper.sh fig3      # Fig 3a/b (~1 min); `text` (~3 h), `extra`, `all`
 scripts/collect_results.sh steve                          # repo host: outputs -> the repo (git diff shows changes)
 scripts/analyze_local.sh && scripts/make_plots.sh ~/loom-paper/plots
 ```
@@ -201,7 +201,7 @@ make sure no other container holds the GPU before a run (`docker ps`, `nvidia-sm
 
 | Stage | Runs | Time |
 |---|---|---|
-| `fig3` | `dispatch_bd` local / ordered / flush, dispatch (7 KiB) and combine (14 KiB), 1/16/128 tokens, 20 runs each | ~15 min |
+| `fig3` | `dispatch_bd` local / ordered / flush, dispatch (7 KiB) and combine (14 KiB), 1/16/128 tokens, 20 runs each | ~1 min |
 | `text` | message rate; DeepEP post path; NVSHMEM put latency idle and beside a GEMM; GPU vs proxy dispatch sweeps (+ `dispatch_sweep_all.csv`); proxy, fence, NIC post, TMA, device copy engine; the 16-4096-token breakdown sweep; DeepGEMM next to reserved SMs (free and clock-locked) | ~3 h |
 | `extra` | ARGUMENT-only numbers: cuBLAS beside held SMs, CPU-posted RDMA beside the GEMM, NVSHMEM puts beside the GEMM, compute lost per dispatch (D3), copy-engine and CPU-posted latency, cuBLAS vs DeepGEMM | ~2.5 h |
 
@@ -230,7 +230,8 @@ and in `m5-rdma-init/README.md`.
 - **Local analyses** rewrite the committed outputs in place: after `scripts/analyze_local.sh --traces`,
   `git status` is clean (verified 2026-10-07).
 - **GPU runs** are measurements: expect the medians to move by a few percent between sessions (the
-  1/128-token dispatch reproduced within 2-5% across three sessions on 2026-10-06/07). Compare with
+  1/128-token dispatch reproduced within 2-5% across three sessions on 2026-10-06/07; three `fig3`
+  runs on 2026-10-07 agree within 5%, mostly 2%). Compare with
   `git diff` after `scripts/collect_results.sh`, then `scripts/make_plots.sh` prints the numbers the
   text quotes.
 

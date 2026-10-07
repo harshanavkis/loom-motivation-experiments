@@ -4,7 +4,7 @@
 # `sudo ~/loom-experiments/steve-rdma/setup_root.sh` (check.sh must show identity x3 and
 # PeerMappingOverride=1). Nothing else may run on the GPU. Outputs stay in each run directory;
 # scripts/collect_results.sh <host> copies them into the repo.
-#   run_paper.sh fig3    Fig 3a/b: dispatch + combine breakdown, 1/16/128 tokens       (~15 min)
+#   run_paper.sh fig3    Fig 3a/b: dispatch + combine breakdown, 1/16/128 tokens       (~1 min)
 #   run_paper.sh text    every measured number in the text of Sections 1-2             (~3 h)
 #   run_paper.sh extra   numbers kept in the paper's % ARGUMENT comments only           (~2.5 h)
 #   run_paper.sh all
