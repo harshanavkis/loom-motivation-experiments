@@ -416,7 +416,7 @@ def panel_breakdown(axes, fs, title, kind, H, tokens=(1, 16, 128), legend=True):
             extra = t.loc[p, 'sender_us'] - floor
             if extra > 0:
                 ax.bar(x[i] + 0.43, extra, 0.16, bottom=floor, color=LOOMGONE, edgecolor='#a04040', linewidth=1.5,
-                       label='remote only' if i == 1 else None)
+                       label='removed by a\nload/store contract' if i == 1 else None)
             ax.text(x[i] + 0.43, max(t.loc[p, 'sender_us'], floor) + 0.16 * top, f"{t.loc[p, 'sender_us'] / floor:.1f}x",
                     ha='center', va='bottom', fontsize=fs['annotation'] - 12, color='#a04040')
         ax.set_xticks(x)
