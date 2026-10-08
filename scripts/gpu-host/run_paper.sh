@@ -122,6 +122,8 @@ extra() {
 }
 
 $H/steve-rdma/check.sh
+busy=$(nvidia-smi --query-compute-apps=pid,process_name --format=csv,noheader)
+if [ -n "$busy" ]; then echo "other processes hold the GPU, refusing to measure:"; echo "$busy"; exit 1; fi
 case $STAGE in
   fig3) fig3 ;; nic) nic ;; text) text ;; extra) extra ;; all) fig3; text; extra ;;
   *) echo "unknown stage $STAGE"; exit 1 ;;
