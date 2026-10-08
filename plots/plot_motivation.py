@@ -389,8 +389,8 @@ def panel_msgrate(ax, fs, title):
 
 
 BD_SEGS = (('send', 'send loop', PASTEL[0], ''),
-           ('drain', 'waiting for own writes', PASTEL[3], '//'),
-           ('signal', 'signal issued', PASTEL[1], '..'),
+           ('drain', 'wait for writes', PASTEL[3], '//'),
+           ('signal', 'signal', PASTEL[1], '..'),
            ('flight', 'signal in flight', PASTEL[7], '\\\\'))
 
 
@@ -415,18 +415,18 @@ def panel_breakdown(axes, fs, title, kind, H, tokens=(1, 16, 128), legend=True):
         reap = float(reap_t3(kind).loc[T])
         io = list(BD_PATHS).index('ordered-destL24')
         ax.bar(x[io], reap, 0.65, bottom=t.loc['ordered-destL24', 'sender_us'], color='white', hatch='++',
-               edgecolor='gray', linewidth=1, label='completions\ncollected later')
+               edgecolor='gray', linewidth=1, label='deferred completions')
         t = t.assign(total_us=t.sender_us)
         t.loc['ordered-destL24', 'total_us'] += reap
         top = max(t.total_us)
         for i, p in enumerate(BD_PATHS):
-            ax.text(x[i], t.loc[p, 'total_us'] + 0.04 * top, f"{t.loc[p, 'total_us']:.0f}", ha='center',
+            ax.text(x[i] - 0.06, t.loc[p, 'total_us'] + 0.03 * top, f"{t.loc[p, 'total_us']:.0f}", ha='center',
                     va='bottom', fontsize=fs['annotation'] - 6)
         link_us = nic_payload_us(kind, H, T)   # what a flushing sender waits out: drawn over the flush bar only
         ifl = list(BD_PATHS).index('flush-warpL24')
         if link_us < top * 1.3:
             ax.plot([x[ifl] - 0.4, x[ifl] + 0.4], [link_us, link_us], color='black', linewidth=4, linestyle='--',
-                    label='payload through NIC')
+                    label='NIC transfer')
         floor = t.loc['local', 'sender_us']
         for i, p in enumerate(BD_PATHS):
             if p == 'local':
@@ -434,29 +434,27 @@ def panel_breakdown(axes, fs, title, kind, H, tokens=(1, 16, 128), legend=True):
             extra = t.loc[p, 'total_us'] - floor
             if extra > 0:
                 ax.bar(x[i] + 0.43, extra, 0.16, bottom=floor, color=LOOMGONE, edgecolor='#a04040', linewidth=1.5,
-                       label='removed by a\nload/store contract' if i == 1 else None)
-            ax.text(x[i] + 0.43, max(t.loc[p, 'total_us'], floor) + 0.16 * top, f"{t.loc[p, 'total_us'] / floor:.1f}x",
-                    ha='center', va='bottom', fontsize=fs['annotation'] - 12, color='#a04040')
+                       label='removed by load/store' if i == 1 else None)
+            # ratio upright on top of the narrow bar, so it never runs into a total label (2026-10-08)
+            ax.text(x[i] + 0.43, max(t.loc[p, 'total_us'], floor) + 0.03 * top, f"{t.loc[p, 'total_us'] / floor:.1f}x",
+                    ha='center', va='bottom', rotation=90, fontsize=fs['annotation'] - 8, color='#a04040')
         ax.set_xticks(x)
         ax.set_xlim(-0.55, 2.75)
         ax.set_xticklabels(['local', 'ord.', 'flush'], fontsize=fs['tick'] - 8)
         ax.tick_params(axis='y', labelsize=fs['tick'] - 6)
-        ax.set_ylim(0, top * (5.6 if legend and ax is axes[0] else 1.35))   # headroom for the legend
+        ax.set_ylim(0, top * 1.5)   # headroom for the total and ratio labels (legend is figure-level since 2026-10-08)
         ax.yaxis.set_major_locator(mticker.MaxNLocator(3))
         ax.grid(True, alpha=0.3, axis='y')
         ax.set_xlabel(f'{T} token{"s" if T > 1 else ""}', fontsize=fs['label'] - 4)
     axes[0].set_ylabel('Sender busy [us]', fontsize=fs['label'])
-    if legend:
-        h, l = axes[0].get_legend_handles_labels()
-        for ax in axes[1:]:   # the payload line may be drawn only in the larger panels
-            for hh, ll in zip(*ax.get_legend_handles_labels()):
-                if ll not in l:
-                    h.append(hh); l.append(ll)
-        axes[0].legend(h, l, loc='upper left', ncol=1, frameon=True, fontsize=fs['legend'] - 10, handlelength=1.4,
-                       labelspacing=0.25, borderpad=0.3)
-    mid = axes[len(axes) // 2]
-    mid.text(0.5, 1.0, title, transform=mid.transAxes, ha='center', va='bottom',
-             fontsize=fs['annotation'], color='navy', fontweight='bold', clip_on=False)
+    # 2026-10-08 (owner: legends too small, too many): no legend inside the axes; the handles go to one
+    # figure-level legend shared by (a) and (b) (figure_costs)
+    h, l = axes[0].get_legend_handles_labels()
+    for ax in axes[1:]:   # the payload line may be drawn only in the larger panels
+        for hh, ll in zip(*ax.get_legend_handles_labels()):
+            if ll not in l:
+                h.append(hh); l.append(ll)
+    return h, l
 
 
 def nic_to_hbm_gbps():
@@ -494,9 +492,9 @@ def panel_transport_state(ax, fs, title):
     d = transport_state()
     b = staging_buffers()
     eps = [16, 128, 256, 512, 1024]
-    series = (('v1-ll', 'DeepEP V1 low-latency', 'lightskyblue'),
-              ('v1-normal', 'DeepEP V1 normal (max EP160)', 'white'),
-              ('v2.5', 'DeepEP V2.5', 'tab:blue'))
+    series = (('v1-ll', 'V1 low-lat.', 'lightskyblue'),     # DeepEP versions (caption)
+              ('v1-normal', 'V1 normal', 'white'),
+              ('v2.5', 'V2.5', 'tab:blue'))
     w = 0.21
     for j, (k, lab, color) in enumerate(series):
         s_ = d[d.series == k].set_index('ep')
@@ -509,27 +507,25 @@ def panel_transport_state(ax, fs, title):
         ax.bar(xs, g, w, bottom=q, color=color, hatch='xx', edgecolor='black', linewidth=1, alpha=0.55)
         for xi, e, top in zip(xs, have, q + g):
             ax.text(xi, top + 0.1, f"{s_.loc[e, 'qps']:,}", ha='center', va='bottom', rotation=90,
-                    fontsize=fs['annotation'] - 12)
+                    fontsize=fs['annotation'] - 8)
     lm = loom_gpu_state().set_index('ep')   # Loom: pointers + page-table entries, no queues, no staging
     xs = np.arange(len(eps)) + 1.5 * w
     vals = np.array([lm.loc[e, 'mib'] / 1024 for e in eps])
-    ax.bar(xs, vals, w, color=VARIANTS['loom'][1], edgecolor='black', linewidth=1, label='NVLink-style, every peer\n(pointers + page tables)')
+    ax.bar(xs, vals, w, color=VARIANTS['loom'][1], edgecolor='black', linewidth=1, label='NVLink-style')
     for xi, e in zip(xs, eps):
         v = lm.loc[e, 'mib']
         ax.text(xi, 0.1, f"{v:.1f} MiB" if v >= 1 else f"{v * 1024:.0f} KiB", ha='center', va='bottom', rotation=90,
-                fontsize=fs['annotation'] - 12, color=VARIANTS['loom'][1])
-    ax.bar([0], [0], 0, color='white', hatch='xx', edgecolor='black', label='+ pinned staging buffers')
+                fontsize=fs['annotation'] - 8, color=VARIANTS['loom'][1])
+    ax.bar([0], [0], 0, color='white', hatch='xx', edgecolor='black', label='+ staging')
     ax.set_xticks(range(len(eps)))
     ax.set_xticklabels([f'{e}' for e in eps], fontsize=fs['tick'])
     ax.tick_params(axis='y', labelsize=fs['tick'])
-    ax.set_ylim(0, 11)            # headroom so the legend sits above the bars
-    ax.set_yticks([0, 2, 4])
+    ax.set_ylim(0, 7.5)           # headroom for the queue-pair labels (legend is figure-level since 2026-10-08)
+    ax.set_yticks([0, 2, 4, 6])
     ax.set_xlabel('GPUs in the expert-parallel group', fontsize=fs['label'])
     ax.set_ylabel('Memory per GPU [GiB]', fontsize=fs['label'] - 6)
     ax.grid(True, alpha=0.3, axis='y')
-    ax.legend(loc='upper left', ncol=1, frameon=True, fontsize=fs['legend'] - 8, handlelength=1.4,
-              labelspacing=0.3, borderpad=0.3)
-    top_label(ax, title, fs['annotation'])
+    return ax.get_legend_handles_labels()
 
 
 def panel_routing(ax, fs, title):
@@ -581,13 +577,29 @@ def figure_costs(out_dir):
     per GPU. Dropped 2026-10-07 (owner): the message-rate panel (GPU-initiated vs CPU proxy; its
     numbers stay in the text and are printed below)."""
     fs = MOTIVATION_COMBINED_FONT_SIZES
-    fig = plt.figure(figsize=E2E_COMBINED_FIGURE_SIZE)
-    gs = fig.add_gridspec(1, 3, left=0.04, right=0.99, top=0.88, bottom=0.2, wspace=0.16, width_ratios=[1.3, 1.3, 1])
+    # 2026-10-08 (owner: legends too small, too many): titles on top, then one legend strip shared by (a) and
+    # (b) and one for (c), then the axes; no legend inside any axes, so the bars use the full height
+    fig = plt.figure(figsize=(E2E_COMBINED_FIGURE_SIZE[0], 8.5))
+    gs = fig.add_gridspec(1, 3, left=0.04, right=0.99, top=0.88, bottom=0.285, wspace=0.16, width_ratios=[1.3, 1.3, 1])
     axd = [fig.add_subplot(c) for c in gs[0, 0].subgridspec(1, 3, wspace=0.42)]
     axc = [fig.add_subplot(c) for c in gs[0, 1].subgridspec(1, 3, wspace=0.42)]
-    panel_breakdown(axd, fs, '(a) Dispatch initiation, 7 KiB tokens (lower ↓)', 'dispatch', 7168)
-    panel_breakdown(axc, fs, '(b) Combine initiation, 14 KiB tokens (lower ↓)', 'combine', 14336, legend=False)
-    panel_transport_state(fig.add_subplot(gs[0, 2]), fs, '(c) Transport state per GPU (lower ↓)')
+    axs = fig.add_subplot(gs[0, 2])
+    h, l = panel_breakdown(axd, fs, None, 'dispatch', 7168)
+    panel_breakdown(axc, fs, None, 'combine', 14336)
+    hs, ls = panel_transport_state(axs, fs, None)
+    def xmid(a0, a1):
+        return (a0.get_position().x0 + a1.get_position().x1) / 2
+    for (a0, a1), title in (((axd[0], axd[-1]), '(a) Dispatch, 7 KiB tokens (lower ↓)'),
+                            ((axc[0], axc[-1]), '(b) Combine, 14 KiB tokens (lower ↓)'),
+                            ((axs, axs), '(c) Transport state per GPU (lower ↓)')):
+        fig.text(xmid(a0, a1), 0.985, title, ha='center', va='top', fontsize=fs['annotation'], color='navy',
+                 fontweight='bold')
+    # legends right below the x-axis labels (owner 2026-10-08: close to the chart area, (c)'s under (c) only)
+    lfs = fs['tick'] - 6
+    fig.legend(h, l, loc='upper center', bbox_to_anchor=(xmid(axd[0], axc[-1]), 0.135), ncol=len(l),
+               frameon=False, fontsize=lfs, handlelength=1.6, columnspacing=1.6, borderaxespad=0)
+    fig.legend(hs, ls, loc='upper center', bbox_to_anchor=(xmid(axs, axs), 0.135), ncol=3, frameon=False,
+               fontsize=lfs, handlelength=1.4, columnspacing=0.8, labelspacing=0.2, borderaxespad=0)
     save(fig, out_dir, 'loom-costs')
     plt.close(fig)
 
