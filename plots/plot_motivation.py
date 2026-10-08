@@ -440,7 +440,7 @@ def panel_breakdown(axes, fs, title, kind, H, tokens=(1, 16, 128), legend=True):
         ax.set_xlim(-0.55, 2.75)
         ax.set_xticklabels(['local', 'ord.', 'flush'], fontsize=fs['tick'] - 8)
         ax.tick_params(axis='y', labelsize=fs['tick'] - 6)
-        ax.set_ylim(0, top * (4.2 if legend and ax is axes[0] else 1.35))   # headroom for the legend
+        ax.set_ylim(0, top * (5.6 if legend and ax is axes[0] else 1.35))   # headroom for the legend
         ax.yaxis.set_major_locator(mticker.MaxNLocator(3))
         ax.grid(True, alpha=0.3, axis='y')
         ax.set_xlabel(f'{T} token{"s" if T > 1 else ""}', fontsize=fs['label'] - 4)
