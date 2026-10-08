@@ -1,0 +1,5 @@
+1 same-port, host mem | client mlx5_0 host -> server mlx5_0 host | 22940.09 MiB/s, 0.367041 Mpps | wire tx MB: mlx5_0=0 mlx5_1=0
+2 same-port, GPU mem | client mlx5_0 --use_cuda=0 --use_cuda_dmabuf -> server mlx5_0 --use_cuda=0 --use_cuda_dmabuf | 22597.95 MiB/s, 0.361567 Mpps | wire tx MB: mlx5_0=0 mlx5_1=0
+3 port0->port1, host | client mlx5_0 host -> server mlx5_1 host | 22068.26 MiB/s, 0.353092 Mpps | wire tx MB: mlx5_0=73373 mlx5_1=73
+4 port0->port1, GPU->host | client mlx5_0 --use_cuda=0 --use_cuda_dmabuf -> server mlx5_1 host | 21752.03 MiB/s, 0.348032 Mpps | wire tx MB: mlx5_0=72331 mlx5_1=71
+5 port0->port1, GPU->GPU | client mlx5_0 --use_cuda=0 --use_cuda_dmabuf -> server mlx5_1 --use_cuda=0 --use_cuda_dmabuf | 21757.95 MiB/s, 0.348127 Mpps | wire tx MB: mlx5_0=72351 mlx5_1=70

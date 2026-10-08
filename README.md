@@ -56,7 +56,7 @@ cite the same files.
 | Fig 3a (`loom-costs`): dispatch initiation (sender busy until it has issued the signal), 7 KiB, 1/16/128 tokens | `m5-rdma-init/steve-cx7/bd_v2/dispatch_bd_t3_*.csv` -> `summary_t3.csv` | GPU [`fig3`], `summarize_bd.py` |
 | Fig 3a/b hatched: completions an ordered sender collects later | `bd_v2/{dispatch,combine}_bd_t3reap_*.csv` -> `summary_t3reap.csv`, `summary_combine_t3reap.csv` | GPU [`fig3`] (`dispatch_bd --reap-inline`) |
 | Fig 3b: combine initiation, 14 KiB | `bd_v2/combine_bd_t3_*.csv` -> `summary_combine_t3.csv` | GPU [`fig3`] (`dispatch_bd --combine`) |
-| Fig 3a/b dashed line: payload through the NIC | message counts from the runs above x size / the NIC -> GPU-memory rate | the rate (14.6 GB/s on steve) is derived from `m5-rdma-init/steve-cx7/dispatch_sweep_all.csv`, the fastest 4096-token dispatch (`plot_motivation.nic_to_hbm_gbps`) |
+| Fig 3a/b dashed line: payload through the NIC | message counts from the runs above x size / the NIC -> GPU-memory rate | the rate (22.6 GB/s on steve since 2026-10-08, 14.6 before) is derived from `m5-rdma-init/steve-cx7/dispatch_sweep_all.csv`, the fastest 4096-token dispatch (`plot_motivation.nic_to_hbm_gbps`) |
 | Fig 3c: transport state per GPU, EP16-EP1024 (queue pairs + pinned staging buffers) | `m2-device-state/totals.out` (struct sizes from `sizes.out`), `m2-device-state/buffers.out` | local (`totals.py`, `run_sizes.sh`, `buffers.py`) |
 | Table 2 (`tables/comparison.tex`) | qualitative | - |
 
@@ -65,24 +65,24 @@ cite the same files.
 | Where | Number | Data | Produced by |
 |---|---|---|---|
 | Intro, 2.1 | 483 / 471 / 12 / 72 MiB per Mixtral-8x22B layer | `m3-sm-share/chakra/et_summary_Mixtral-8x22B.json` | local |
-| Intro, 2.2 | 87 M/s GPU-initiated vs ~3 M/s CPU proxy | `m5-rdma-init/steve-cx7/msgrate_steve.csv` | GPU [`text`] `run_msgrate.sh` |
-| Intro, 2.2 | dispatch 2.1-5.4x faster when the GPU posts | `dispatch_sweep_all.csv`, `dispatch_ibgda_block_H*_load0.csv`, `deepep_post_dispatch_H*.csv` | GPU [`text`] `run_dispatch*.sh`, `run_deepep_post.sh` |
-| Intro, 2.3 #2 | post chain 3.1 µs (DeepEP) / 7.3 µs (NVSHMEM) of SM time | `deepep_post_lat.csv` | GPU [`text`] `run_deepep_post.sh` |
-| 2.2 | single message 5.4 (proxy) / 9.2 (DeepEP) / 14.3 µs (NVSHMEM) | `proxy_b2_numa0.csv`, `deepep_post_lat.csv` | GPU [`text`] |
-| Intro, 2.3 #2 | flush holds SMs 10-34x (dispatch), 9-27x (combine) as long as local | `bd_v2/summary_t3.csv`, `summary_combine_t3.csv` | GPU [`fig3`] |
+| Intro, 2.2 | 107 M/s GPU-initiated vs ~2 M/s CPU proxy | `m5-rdma-init/steve-cx7/msgrate_steve.csv` | GPU [`text`] `run_msgrate.sh` |
+| Intro, 2.2 | dispatch 3.2-4.5x faster when the GPU posts | `dispatch_sweep_all.csv`, `dispatch_ibgda_block_H*_load0.csv`, `deepep_post_dispatch_H*.csv` | GPU [`text`] `run_dispatch*.sh`, `run_deepep_post.sh` |
+| Intro, 2.3 #2 | post chain 2.5 µs (DeepEP) / 6.7 µs (NVSHMEM) of SM time | `deepep_post_lat.csv` | GPU [`text`] `run_deepep_post.sh` |
+| 2.2 | single message 4.6 (proxy) / 8.1 (DeepEP) / 12.9 µs (NVSHMEM) | `proxy_b2_numa0.csv`, `deepep_post_lat.csv` | GPU [`text`] |
+| Intro, 2.3 #2 | flush holds SMs 10-21x (dispatch), 8-18x (combine) as long as local | `bd_v2/summary_t3.csv`, `summary_combine_t3.csv` | GPU [`fig3`] |
 | Intro, 2.3 #3, Table 1 | 4,257 QPs / 592 MiB at EP256; 16,641 / 2.3 GiB at EP1024 | `m2-device-state/totals.out` | local |
 | Intro, 2.3 #1 | NCCL 47% fabric-specific, 36.6K / 16.6K lines, 32% of 25K in 2.18, 20 plugin APIs | `m1-nccl-loc/summary_*.txt`, `results.md` | local |
 | 2.1 | TMA 45 GB/s per SM, stores 35 GB/s | `m5-rdma-init/steve-cx7/tma_bw.csv` | GPU [`text`] |
 | 2.1 | a kernel cannot start a copy engine | `dev_ce_check.csv` | GPU [`text`] |
 | 2.1 | copy-engine collective 17 µs + 2 µs per rank | `src/nccl/src/tuning/ce_model.cc` | source |
 | 2.1 | Mixtral-8x7B: 83% before the last rank starts, a2a 94 µs, 1.7x NVLink bound | `m3-sm-share/chakra/out_skew_Mixtral-8x7B.txt`, `out_moe_Mixtral-8x7B.txt` | local (`--traces`) |
-| 2.1 | NIC writes GPU memory at 14.6 GB/s | `m5-rdma-init/steve-cx7/dispatch_sweep_all.csv` (printed by `make_plots.sh`; perftest's GPU->GPU loopback, `m3-sm-share/steve-rdma/perftest-cuda/loopback_steve_identity.txt`, gives 15.7 GB/s) | GPU [`text`] |
-| 2.3 #2 | NVSHMEM puts 10-22% slower beside a GEMM | `put_lat_steve.txt` vs `put_lat_steve_load.txt` | GPU [`text`] `run_put_lat.sh` |
+| 2.1 | NIC writes GPU memory at 22.6 GB/s | `m5-rdma-init/steve-cx7/dispatch_sweep_all.csv` (printed by `make_plots.sh`; perftest's GPU->GPU loopback, `m3-sm-share/steve-rdma/perftest-cuda/loopback_rerun.txt`, gives 22.8 GB/s) | GPU [`text`] |
+| 2.3 #2 | NVSHMEM puts 13-20% slower beside a GEMM | `put_lat_steve.txt` vs `put_lat_steve_load.txt` | GPU [`text`] `run_put_lat.sh` |
 | 2.3 #2 | 88-97% of a token's copies leave an 8-GPU domain from EP64 | `m6-routing/routing_traffic.csv` | local (`routing_traffic.py`) |
 | 2.3 #2 | 1-token and 128-token breakdown numbers | `bd_v2/summary_t3.csv`, `summary_combine_t3.csv` | GPU [`fig3`] |
-| 2.3 #2 | at 4096 tokens the remote path is the link (10.6 ms vs 0.29 ms) | `bd_v2/summary.csv` | GPU [`text`] `run_dispatch_bd.sh` |
+| 2.3 #2 | at 4096 tokens the remote path is the link (6.9 ms vs 0.29 ms) | `bd_v2/summary_4096.csv` | GPU [`nic`] (`bd_one.sh`, 4096 tokens) |
 | 2.3 #2 | DeepGEMM keeps 81-94% beside 20 reserved SMs | `m3-sm-share/deepgemm/held_m*.csv`, `locked_m*.csv` | GPU [`text`] (docker) |
-| 2.3 #2 | a single message by stores would take 3.9-5.4 µs | `fence_cost_numa0.csv`, `nic_post_numa0.csv` | GPU [`text`] |
+| 2.3 #2 | a single message by stores would take 3.4-4.7 µs | `fence_cost_numa0.csv`, `nic_post_numa0.csv` | GPU [`text`] |
 | 2.3 #3 | 384.5 KiB per NVSHMEM QP, 140 KiB per GIN QP | `m2-device-state/sizes.out`, `totals.out` | local |
 | 2.3 #2, #3 | 0.95 GB pinned send buffers (DeepEP V1, decode); 0.6 / 2.4 GiB (V2.5, EP256 / EP1024) | `m2-device-state/buffers.out` | local (`buffers.py`) |
 
