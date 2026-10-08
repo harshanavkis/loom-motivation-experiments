@@ -8,7 +8,7 @@
 set -euo pipefail
 # PCI addresses of the GPU and of the two NIC ports cabled back to back (steve's defaults; find yours
 # with `lspci -D | grep -i -e nvidia -e mellanox` and `nvidia-smi topo -m`)
-GPU=${GPU:-0000:15:00.0}; NICS=${NICS:-"0000:95:00.0 0000:95:00.1"}
+GPU=${GPU:-0000:15:00.0}; NICS=${NICS:-"0000:3b:00.0 0000:3b:00.1"}
 grp() { basename "$(readlink /sys/bus/pci/devices/$1/iommu_group)"; }
 typ() { cat /sys/kernel/iommu_groups/$(grp $1)/type; }
 
