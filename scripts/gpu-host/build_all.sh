@@ -18,4 +18,18 @@ if [ "${1:-}" != --no-docker ]; then
   echo "== DeepGEMM image (DeepGEMM 057ca59, CUDA 12.9; ~18 GB)"
   docker build -t loom-deepgemm $H/deepgemm
 fi
+echo "== pin the nix store paths the built tools load at run time (a garbage collection, e.g. at reboot, removed"
+echo "   them once: binaries then fail with 'libmlx5.so.1: cannot open shared object file')"
+mkdir -p $H/.gcroots
+for f in $H/latency/* $H/gpu-posted/* $H/gpu-interference/* $H/perftest-cuda/install/bin/* $H/nvshmem-3.6.5/lib/*.so*; do
+  [ -f "$f" ] && [ -x "$f" -o "${f%.so*}" != "$f" ] || continue
+  readelf -d "$f" 2>/dev/null | grep -o '/nix/store/[^:/]*' || true
+done | sort -u > $H/.gcroots/paths.txt
+grep -o '/nix/store/[^:/]*' $H/nvshmem-loopback/env.sh >> $H/.gcroots/paths.txt || true
+for t in mpich numactl; do nix build --no-link --print-out-paths nixpkgs#$t | grep -v -- -man | head -1 >> $H/.gcroots/paths.txt; done
+sort -u $H/.gcroots/paths.txt | while read p; do
+  nix-store --realise "$p" --add-root "$H/.gcroots/$(basename "$p")" --indirect > /dev/null 2>&1 \
+    || echo "   not pinned (gone and not substitutable): $p"   # e.g. openmpi/ucx/pmix of NVSHMEM's unused plugins
+done
+echo "   pinned $(sort -u $H/.gcroots/paths.txt | wc -l) store paths under $H/.gcroots"
 echo "built; next: sudo $H/steve-rdma/setup_root.sh (after every reboot), then $H/paper/run_paper.sh fig3"
