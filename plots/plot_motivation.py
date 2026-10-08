@@ -290,11 +290,12 @@ def staging_buffers():
 
 
 def loom_gpu_state():
-    """Loom's GPU-side state per GPU (MiB), rough estimate from buffers.out: one pointer + page-table entries
-    over every peer's receive window (see buffers.py loom_gpu_state)."""
+    """GPU-side state per GPU (MiB) if every EP peer is reached as an NVLink peer is today (what Loom provides),
+    rough estimate from buffers.out: one pointer + page-table entries over every peer's receive window
+    (see buffers.py loom_gpu_state)."""
     rows, on = [], False
     for line in open(os.path.join(M2, 'buffers.out')):
-        if line.startswith('Loom, GPU side'):
+        if line.startswith('NVLink-style peer state'):
             on = True
             continue
         m = re.match(r'^\s+(\d+)\s+[\d.]+ (?:MiB|GiB)\s+[\d,]+\s+[\d,]+ B\s+([\d.]+) (MiB|GiB)', line)
@@ -512,7 +513,7 @@ def panel_transport_state(ax, fs, title):
     lm = loom_gpu_state().set_index('ep')   # Loom: pointers + page-table entries, no queues, no staging
     xs = np.arange(len(eps)) + 1.5 * w
     vals = np.array([lm.loc[e, 'mib'] / 1024 for e in eps])
-    ax.bar(xs, vals, w, color=VARIANTS['loom'][1], edgecolor='black', linewidth=1, label='Loom (pointers + page tables)')
+    ax.bar(xs, vals, w, color=VARIANTS['loom'][1], edgecolor='black', linewidth=1, label='NVLink-style, every peer\n(pointers + page tables)')
     for xi, e in zip(xs, eps):
         v = lm.loc[e, 'mib']
         ax.text(xi, 0.1, f"{v:.1f} MiB" if v >= 1 else f"{v * 1024:.0f} KiB", ha='center', va='bottom', rotation=90,
@@ -623,7 +624,7 @@ def main():
     print('message rate (text only):', m.groupby('transport').mops.max().round(1).to_dict())
     print('transport state (Fig 3c):')
     print(transport_state().to_string(index=False))
-    print('Loom GPU-side state (Fig 3c, green), MiB:')
+    print('NVLink-style peer state for every EP peer (Fig 3c, green), MiB:')
     print(loom_gpu_state().to_string(index=False))
     print('pinned staging buffers (Fig 3c, hatched):')
     print(staging_buffers().to_string(index=False))

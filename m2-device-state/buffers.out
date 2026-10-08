@@ -126,7 +126,7 @@ T=128,  flat load/store domain (direct, is_scaleup_nvlink) total     32.0 MiB   
    of which (a) send/staging                                          0.0 MiB      0.0 MiB      0.0 MiB      0.0 MiB
 
 ======================================================================================================================
-Loom, GPU side (rough estimate): per peer one 8 B pointer + 8 B PTEs (2 MiB pages) over its receive window
+NVLink-style peer state, GPU side (rough estimate; NVLink peers of an 8-GPU node: 7 x per peer = 25,536 B): per peer one 8 B pointer + 8 B PTEs (2 MiB pages) over its receive window
 ======================================================================================================================
    EP  window per peer   pages/peer   bytes/peer        total
    16        910.0 MiB         455       3,648 B       0.1 MiB
