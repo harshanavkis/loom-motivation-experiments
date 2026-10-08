@@ -532,8 +532,7 @@ def loom_gpu_state(ep, tokens=128):
 def print_loom():
     # An NVLink peer is reached the same way today (CUDA IPC maps the peer's buffer into the GPU's page tables),
     # so this is the GPU-side state of an NVLink peer; Loom gives every peer in the EP group that contract.
-    nvl = 7 * loom_gpu_state(256)["per_peer"]
-    header(f"NVLink-style peer state, GPU side (rough estimate; NVLink peers of an 8-GPU node: 7 x per peer = {nvl:,} B):"
+    header("NVLink-style peer state, GPU side (rough estimate, every EP peer reached as an NVLink peer):"
            " per peer one 8 B pointer + 8 B PTEs (2 MiB pages) over its receive window")
     print("   EP  window per peer   pages/peer   bytes/peer        total")
     for ep in (16, 128, 256, 512, 1024):
