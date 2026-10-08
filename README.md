@@ -237,7 +237,8 @@ Everything that goes through the NIC must be rerun; nothing else does.
    or GID changed, edit `nvshmem-loopback/env.sh` and the perftest scripts (`-d`, `-x`). Make the defaults
    in `setup_root.sh` / `check.sh` the new addresses and commit.
 3. `~/loom-experiments/perftest-cuda/test_loopback.sh` (link check; GPU->GPU bandwidth).
-4. `~/loom-experiments/paper/run_paper.sh fig3`, then `run_paper.sh text` (~3 h). Not affected: TMA
+4. `~/loom-experiments/paper/run_paper.sh fig3`, then `run_paper.sh nic` (<1 h: only the NIC-dependent numbers the text
+   quotes; the 4096-token point goes to `bd_v2/summary_4096.csv`). `text` (~3 h) reruns everything. Not affected: TMA
    bandwidth, the device copy-engine check, DeepGEMM, and every local analysis.
 5. `scripts/collect_results.sh <host>`, `scripts/analyze_local.sh`, `scripts/make_plots.sh ~/loom-paper/plots`.
    The NIC -> GPU-memory rate behind the dashed line is recomputed from the new sweep; `make_plots.sh` prints

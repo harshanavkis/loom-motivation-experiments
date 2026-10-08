@@ -5,6 +5,7 @@
 # PeerMappingOverride=1). Nothing else may run on the GPU. Outputs stay in each run directory;
 # scripts/collect_results.sh <host> copies them into the repo.
 #   run_paper.sh fig3    Fig 3a/b: dispatch + combine breakdown, 1/16/128 tokens       (~1 min)
+#   run_paper.sh nic     only the NIC-dependent numbers the text quotes (after moving the NIC) (<1 h)
 #   run_paper.sh text    every measured number in the text of Sections 1-2             (~3 h)
 #   run_paper.sh extra   numbers kept in the paper's % ARGUMENT comments only           (~2.5 h)
 #   run_paper.sh all
@@ -70,6 +71,34 @@ text() {
   ./run_locked.sh        # same with the SM clock locked at 1410 MHz (sudo nvidia-smi -lgc)
 }
 
+nic() {   # the NIC-dependent numbers the text quotes; skips what does not touch the NIC (TMA, device copy
+          # engine, DeepGEMM) and limits the breakdown sweep to its quoted point (4096 tokens, 20 CTAs)
+  say "RDMA loopback link check (perftest, GPU->GPU)"
+  $H/perftest-cuda/test_loopback.sh > $H/perftest-cuda/loopback_rerun.txt
+  say "message rate, GPU-initiated vs CPU proxy"
+  sudo $H/nvshmem-loopback/run_msgrate.sh
+  say "DeepEP post path vs NVSHMEM put"
+  sudo $H/gpu-posted/run_deepep_post.sh
+  say "NVSHMEM put latency idle and beside a GEMM"
+  sudo $H/nvshmem-loopback/run_put_lat.sh && sudo $H/nvshmem-loopback/run_put_lat.sh load
+  say "dispatch, GPU-initiated vs CPU proxy (+ the NIC -> HBM rate)"
+  sudo $H/gpu-posted/run_dispatch.sh < /dev/null
+  sudo $H/gpu-posted/run_dispatch_block.sh < /dev/null
+  $H/latency/run_dispatch_proxy.sh
+  (cd $H && cat gpu-posted/dispatch_ibgda_H{1024,7168}_load{0,1}.csv latency/dispatch_proxy_H{1024,7168}_load{0,1}.csv > paper/dispatch_sweep_all.csv)
+  say "CPU proxy single put, fences, NIC post"
+  cd $H/latency
+  $NUMA -N 0 -m 0 ./proxy_b2 20000 > proxy_b2_numa0.csv
+  $NUMA -N 0 -m 0 ./fence_cost > fence_cost_numa0.csv
+  ./run_nic_post.sh
+  say "dispatch at the training size (4096 x 7 KiB, 20 CTAs)"
+  mkdir -p $H/gpu-posted/bd_v2
+  for V in "${PATHS[@]}"; do
+    N=${V%%:*}; A=${V#*:}; F=$H/gpu-posted/bd_v2/dispatch_bd4096_${N}_H7168_load0.csv
+    sudo bash $H/gpu-posted/bd_one.sh $A --H 7168 --tokens 4096 --iters 20 > $F 2> ${F%.csv}.err
+  done
+}
+
 extra() {
   say "cuBLAS GEMM beside held SMs / copy engine (M3)"
   (cd $H/gpu-interference && ./run.sh results_steve.csv && python3 summarize.py results_steve.csv > summary_steve.md)
@@ -94,7 +123,7 @@ extra() {
 
 $H/steve-rdma/check.sh
 case $STAGE in
-  fig3) fig3 ;; text) text ;; extra) extra ;; all) fig3; text; extra ;;
+  fig3) fig3 ;; nic) nic ;; text) text ;; extra) extra ;; all) fig3; text; extra ;;
   *) echo "unknown stage $STAGE"; exit 1 ;;
 esac
 say "done ($STAGE); on the repo host: scripts/collect_results.sh <host>"
