@@ -4,6 +4,8 @@
 # 1. NVIDIA driver option PeerMappingOverride=1: lets the GPU map the NIC doorbell (IBGDA).
 # 2. IOMMU passthrough (identity) for the GPU and both CX-7 functions: GPUDirect RDMA
 #    (NIC <-> HBM) and GPU -> NIC doorbell writes otherwise fault in the IOMMU (DMAR).
+# 3. MTU 9000 on both NIC ports: RoCE's active MTU follows the netdev MTU (1500 -> 1024 B packets);
+#    9000 gives the CX-7's maximum, 4096 B. The ports are cabled back to back, no switch in between.
 # Undo: reboot (or write DMA-FQ back to each group and remove /run/modprobe.d/nvidia-peermapping.conf).
 set -euo pipefail
 # PCI addresses of the GPU and of the two NIC ports cabled back to back (steve's defaults; find yours
@@ -40,6 +42,11 @@ for d in $NICS; do
     echo identity > /sys/kernel/iommu_groups/$(grp $d)/type
     echo $d > /sys/bus/pci/drivers/mlx5_core/bind
   fi
+done
+
+# 3. MTU (netdev of each NIC function)
+for d in $NICS; do
+  for n in /sys/bus/pci/devices/$d/net/*; do ip link set "$(basename $n)" mtu 9000; done
 done
 
 systemctl start ollama || true
