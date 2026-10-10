@@ -1,20 +1,20 @@
 # nvshmem post path, use_async_postsend=0 num_rc_per_pe=24
 test,mode,H,tokens,ctas,messages,median_us,p10_us,p90_us,GBps
-dispatch,nvshmem,7168,16,8,90,73.8,69.3,78.6,8.74
-dispatch,nvshmem,7168,16,20,90,75.9,71.9,82.0,8.50
-dispatch,nvshmem,7168,32,8,170,96.2,94.7,111.3,12.66
-dispatch,nvshmem,7168,32,20,170,104.6,92.2,110.3,11.65
-dispatch,nvshmem,7168,128,8,683,259.5,253.0,274.6,18.86
-dispatch,nvshmem,7168,128,20,683,252.2,241.8,261.8,19.42
-dispatch,nvshmem,7168,1024,8,5446,1770.3,1757.2,1776.7,22.05
-dispatch,nvshmem,7168,1024,20,5446,1760.1,1747.7,1769.4,22.18
-dispatch,nvshmem,7168,4096,8,21711,6883.9,6873.5,6895.5,22.61
-dispatch,nvshmem,7168,4096,20,21711,6889.3,6874.3,6897.4,22.59
+dispatch,nvshmem,7168,16,8,90,78.3,75.2,87.0,8.24
+dispatch,nvshmem,7168,16,20,90,80.7,76.9,85.3,7.99
+dispatch,nvshmem,7168,32,8,170,97.9,95.0,104.3,12.44
+dispatch,nvshmem,7168,32,20,170,99.3,93.6,103.7,12.27
+dispatch,nvshmem,7168,128,8,683,251.9,244.2,264.6,19.43
+dispatch,nvshmem,7168,128,20,683,235.8,230.8,250.4,20.76
+dispatch,nvshmem,7168,1024,8,5446,1681.2,1670.6,1694.9,23.22
+dispatch,nvshmem,7168,1024,20,5446,1673.5,1653.4,1696.8,23.33
+dispatch,nvshmem,7168,4096,8,21711,6529.8,6520.3,6541.2,23.83
+dispatch,nvshmem,7168,4096,20,21711,6536.0,6519.1,6553.0,23.81
 # deepep post path, use_async_postsend=0 num_rc_per_pe=24
 test,mode,H,tokens,ctas,messages,median_us,p10_us,p90_us,GBps
-dispatch,deepep,7168,16,8,90,44.5,43.9,46.8,14.48
-dispatch,deepep,7168,16,20,90,44.8,43.5,45.7,14.39
-dispatch,deepep,7168,32,8,170,70.1,68.9,82.8,17.37
-dispatch,deepep,7168,32,20,170,70.0,69.0,82.7,17.40
-dispatch,deepep,7168,128,8,683,228.2,227.5,241.7,21.45
-dispatch,deepep,7168,128,20,683,227.4,226.7,241.4,21.53
+dispatch,deepep,7168,16,8,90,44.0,43.3,55.5,14.67
+dispatch,deepep,7168,16,20,90,44.3,42.9,45.4,14.58
+dispatch,deepep,7168,32,8,170,67.4,65.9,80.9,18.07
+dispatch,deepep,7168,32,20,170,66.6,65.5,72.0,18.30
+dispatch,deepep,7168,128,8,683,217.6,216.6,232.4,22.50
+dispatch,deepep,7168,128,20,683,216.6,215.7,232.2,22.61
