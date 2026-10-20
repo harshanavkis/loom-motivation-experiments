@@ -339,16 +339,18 @@ def deepgemm_held(ks=(4, 8, 16, 20)):
 # ---------------------------------------------------------------- panels
 def panel_layer_bytes(ax, fs, title):
     b = mixtral_8x22b_layer_bytes()
-    segs = [('TP all-gather (host-queued)', [b['tp_ag'], 0], PASTEL[0], ''),
-            ('TP reduce-scatter (host-queued)', [b['tp_rs'], 0], PASTEL[1], '///'),
-            ('EP all-to-all (kernel-initiated)', [b['a2a_local'], b['a2a_remote']], PASTEL[3], '\\\\')]
+    segs = [('TP all-gather (host-initiated)', [b['tp_ag'], 0], PASTEL[0], ''),
+            ('TP reduce-scatter (host-initiated)', [b['tp_rs'], 0], PASTEL[1], '///'),
+            ('EP all-to-all (XPU-initiated)', [b['a2a_local'], b['a2a_remote']], PASTEL[3], '\\\\')]
     y = np.arange(2)
     left = np.zeros(2)
     for name, vals, color, hatch in segs:
         ax.barh(y, vals, 0.55, left=left, color=color, hatch=hatch, edgecolor='black', linewidth=1, label=name)
         left += np.array(vals)
+    # the EP all-to-all crosses both fabrics: name its NVLink share, too thin to see in the bar (review 2026-10-20)
+    lab = [f"{left[0]:.0f} MiB ({b['a2a_local']:.0f} MiB EP)", f'{left[1]:.0f} MiB']
     for i, tot in enumerate(left):
-        ax.text(tot + 8, y[i], f'{tot:.0f} MiB', va='center', ha='left', fontsize=fs['annotation'])
+        ax.text(tot + 8, y[i], lab[i], va='center', ha='left', fontsize=fs['annotation'])
     ax.set_yticks(y)
     ax.set_yticklabels(['NVLink\n(scale-up)', 'RDMA\n(scale-out)'], fontsize=fs['tick'])
     ax.invert_yaxis()
