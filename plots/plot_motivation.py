@@ -457,9 +457,11 @@ def panel_breakdown(axes, fs, title, kind, H, tokens=(1, 16, 128), legend=True):
 
 def panel_breakdown_both(axes, fs, tokens=(1, 16, 128)):
     """Section 2's one-column Fig 4 (owner 2026-10-21): dispatch (7 KiB) and combine (14 KiB) in ONE plot, one sub-axis
-    per batch size; per operation a local bar (gray: the GPU's own HBM, a lower bound) and a remote bar (flush path,
-    stacked: send loop, wait for writes, signal), dashed = the payload's time through the NIC, narrow bar + red label =
-    remote / local."""
+    per batch size; per operation a local bar (gray: the GPU's own HBM, a lower bound) and a remote bar. Owner 2026-10-21
+    (night): remote = the GENERIC path (ordered: the signal behind the data on the queue pair; completions collected
+    before the buffer is reused): stacked send loop + signal = the sender's busy time; dotted outline = the time the
+    buffer stays in use until its completions return (--reap-inline). Dashed = the payload's time through the NIC,
+    narrow bar (removed by Loom) + red label = (remote busy + buffer in use) / local."""
     ops = (('dispatch', 7168, 'disp.'), ('combine', 14336, 'comb.'))
     for ax, T in zip(axes, tokens):
         top, ticks = 0, []
@@ -471,22 +473,29 @@ def panel_breakdown_both(axes, fs, tokens=(1, 16, 128)):
             ax.bar(x0, loc, 0.8, color='0.8', edgecolor='black', linewidth=1, label='local (lower bound)')
             bottom = 0.0
             for col, lab, color, hatch in BD_SEGS[:3]:
-                v = t.loc['flush-warpL24', col]
+                v = t.loc['ordered-destL24', col]
+                if v <= 0:                       # the ordered path has no wait for writes
+                    continue
                 ax.bar(x0 + 1, v, 0.8, bottom=bottom, color=color, hatch=hatch, edgecolor='black', linewidth=1,
                        label=f'remote: {lab}')
                 bottom += v
             rem = bottom
+            reap = float(reap_t3(kind).loc[T])
+            ax.bar(x0 + 1, reap, 0.8, bottom=rem, fill=False, linestyle=':', edgecolor='dimgray', linewidth=2,
+                   label='remote: buffer in use')
             link = nic_payload_us(kind, H, T)
-            if link < rem * 1.3:
+            if link < (rem + reap) * 1.3:
                 ax.plot([x0 + 0.55, x0 + 1.45], [link, link], color='black', linewidth=4, linestyle='--',
                         label='NIC transfer')
-            ax.bar(x0 + 1.6, rem - loc, 0.22, bottom=loc, color=LOOMGONE, edgecolor='#a04040', linewidth=1.5,
-                   label='removed by load/store')
+            # owner 2026-10-21 night: "removed by Loom", up to the end of the buffer time (Loom frees the buffer at once)
+            ax.bar(x0 + 1.6, rem + reap - loc, 0.22, bottom=loc, color=LOOMGONE, edgecolor='#a04040', linewidth=1.5,
+                   label='removed by Loom')
             ticks.append((x0 + 0.5, name))
-            top = max(top, rem)
-            for x, v in ((x0, loc), (x0 + 0.85, rem)):
-                ax.text(x, v + 0.02 * rem, f'{v:.0f}', ha='center', va='bottom', fontsize=fs['annotation'] - 12)
-            ax.text(x0 + 1.68, rem + 0.02 * rem, f'{rem / loc:.1f}x', ha='center', va='bottom', rotation=90,
+            top = max(top, rem + reap)
+            for x, v in ((x0, loc), (x0 + 1, rem)):
+                ax.text(x, v + 0.02 * (rem + reap), f'{v:.0f}', ha='center', va='bottom', fontsize=fs['annotation'] - 12)
+            ax.text(x0 + 1.6, rem + reap + 0.02 * (rem + reap), f'{(rem + reap) / loc:.1f}x', ha='center', va='bottom',
+                    rotation=90,
                     fontsize=fs['annotation'] - 12, color='#a04040')
         for ax_ in (ax,):
             ax_.set_xticks([x for x, _ in ticks])
