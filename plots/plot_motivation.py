@@ -401,48 +401,44 @@ def panel_breakdown(axes, fs, title, kind, H, tokens=(1, 16, 128), legend=True):
     the arrival signal (send loop + waiting for its own writes + issuing the signal), stacked, one sub-axis per
     batch size (owner 2026-10-07: show initiation, not delivery; the receiver-side 'signal in flight' is left
     out and printed for the text). Dashed: the payload's time through the NIC, what a flushing sender waits
-    out. Narrow bars: what a remote sender spends beyond the local sender (labels: remote / local). The
-    ordered path reaps its completions after the dispatch (not in its bar)."""
+    out. Narrow bars: what a remote sender spends beyond the local sender (labels: remote / local). Owner
+    2026-10-21: only local and flush (the general path, the sender waits for its completions); the ordered path
+    (DeepEP's low-latency kernels) is one sentence in Section 2."""
+    paths = ('local', 'flush-warpL24')
     d = breakdown_t3(kind)
     d = d.assign(sender_us=d.send + d.drain + d.signal)
-    x = np.arange(len(BD_PATHS))
+    x = np.arange(len(paths))
     for ax, T in zip(axes, tokens):
         t = d[(d.H == H) & (d.tokens == T)].set_index('path')
         bottom = np.zeros(len(x))
         for col, lab, color, hatch in BD_SEGS[:3]:
-            vals = np.array([t.loc[p, col] for p in BD_PATHS])
+            vals = np.array([t.loc[p, col] for p in paths])
             ax.bar(x, vals, 0.65, bottom=bottom, color=color, hatch=hatch, edgecolor='black', linewidth=1, label=lab)
             bottom += vals
-        # the ordered sender collects its completions later (before it reuses its send buffer and queue slots)
-        reap = float(reap_t3(kind).loc[T])
-        io = list(BD_PATHS).index('ordered-destL24')
-        ax.bar(x[io], reap, 0.65, bottom=t.loc['ordered-destL24', 'sender_us'], color='white', hatch='++',
-               edgecolor='gray', linewidth=1, label='deferred completions')
         t = t.assign(total_us=t.sender_us)
-        t.loc['ordered-destL24', 'total_us'] += reap
-        top = max(t.total_us)
-        for i, p in enumerate(BD_PATHS):
+        top = max(t.loc[p, 'total_us'] for p in paths)
+        for i, p in enumerate(paths):
             ax.text(x[i] - 0.06, t.loc[p, 'total_us'] + 0.03 * top, f"{t.loc[p, 'total_us']:.0f}", ha='center',
                     va='bottom', fontsize=fs['annotation'] - 6)
         link_us = nic_payload_us(kind, H, T)   # what a flushing sender waits out: drawn over the flush bar only
-        ifl = list(BD_PATHS).index('flush-warpL24')
+        ifl = paths.index('flush-warpL24')
         if link_us < top * 1.3:
             ax.plot([x[ifl] - 0.4, x[ifl] + 0.4], [link_us, link_us], color='black', linewidth=4, linestyle='--',
                     label='NIC transfer')
         floor = t.loc['local', 'sender_us']
-        for i, p in enumerate(BD_PATHS):
+        for i, p in enumerate(paths):
             if p == 'local':
                 continue
             extra = t.loc[p, 'total_us'] - floor
             if extra > 0:
                 ax.bar(x[i] + 0.43, extra, 0.16, bottom=floor, color=LOOMGONE, edgecolor='#a04040', linewidth=1.5,
-                       label='removed by load/store' if i == 1 else None)
+                       label='removed by load/store')
             # ratio upright on top of the narrow bar, so it never runs into a total label (2026-10-08)
             ax.text(x[i] + 0.43, max(t.loc[p, 'total_us'], floor) + 0.03 * top, f"{t.loc[p, 'total_us'] / floor:.1f}x",
                     ha='center', va='bottom', rotation=90, fontsize=fs['annotation'] - 8, color='#a04040')
         ax.set_xticks(x)
-        ax.set_xlim(-0.55, 2.75)
-        ax.set_xticklabels(['local', 'ord.', 'flush'], fontsize=fs['tick'] - 8)
+        ax.set_xlim(-0.55, 1.75)
+        ax.set_xticklabels(['local', 'flush'], fontsize=fs['tick'] - 11)
         ax.tick_params(axis='y', labelsize=fs['tick'] - 6)
         ax.set_ylim(0, top * 1.5)   # headroom for the total and ratio labels (legend is figure-level since 2026-10-08)
         ax.yaxis.set_major_locator(mticker.MaxNLocator(3))
@@ -453,6 +449,57 @@ def panel_breakdown(axes, fs, title, kind, H, tokens=(1, 16, 128), legend=True):
     # figure-level legend shared by (a) and (b) (figure_costs)
     h, l = axes[0].get_legend_handles_labels()
     for ax in axes[1:]:   # the payload line may be drawn only in the larger panels
+        for hh, ll in zip(*ax.get_legend_handles_labels()):
+            if ll not in l:
+                h.append(hh); l.append(ll)
+    return h, l
+
+
+def panel_breakdown_both(axes, fs, tokens=(1, 16, 128)):
+    """Section 2's one-column Fig 4 (owner 2026-10-21): dispatch (7 KiB) and combine (14 KiB) in ONE plot, one sub-axis
+    per batch size; per operation a local bar (gray: the GPU's own HBM, a lower bound) and a remote bar (flush path,
+    stacked: send loop, wait for writes, signal), dashed = the payload's time through the NIC, narrow bar + red label =
+    remote / local."""
+    ops = (('dispatch', 7168, 'disp.'), ('combine', 14336, 'comb.'))
+    for ax, T in zip(axes, tokens):
+        top, ticks = 0, []
+        for j, (kind, H, name) in enumerate(ops):
+            d = breakdown_t3(kind)
+            t = d[(d.H == H) & (d.tokens == T)].set_index('path')
+            x0 = j * 2.7
+            loc = t.loc['local', 'send'] + t.loc['local', 'drain'] + t.loc['local', 'signal']
+            ax.bar(x0, loc, 0.8, color='0.8', edgecolor='black', linewidth=1, label='local (lower bound)')
+            bottom = 0.0
+            for col, lab, color, hatch in BD_SEGS[:3]:
+                v = t.loc['flush-warpL24', col]
+                ax.bar(x0 + 1, v, 0.8, bottom=bottom, color=color, hatch=hatch, edgecolor='black', linewidth=1,
+                       label=f'remote: {lab}')
+                bottom += v
+            rem = bottom
+            link = nic_payload_us(kind, H, T)
+            if link < rem * 1.3:
+                ax.plot([x0 + 0.55, x0 + 1.45], [link, link], color='black', linewidth=4, linestyle='--',
+                        label='NIC transfer')
+            ax.bar(x0 + 1.6, rem - loc, 0.22, bottom=loc, color=LOOMGONE, edgecolor='#a04040', linewidth=1.5,
+                   label='removed by load/store')
+            ticks.append((x0 + 0.5, name))
+            top = max(top, rem)
+            for x, v in ((x0, loc), (x0 + 0.85, rem)):
+                ax.text(x, v + 0.02 * rem, f'{v:.0f}', ha='center', va='bottom', fontsize=fs['annotation'] - 12)
+            ax.text(x0 + 1.68, rem + 0.02 * rem, f'{rem / loc:.1f}x', ha='center', va='bottom', rotation=90,
+                    fontsize=fs['annotation'] - 12, color='#a04040')
+        for ax_ in (ax,):
+            ax_.set_xticks([x for x, _ in ticks])
+            ax_.set_xticklabels([n for _, n in ticks], fontsize=fs['tick'] - 10)
+        ax.set_xlim(-0.6, 4.6)
+        ax.set_ylim(0, top * 1.55)
+        ax.yaxis.set_major_locator(mticker.MaxNLocator(3))
+        ax.tick_params(axis='y', labelsize=fs['tick'] - 8)
+        ax.grid(True, alpha=0.3, axis='y')
+        ax.set_xlabel(f'{T} token{"s" if T > 1 else ""}', fontsize=fs['label'] - 8)
+    axes[0].set_ylabel('Sender busy [us]', fontsize=fs['label'] - 4)
+    h, l = [], []
+    for ax in axes:
         for hh, ll in zip(*ax.get_legend_handles_labels()):
             if ll not in l:
                 h.append(hh); l.append(ll)
@@ -575,33 +622,28 @@ def figure_intro(out_dir):
 
 
 def figure_costs(out_dir):
-    """Section 2 (one row): dispatch and combine breakdowns (1 / 16 / 128 tokens) and transport state
-    per GPU. Dropped 2026-10-07 (owner): the message-rate panel (GPU-initiated vs CPU proxy; its
-    numbers stay in the text and are printed below)."""
+    """Section 2, ONE COLUMN (owner 2026-10-21): (a) dispatch and combine in one plot (1 / 16 / 128 tokens), (b) transport
+    state per GPU beside it. Drawn at the column's share of the strip's drawing width (48 in for 7.0 in), so printed
+    fonts keep their size. Dropped 2026-10-07 (owner): the message-rate panel."""
     fs = MOTIVATION_COMBINED_FONT_SIZES
-    # 2026-10-08 (owner: legends too small, too many): titles on top, then one legend strip shared by (a) and
-    # (b) and one for (c), then the axes; no legend inside any axes, so the bars use the full height
-    fig = plt.figure(figsize=(E2E_COMBINED_FIGURE_SIZE[0], 8.5))
-    gs = fig.add_gridspec(1, 3, left=0.04, right=0.99, top=0.88, bottom=0.285, wspace=0.16, width_ratios=[1.3, 1.3, 1])
-    axd = [fig.add_subplot(c) for c in gs[0, 0].subgridspec(1, 3, wspace=0.42)]
-    axc = [fig.add_subplot(c) for c in gs[0, 1].subgridspec(1, 3, wspace=0.42)]
-    axs = fig.add_subplot(gs[0, 2])
-    h, l = panel_breakdown(axd, fs, None, 'dispatch', 7168)
-    panel_breakdown(axc, fs, None, 'combine', 14336)
-    hs, ls = panel_transport_state(axs, fs, None)
+    W = 48 * 3.336 / 7.0                       # ACM column width / text width
+    fig = plt.figure(figsize=(W, 9.5))
+    gs = fig.add_gridspec(1, 2, left=0.075, right=0.985, top=0.83, bottom=0.33, wspace=0.17, width_ratios=[1.1, 1])
+    axb = [fig.add_subplot(c) for c in gs[0, 0].subgridspec(1, 3, wspace=0.6)]
+    axs = fig.add_subplot(gs[0, 1])
+    h, l = panel_breakdown_both(axb, fs)
+    hs, ls = panel_transport_state(axs, dict(label=34, tick=30, legend=28, annotation=32), None)   # narrower panel
     def xmid(a0, a1):
         return (a0.get_position().x0 + a1.get_position().x1) / 2
-    for (a0, a1), title in (((axd[0], axd[-1]), '(a) Dispatch, 7 KiB tokens (lower ↓)'),
-                            ((axc[0], axc[-1]), '(b) Combine, 14 KiB tokens (lower ↓)'),
-                            ((axs, axs), '(c) Transport state per GPU (lower ↓)')):
-        fig.text(xmid(a0, a1), 0.985, title, ha='center', va='top', fontsize=fs['annotation'], color='navy',
+    for (a0, a1), title in (((axb[0], axb[-1]), '(a) Dispatch and combine\n(lower is better ↓)'),
+                            ((axs, axs), '(b) Transport state per GPU\n(lower is better ↓)')):
+        fig.text(xmid(a0, a1), 0.995, title, ha='center', va='top', fontsize=fs['annotation'] - 4, color='navy',
                  fontweight='bold')
-    # legends right below the x-axis labels (owner 2026-10-08: close to the chart area, (c)'s under (c) only)
-    lfs = fs['tick'] - 6
-    fig.legend(h, l, loc='upper center', bbox_to_anchor=(xmid(axd[0], axc[-1]), 0.135), ncol=len(l),
-               frameon=False, fontsize=lfs, handlelength=1.6, columnspacing=1.6, borderaxespad=0)
-    fig.legend(hs, ls, loc='upper center', bbox_to_anchor=(xmid(axs, axs), 0.135), ncol=3, frameon=False,
+    lfs = fs['tick'] - 10
+    fig.legend(h, l, loc='upper center', bbox_to_anchor=(xmid(axb[0], axb[-1]), 0.165), ncol=2, frameon=False,
                fontsize=lfs, handlelength=1.4, columnspacing=0.8, labelspacing=0.2, borderaxespad=0)
+    fig.legend(hs, ls, loc='upper center', bbox_to_anchor=(xmid(axs, axs), 0.165), ncol=3, frameon=False,
+               fontsize=lfs, handlelength=1.4, columnspacing=0.6, labelspacing=0.2, borderaxespad=0)
     save(fig, out_dir, 'loom-costs')
     plt.close(fig)
 
