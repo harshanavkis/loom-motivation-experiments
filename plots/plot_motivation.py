@@ -460,7 +460,7 @@ def panel_breakdown_both(axes, fs, tokens=(1, 16, 128)):
     per batch size; per operation a local bar (gray: the GPU's own HBM, a lower bound) and a remote bar. Owner 2026-10-21
     (night): remote = the GENERIC path (ordered: the signal behind the data on the queue pair; completions collected
     before the buffer is reused): stacked send loop + signal = the sender's busy time; dotted outline = the time the
-    buffer stays in use until its completions return (--reap-inline). Dashed = the payload's time through the NIC,
+    buffer stays in use until its completions return (--reap-inline). No NIC-transfer line (owner);
     narrow bar (removed by Loom) + red label = (remote busy + buffer in use) / local."""
     ops = (('dispatch', 7168, 'disp.'), ('combine', 14336, 'comb.'))
     for ax, T in zip(axes, tokens):
@@ -483,10 +483,7 @@ def panel_breakdown_both(axes, fs, tokens=(1, 16, 128)):
             reap = float(reap_t3(kind).loc[T])
             ax.bar(x0 + 1, reap, 0.8, bottom=rem, fill=False, linestyle=':', edgecolor='dimgray', linewidth=2,
                    label='remote: buffer in use')
-            link = nic_payload_us(kind, H, T)
-            if link < (rem + reap) * 1.3:
-                ax.plot([x0 + 0.55, x0 + 1.45], [link, link], color='black', linewidth=4, linestyle='--',
-                        label='NIC transfer')
+            # owner 2026-10-21 night: no NIC-transfer line (its number is in the text; nic_payload_us prints it)
             # owner 2026-10-21 night: "removed by Loom", up to the end of the buffer time (Loom frees the buffer at once)
             ax.bar(x0 + 1.6, rem + reap - loc, 0.22, bottom=loc, color=LOOMGONE, edgecolor='#a04040', linewidth=1.5,
                    label='removed by Loom')
