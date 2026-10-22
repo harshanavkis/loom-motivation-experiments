@@ -460,8 +460,9 @@ def panel_breakdown_both(axes, fs, tokens=(1, 16, 128)):
     per batch size; per operation a local bar (gray: the GPU's own HBM, a lower bound) and a remote bar. Owner 2026-10-21
     (night): remote = the GENERIC path (ordered: the signal behind the data on the queue pair; completions collected
     before the buffer is reused): stacked send loop + signal = the sender's busy time; dotted outline = the time the
-    buffer stays in use until its completions return (--reap-inline). No NIC-transfer line (owner);
-    narrow bar (removed by Loom) + red label = (remote busy + buffer in use) / local."""
+    buffer stays in use until its completions return (--reap-inline). No NIC-transfer line (owner). Narrow bar (removed
+    by unified contract, as Fig 2): from the floor max(local, the payload's time through the NIC) to the end of the buffer
+    time, so it never claims the wire time (review 2026-10-22, owner OK); red label = (busy + buffer in use) / floor."""
     ops = (('dispatch', 7168, 'disp.'), ('combine', 14336, 'comb.'))
     for ax, T in zip(axes, tokens):
         top, ticks = 0, []
@@ -484,16 +485,20 @@ def panel_breakdown_both(axes, fs, tokens=(1, 16, 128)):
             ax.bar(x0 + 1, reap, 0.8, bottom=rem, fill=False, linestyle=':', edgecolor='dimgray', linewidth=2,
                    label='remote: buffer in use')
             # owner 2026-10-21 night: no NIC-transfer line (its number is in the text; nic_payload_us prints it)
-            # owner 2026-10-21 night: "removed by Loom", up to the end of the buffer time (Loom frees the buffer at once)
-            ax.bar(x0 + 1.6, rem + reap - loc, 0.22, bottom=loc, color=LOOMGONE, edgecolor='#a04040', linewidth=1.5,
-                   label='removed by Loom')
+            # review 2026-10-22: a unified contract still moves the bytes, so the removed part starts at the larger of
+            # the local time and the payload's time through the NIC, and ends with the buffer time
+            floor = max(loc, nic_payload_us(kind, H, T))
+            end = rem + reap
+            if end > floor:
+                ax.bar(x0 + 1.6, end - floor, 0.22, bottom=floor, color=LOOMGONE, edgecolor='#a04040', linewidth=1.5,
+                       label='removed by unified contract')
             ticks.append((x0 + 0.5, name))
-            top = max(top, rem + reap)
+            top = max(top, end)
             for x, v in ((x0, loc), (x0 + 1, rem)):
-                ax.text(x, v + 0.02 * (rem + reap), f'{v:.0f}', ha='center', va='bottom', fontsize=fs['annotation'] - 12)
-            ax.text(x0 + 1.6, rem + reap + 0.02 * (rem + reap), f'{(rem + reap) / loc:.1f}x', ha='center', va='bottom',
-                    rotation=90,
-                    fontsize=fs['annotation'] - 12, color='#a04040')
+                ax.text(x, v + 0.02 * end, f'{v:.0f}', ha='center', va='bottom', fontsize=fs['annotation'] - 12)
+            r = end / floor                      # two decimals near 1 (128 tokens: 1.05x, 1.02x; "1.0x" read as zero)
+            ax.text(x0 + 1.6, end + 0.02 * end, f'{r:.2f}x' if r < 1.1 else f'{r:.1f}x', ha='center', va='bottom',
+                    rotation=90, fontsize=fs['annotation'] - 12, color='#a04040')
         for ax_ in (ax,):
             ax_.set_xticks([x for x, _ in ticks])
             ax_.set_xticklabels([n for _, n in ticks], fontsize=fs['tick'] - 10)
@@ -503,7 +508,7 @@ def panel_breakdown_both(axes, fs, tokens=(1, 16, 128)):
         ax.tick_params(axis='y', labelsize=fs['tick'] - 8)
         ax.grid(True, alpha=0.3, axis='y')
         ax.set_xlabel(f'{T} token{"s" if T > 1 else ""}', fontsize=fs['label'] - 8)
-    axes[0].set_ylabel('Sender busy [us]', fontsize=fs['label'] - 4)
+    axes[0].set_ylabel('Time [us]', fontsize=fs['label'] - 4)   # review 2026-10-22: busy + buffer time
     h, l = [], []
     for ax in axes:
         for hh, ll in zip(*ax.get_legend_handles_labels()):
