@@ -30,6 +30,7 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
 import matplotlib.ticker as mticker
 from matplotlib.lines import Line2D
 
@@ -659,6 +660,163 @@ def figure_costs(out_dir):
     plt.close(fig)
 
 
+def nccl_loc():
+    """NCCL-authored code lines by fabric, split view (m1-nccl-loc/summary_*.txt): {version: {category: lines}}."""
+    out = {}
+    for v in ('2.18.5', '2.32.3'):
+        txt = open(os.path.join(ROOT, 'm1-nccl-loc', f'summary_v{v}-1.txt')).read()
+        sec = txt.split('## NCCL-authored')[1].split('##')[0]
+        out[v] = {m.group(1): int(m.group(2)) for m in re.finditer(r'\| (scale-up|scale-out|common) \| \d+ \| \d+ \| [\d.]+% \| (\d+) \|', sec)}
+    return out
+
+
+# Full-width Fig 4 (owner 2026-10-25): ONE colour code and ONE legend for all three panels
+WIDE_LOCAL, WIDE_REMOTE = 'tab:green', 'tab:blue'
+
+
+def panel_nccl_loc(ax, fs, bar_in=None):
+    """(a) #1: share of NCCL's code per fabric in 2.18 and 2.32 (100% stacked), percentages beside the bars, total lines
+    on top. Style of the first versions (owner 2026-10-25): scale-up green, scale-out shaded as what a unified contract
+    removes, own legend. bar_in = printed bar width in drawn inches, to match the other panels' bars."""
+    d = nccl_loc()
+    xlim = (-0.5, 1.75)
+    w = 0.5
+    if bar_in:
+        fw = ax.figure.get_figwidth() * ax.get_position().width
+        w = bar_in / fw * (xlim[1] - xlim[0])
+    segs = (('scale-up', 'scale-up', 'tab:green'), ('scale-out', 'scale-out', LOOMGONE), ('common', 'shared', 'white'))
+    for i, v in enumerate(d):
+        tot, bottom = sum(d[v].values()), 0
+        for k, lab, color in segs:
+            val = 100 * d[v][k] / tot
+            ax.bar(i, val, w, bottom=bottom, color=color, edgecolor='black', linewidth=1,
+                   label=lab if i == 0 else None)
+            ax.text(i + w / 2 + 0.04, bottom + val / 2, f'{val:.0f}%', ha='left', va='center',
+                    fontsize=fs['annotation'])
+            bottom += val
+        ax.text(i, 102, f'{tot / 1000:.0f}K', ha='center', va='bottom', fontsize=fs['annotation'])
+    ax.set_xticks(range(len(d)))
+    ax.set_xticklabels([v.rsplit('.', 1)[0] for v in d], fontsize=fs['tick'])
+    ax.set_xlabel('NCCL release', fontsize=fs['label'])
+    ax.set_xlim(*xlim)
+    ax.set_ylim(0, 125)
+    ax.set_yticks([0, 50, 100])
+    ax.tick_params(axis='y', labelsize=fs['tick'])
+    ax.set_ylabel('Share of lines [%]', fontsize=fs['label'])
+    return ax.get_legend_handles_labels()
+
+
+def panel_breakdown_wide(axes, fs, tokens=(1, 16, 128)):
+    """(b) #2: as panel_breakdown_both, but one remote bar (send loop + signal = sender busy) instead of its phases."""
+    ops = (('dispatch', 7168, 'disp.'), ('combine', 14336, 'comb.'))
+    for ax, T in zip(axes, tokens):
+        top, ticks = 0, []
+        for j, (kind, H, name) in enumerate(ops):
+            d = breakdown_t3(kind)
+            t = d[(d.H == H) & (d.tokens == T)].set_index('path')
+            x0 = j * 2.7
+            loc = t.loc['local', 'send'] + t.loc['local', 'drain'] + t.loc['local', 'signal']
+            rem = sum(t.loc['ordered-destL24', c] for c, *_ in BD_SEGS[:3] if t.loc['ordered-destL24', c] > 0)
+            reap = float(reap_t3(kind).loc[T])
+            ax.bar(x0, loc, 0.8, color=WIDE_LOCAL, edgecolor='black', linewidth=1)
+            ax.bar(x0 + 1, rem, 0.8, color=WIDE_REMOTE, edgecolor='black', linewidth=1)
+            ax.bar(x0 + 1, reap, 0.8, bottom=rem, fill=False, linestyle=':', edgecolor='dimgray', linewidth=2)
+            floor = max(loc, nic_payload_us(kind, H, T))
+            end = rem + reap
+            if end > floor:
+                ax.bar(x0 + 1.6, end - floor, 0.22, bottom=floor, color=LOOMGONE, edgecolor='#a04040', linewidth=1.5)
+            ticks.append((x0 + 0.5, name))
+            top = max(top, end)
+            for x, v in ((x0, loc), (x0 + 1, rem)):
+                ax.text(x, v + 0.02 * end, f'{v:.0f}', ha='center', va='bottom', fontsize=fs['annotation'])
+            r = end / floor
+            ax.text(x0 + 1.6, end + 0.02 * end, f'{r:.2f}x' if r < 1.1 else f'{r:.1f}x', ha='center', va='bottom',
+                    rotation=90, fontsize=fs['annotation'], color='#a04040')
+        ax.set_xticks([x for x, _ in ticks])
+        ax.set_xticklabels([n for _, n in ticks], fontsize=fs['tick'])
+        ax.set_xlim(-0.6, 4.6)
+        ax.set_ylim(0, top * 1.5)
+        ax.yaxis.set_major_locator(mticker.MaxNLocator(3))
+        ax.tick_params(axis='y', labelsize=fs['tick'])
+        ax.grid(True, alpha=0.3, axis='y')
+        ax.set_xlabel(f'{T} token{"s" if T > 1 else ""}', fontsize=fs['label'])
+    axes[0].set_ylabel('Time [us]', fontsize=fs['label'])
+
+
+def panel_state_wide(ax, fs):
+    """(c) #3: DeepEP V2.5's transport state per GPU (the version the text quotes): queue-pair state + staging
+    buffers (hatched), labels = QPs; beside it the NVLink-style peer state (pointers + page-table entries)."""
+    s_ = transport_state(); s_ = s_[s_.series == 'v2.5'].set_index('ep')
+    st = staging_buffers(); st = st[st.series == 'v2.5'].set_index('ep')
+    lm = loom_gpu_state().set_index('ep')
+    eps, w = [16, 128, 256, 512, 1024], 0.36
+    x = np.arange(len(eps))
+    q = np.array([s_.loc[e, 'mib'] / 1024 for e in eps])
+    g = np.array([st.loc[e, 'staging_gib'] for e in eps])
+    ax.bar(x - w / 2, q, w, color=WIDE_REMOTE, edgecolor='black', linewidth=1)
+    ax.bar(x - w / 2, g, w, bottom=q, color='white', hatch='xx', edgecolor=WIDE_REMOTE, linewidth=1)
+    ax.bar(x - w / 2, q + g, w, fill=False, edgecolor='black', linewidth=1)
+    for xi, e, top in zip(x - w / 2, eps, q + g):
+        ax.text(xi, top + 0.1, f"{s_.loc[e, 'qps']:,}", ha='center', va='bottom', fontsize=fs['annotation'])
+    vals = np.array([lm.loc[e, 'mib'] / 1024 for e in eps])
+    ax.bar(x + w / 2, vals, w, color=WIDE_LOCAL, edgecolor='black', linewidth=1)
+    for xi, e in zip(x + w / 2, eps):
+        v = lm.loc[e, 'mib']
+        ax.text(xi + 0.02, 0.12, f"{v:.1f} MiB" if v >= 1 else f"{v * 1024:.0f} KiB", ha='center', va='bottom',
+                rotation=90, fontsize=fs['annotation'] - 4, color='darkgreen')
+    ax.set_xticks(x)
+    ax.set_xticklabels([f'{e}' for e in eps], fontsize=fs['tick'])
+    ax.tick_params(axis='y', labelsize=fs['tick'])
+    ax.set_ylim(0, 6)
+    ax.set_yticks([0, 2, 4, 6])
+    ax.set_xlabel('GPUs in the expert-parallel group', fontsize=fs['label'])
+    ax.set_ylabel('Memory/GPU [GiB]', fontsize=fs['label'])
+    ax.grid(True, alpha=0.3, axis='y')
+
+
+def figure_costs_wide(out_dir, name='loom-costs'):
+    """Section 2's Fig 4 as a FULL-WIDTH strip (owner 2026-10-25, Atsushi's comment: one panel per challenge, larger
+    text): (a) #1 NCCL code by fabric, (b) #2 dispatch and combine, (c) #3 transport state per GPU. One colour code
+    (green = scale-up / local, blue = scale-out / remote) and ONE legend row. Drawn at 48 in for the 7.0 in text
+    width (scale 6.86): 44 pt drawn = 6.4 pt printed."""
+    fs = {'label': 44, 'tick': 42, 'legend': 40, 'annotation': 40}
+    fig = plt.figure(figsize=(48, 9.4))
+    gs = fig.add_gridspec(1, 3, left=0.04, right=0.995, top=0.89, bottom=0.35, wspace=0.17,
+                          width_ratios=[0.5, 1.37, 1.12])
+    axl = fig.add_subplot(gs[0, 0])
+    axb = [fig.add_subplot(c) for c in gs[0, 1].subgridspec(1, 3, wspace=0.45)]
+    axs = fig.add_subplot(gs[0, 2])
+    # (a)'s bars as wide on paper as (b)'s: 0.8 data units of a (b) sub-axis spanning 5.2 units
+    hl, ll = panel_nccl_loc(axl, fs, bar_in=0.8 / 5.2 * fig.get_figwidth() * axb[0].get_position().width)
+    panel_breakdown_wide(axb, fs)
+    panel_state_wide(axs, fs)   # owner 2026-10-25: V2.5 only (the version the text quotes), V1 dropped
+    for a0, a1, title in ((axl, axl, '(a) Fabric-specific code'),
+                          (axb[0], axb[-1], '(b) Dispatch and combine (lower is better ↓)'),
+                          (axs, axs, '(c) Transport state per GPU (lower is better ↓)')):
+        p0, p1 = a0.get_position(), a1.get_position()
+        fig.text((p0.x0 + p1.x1) / 2, p0.y1 + 0.015, title, ha='center', va='bottom', fontsize=fs['label'],
+                 color='navy', fontweight='bold')
+    # one legend per panel, all below their panels (legend rule: same placement in every panel); (a) is labelled
+    # directly. Colours as in all panels: green = local / scale-up, blue = remote / scale-out.
+    pk = lambda **kw: mpatches.Patch(edgecolor='black', linewidth=1, **kw)
+    legends = ((axl, axl, 2, list(zip(hl, ll))),
+               (axb[0], axb[-1], 2, [(pk(facecolor=WIDE_LOCAL), 'local (lower bound)'),
+                                     (pk(facecolor=WIDE_REMOTE), 'remote: sender busy'),
+                                     (mpatches.Patch(fill=False, linestyle=':', edgecolor='dimgray', linewidth=2),
+                                      'remote: buffer in use'),
+                                     (mpatches.Patch(facecolor=LOOMGONE, edgecolor='#a04040', linewidth=1.5),
+                                      'removed by unified contract')]),
+               (axs, axs, 2, [(pk(facecolor=WIDE_REMOTE), 'V2.5 queue-pair state'),
+                              (mpatches.Patch(facecolor='white', hatch='xx', edgecolor=WIDE_REMOTE),
+                               'V2.5 staging buffers'),
+                              (pk(facecolor=WIDE_LOCAL), 'NVLink-style mappings')]))
+    for a0, a1, nc, hl in legends:
+        fig.legend([h for h, _ in hl], [l for _, l in hl], loc='upper center', ncol=nc, frameon=False,
+                   bbox_to_anchor=((a0.get_position().x0 + a1.get_position().x1) / 2, 0.17), fontsize=fs['legend'],
+                   handlelength=1.4, columnspacing=0.9, labelspacing=0.2, borderaxespad=0)
+    save(fig, out_dir, name)
+    plt.close(fig)
+
 NIC_GBPS = None   # set in main() from nic_to_hbm_gbps()
 
 
@@ -669,7 +827,7 @@ def main():
     out_dir = sys.argv[1] if len(sys.argv) > 1 else os.path.join(ROOT, 'plots', 'out')
     os.makedirs(out_dir, exist_ok=True)
     figure_intro(out_dir)
-    figure_costs(out_dir)
+    figure_costs_wide(out_dir)   # owner 2026-10-25: full-width Fig 4 (figure_costs = the old one-column version)
     # print the plotted numbers so the paper text can be checked against them
     print('layer bytes MiB:', {k: round(v, 1) for k, v in mixtral_8x22b_layer_bytes().items()})
     print('initiator us:', initiator_latency())
